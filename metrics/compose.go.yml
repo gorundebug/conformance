@@ -1,0 +1,8 @@
+services:
+  inventoryservice:
+    environment:
+      INVENTORY_SERVICE_ENVIRONMENT: debug
+
+  orderservice:
+    environment:
+      ORDER_SERVICE_ENVIRONMENT: debug

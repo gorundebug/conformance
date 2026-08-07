@@ -1,0 +1,12 @@
+services:
+  inventoryservice:
+    environment:
+      SERVICELIB_ENVIRONMENT: debug
+      RUST_LOG: info
+
+  orderservice:
+    environment:
+      SERVICELIB_ENVIRONMENT: debug
+      RUST_LOG: info
+    depends_on:
+      - inventoryservice

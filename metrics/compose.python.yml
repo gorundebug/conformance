@@ -1,0 +1,28 @@
+services:
+  inventoryservice:
+    command:
+      - python
+      - -m
+      - inventory_service.main
+      - --config
+      - /workspace/inventoryservice/config/config.yaml
+      - --overrides
+      - /workspace/conformance/inventoryservice.overrides.yaml
+    volumes:
+      - ../conformance/.artifacts/metrics/python:/workspace/conformance:ro
+      - ${PYSERVICELIB_SOURCE_CONTEXT:-../pyservicelib}/src/pyservicelib_gorundebug:/workspace/.venv/lib/python3.12/site-packages/pyservicelib_gorundebug:ro
+
+  orderservice:
+    command:
+      - python
+      - -m
+      - order_service.main
+      - --config
+      - /workspace/orderservice/config/config.yaml
+      - --overrides
+      - /workspace/conformance/orderservice.overrides.yaml
+    volumes:
+      - ../conformance/.artifacts/metrics/python:/workspace/conformance:ro
+      - ${PYSERVICELIB_SOURCE_CONTEXT:-../pyservicelib}/src/pyservicelib_gorundebug:/workspace/.venv/lib/python3.12/site-packages/pyservicelib_gorundebug:ro
+    depends_on:
+      - inventoryservice

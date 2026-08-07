@@ -1,0 +1,42 @@
+services:
+  inventoryservice:
+    command:
+      - python
+      - -m
+      - inventory_service.main
+      - --config
+      - /workspace/inventoryservice/config/config.yaml
+      - --overrides
+      - /workspace/conformance/inventoryservice.overrides.yaml
+    volumes:
+      - ../conformance/.artifacts/tracing/python:/workspace/conformance:ro
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+    depends_on:
+      - otel-collector
+
+  orderservice:
+    command:
+      - python
+      - -m
+      - order_service.main
+      - --config
+      - /workspace/orderservice/config/config.yaml
+      - --overrides
+      - /workspace/conformance/orderservice.overrides.yaml
+    volumes:
+      - ../conformance/.artifacts/tracing/python:/workspace/conformance:ro
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+    depends_on:
+      - inventoryservice
+      - otel-collector
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+    networks:
+      - app_net
