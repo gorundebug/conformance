@@ -1,0 +1,4 @@
+.artifacts/
+.dependencies/
+.cpp-source-cache/
+__pycache__/

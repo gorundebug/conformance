@@ -1,0 +1,8 @@
+services:
+  inventoryservice:
+    environment:
+      GOMAXPROCS: ${BENCHMARK_SERVICE_CORES}
+
+  orderservice:
+    environment:
+      GOMAXPROCS: ${BENCHMARK_SERVICE_CORES}

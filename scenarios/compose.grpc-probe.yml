@@ -1,0 +1,9 @@
+services:
+  grpc-probe:
+    image: golang:1.25-bookworm
+    entrypoint: [/scenario-artifacts/grpc-probe]
+    working_dir: /
+    volumes:
+      - ${SERVICELIB_SCENARIO_ARTIFACTS_DIR}:/scenario-artifacts:ro
+    networks: [app_net]
+    profiles: [conformance]

@@ -1,0 +1,7 @@
+services:
+  inventoryservice:
+    environment:
+      PYTHONOPTIMIZE: "2"
+  orderservice:
+    environment:
+      PYTHONOPTIMIZE: "2"

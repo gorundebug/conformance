@@ -1,0 +1,8 @@
+services:
+  inventoryservice:
+    restart: "no"
+  orderservice:
+    restart: "no"
+    environment:
+      ORDER_PROCESSED_ENABLED: "false"
+    depends_on: [inventoryservice]

@@ -1,0 +1,7 @@
+services:
+  inventoryservice: {}
+
+  orderservice:
+    environment:
+      INVENTORY_SERVICE_API_CONNECTIONS_COUNT: ${BENCHMARK_GRPC_CONNECTIONS}
+      ORDER_PROCESSED_ENABLED: "false"

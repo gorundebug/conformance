@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""Reject userver build declarations and linked runtime dependencies."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(CONFORMANCE_DIR))
+import cpp_source_cache
+
+ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ARTIFACT_DIR = CONFORMANCE_DIR / ".artifacts" / "dependencies"
+SOURCE_ROOTS = (
+    ROOT / "cppboostservicelib",
+    ROOT / "cppboostexample",
+    ROOT / "cppboostnativeexample",
+    ROOT / "servicegen" / "internal" / "codegenerator" / "templates" / "cppboost",
+)
+BUILD_FILENAMES = {"CMakeLists.txt", "Dockerfile", "Dockerfile.cmake"}
+BUILD_SUFFIXES = {".cmake", ".sh", ".yml", ".yaml", ".tmpl"}
+FORBIDDEN = re.compile(
+    r"(?:find_package\s*\([^)]*userver|FetchContent[^\n]*userver|"
+    r"target_link_libraries[^\n]*userver|userver::|libuserver|userver-core|"
+    r"<userver/)",
+    re.IGNORECASE,
+)
+BINARIES = {
+    "orderservice": "/workspace/build/orderservice/example_order_service",
+    "inventoryservice": "/workspace/build/inventoryservice/example_inventory_service",
+}
+NATIVE_BINARIES = {
+    "orderservice-native": (
+        "cppboostnativeexample-orderservice:latest",
+        "/usr/local/bin/orderservice",
+    ),
+    "inventoryservice-native": (
+        "cppboostnativeexample-inventoryservice:latest",
+        "/usr/local/bin/inventoryservice",
+    ),
+}
+
+CPPBOOST_SNAPSHOT = {
+    "boost": "BOOST",
+    "grpc": "GRPC",
+    "protobuf": "PROTOBUF",
+    "asio-grpc": "ASIO_GRPC",
+    "yaml-cpp": "YAML_CPP",
+    "librdkafka": "RDKAFKA",
+    "opentelemetry-cpp": "OPENTELEMETRY",
+    "googletest": "GOOGLETEST",
+}
+
+
+def command(args: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> str:
+    result = subprocess.run(
+        args,
+        cwd=cwd,
+        env=env,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode:
+        raise RuntimeError(f"command failed ({result.returncode}): {' '.join(args)}\n{result.stdout}")
+    return result.stdout
+
+
+def is_build_input(path: Path) -> bool:
+    if any(part in {"build", ".artifacts", ".git"} for part in path.parts):
+        return False
+    return path.name in BUILD_FILENAMES or path.suffix in BUILD_SUFFIXES
+
+
+def static_findings() -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    for source_root in SOURCE_ROOTS:
+        for path in sorted(source_root.rglob("*")):
+            if not path.is_file() or not is_build_input(path):
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for match in FORBIDDEN.finditer(text):
+                findings.append(
+                    {
+                        "path": str(path.relative_to(ROOT)),
+                        "line": text.count("\n", 0, match.start()) + 1,
+                        "match": match.group(0),
+                    }
+                )
+    return findings
+
+
+def manifest_dependencies(path: Path) -> dict[str, dict[str, str]]:
+    dependencies: dict[str, dict[str, str]] = {}
+    current: str | None = None
+    in_dependencies = False
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if raw_line == "dependencies:":
+            in_dependencies = True
+            continue
+        if in_dependencies and raw_line and not raw_line.startswith(" "):
+            break
+        match = re.fullmatch(r"    ([^:]+):", raw_line)
+        if in_dependencies and match:
+            current = match.group(1)
+            dependencies[current] = {}
+            continue
+        match = re.fullmatch(r"        (repository|revision):\s+(.+)", raw_line)
+        if in_dependencies and current and match:
+            dependencies[current][match.group(1)] = match.group(2)
+    return dependencies
+
+
+def cmake_cache_value(text: str, variable: str) -> str | None:
+    match = re.search(
+        rf"set\({re.escape(variable)}\s+\"([^\"]+)\"",
+        text,
+        re.MULTILINE,
+    )
+    return match.group(1) if match else None
+
+
+def dependency_snapshot_errors() -> list[str]:
+    manifest = manifest_dependencies(
+        ROOT / "servicegen" / "internal" / "codegenerator" / "dependencies.yaml"
+    )
+    errors: list[str] = []
+    boost_snapshot = (
+        ROOT / "cppboostservicelib" / "cmake" / "DependencyVersions.cmake"
+    ).read_text(encoding="utf-8")
+    for dependency, prefix in CPPBOOST_SNAPSHOT.items():
+        expected = manifest.get(dependency, {})
+        for field, suffix in (("repository", "REPOSITORY"), ("revision", "VERSION")):
+            variable = f"CPPBOOSTSERVICELIB_{prefix}_{suffix}"
+            actual = cmake_cache_value(boost_snapshot, variable)
+            if actual != expected.get(field):
+                errors.append(
+                    f"{variable}={actual!r} differs from dependencies.yaml "
+                    f"{dependency}.{field}={expected.get(field)!r}"
+                )
+
+    userver_snapshot = (
+        ROOT / "cppservicelib" / "cmake" / "DependencyVersions.cmake"
+    ).read_text(encoding="utf-8")
+    rdkafka = manifest.get("librdkafka", {})
+    for field, variable in (
+        ("repository", "SERVICELIB_RDKAFKA_REPOSITORY"),
+        ("revision", "SERVICELIB_RDKAFKA_VERSION"),
+    ):
+        actual = cmake_cache_value(userver_snapshot, variable)
+        if actual != rdkafka.get(field):
+            errors.append(
+                f"{variable}={actual!r} differs from dependencies.yaml "
+                f"librdkafka.{field}={rdkafka.get(field)!r}"
+            )
+
+    for relative in (
+        Path("cppservicelib/docker/userver-packages-ubuntu-24.04.txt"),
+        Path("servicegen/internal/codegenerator/templates/cpp/docker/userver_packages.tmpl"),
+    ):
+        if "librdkafka-dev" in (ROOT / relative).read_text(encoding="utf-8"):
+            errors.append(f"{relative} still permits unpinned system librdkafka")
+    return errors
+
+
+def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
+    example = ROOT / "cppboostexample"
+    native_example = ROOT / "cppboostnativeexample"
+    framework_env = os.environ.copy()
+    framework_env.setdefault(
+        "SERVICEGEN_CPPBOOST_BUILD_VOLUME",
+        cpp_source_cache.build_volume_name(ROOT / "cppboostservicelib"),
+    )
+    if not skip_build:
+        framework_env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        source_cache = cpp_source_cache.configure_environment(
+            framework_env, ROOT / "cppboostservicelib"
+        )
+        # Keep the subsequent Compose inspection on the exact build volume
+        # selected by scripts/build.generated.sh. Environment exported inside
+        # that script cannot propagate back into this Python process.
+        framework_env["SERVICEGEN_GRPC_SOURCE_CONTEXT"] = str(
+            source_cache / "grpc-src"
+        )
+        framework_env["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"] = str(
+            source_cache / "asio-grpc-src"
+        )
+        command(
+            ["./scripts/build.generated.sh", "docker-release"],
+            cwd=example,
+            env=framework_env,
+        )
+        command(
+            ["docker", "compose", "build", "inventoryservice", "orderservice"],
+            cwd=native_example,
+            env=framework_env,
+        )
+
+    results: dict[str, dict[str, object]] = {}
+    build_volume = framework_env["SERVICEGEN_CPPBOOST_BUILD_VOLUME"]
+    for service, binary in BINARIES.items():
+        output = command(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--entrypoint",
+                "ldd",
+                "--volume",
+                f"{build_volume}:/workspace/build:ro",
+                "cppboostexample-cpp-build",
+                binary,
+            ],
+            cwd=example,
+        )
+        libraries = [line.strip() for line in output.splitlines() if "=>" in line or line.lstrip().startswith("/")]
+        userver = [line for line in libraries if "userver" in line.casefold()]
+        results[service] = {
+            "binary": binary,
+            "libraries": libraries,
+            "userver_libraries": userver,
+            "jemalloc_libraries": [line for line in libraries if "jemalloc" in line.casefold()],
+        }
+    for service, (image, binary) in NATIVE_BINARIES.items():
+        output = command(
+            ["docker", "run", "--rm", "--entrypoint", "ldd", image, binary],
+            cwd=native_example,
+        )
+        libraries = [line.strip() for line in output.splitlines() if "=>" in line or line.lstrip().startswith("/")]
+        userver = [line for line in libraries if "userver" in line.casefold()]
+        results[service] = {
+            "binary": binary,
+            "image": image,
+            "libraries": libraries,
+            "userver_libraries": userver,
+            "jemalloc_libraries": [line for line in libraries if "jemalloc" in line.casefold()],
+        }
+    return results
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--skip-build", action="store_true", help="reuse the existing Docker Release build")
+    parser.add_argument("--static-only", action="store_true", help="skip the linked-binary check")
+    args = parser.parse_args()
+
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    findings = static_findings()
+    runtime = {} if args.static_only else linked_dependencies(args.skip_build)
+    linked_userver = {
+        service: details["userver_libraries"]
+        for service, details in runtime.items()
+        if details["userver_libraries"]
+    }
+    missing_jemalloc = {
+        service: details["binary"]
+        for service, details in runtime.items()
+        if not details["jemalloc_libraries"]
+    }
+    errors: list[str] = []
+    snapshot_errors = dependency_snapshot_errors()
+    if findings:
+        errors.append(f"{len(findings)} forbidden userver build declaration(s)")
+    if linked_userver:
+        errors.append(f"userver linked into: {', '.join(sorted(linked_userver))}")
+    if missing_jemalloc:
+        errors.append(f"jemalloc missing from: {', '.join(sorted(missing_jemalloc))}")
+    errors.extend(snapshot_errors)
+
+    summary = {
+        "status": "pass" if not errors else "fail",
+        "static_files_scanned_roots": [str(path.relative_to(ROOT)) for path in SOURCE_ROOTS],
+        "static_findings": findings,
+        "dependency_snapshot_errors": snapshot_errors,
+        "runtime_checked": not args.static_only,
+        "binaries": runtime,
+        "errors": errors,
+    }
+    (ARTIFACT_DIR / "summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

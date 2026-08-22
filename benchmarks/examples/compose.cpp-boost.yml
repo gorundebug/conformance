@@ -1,0 +1,24 @@
+services:
+  inventoryservice:
+    command:
+      - --config
+      - /app/config/config.yaml
+      - --values
+      - /benchmark-config/inventoryservice.overrides.yaml
+      - --workers
+      - ${BENCHMARK_SERVICE_CORES}
+    volumes:
+      - ${BENCHMARK_CPPBOOST_CONFIG_DIR}:/benchmark-config:ro
+
+  orderservice:
+    environment:
+      - ORDER_PROCESSED_ENABLED=false
+    command:
+      - --config
+      - /app/config/config.yaml
+      - --values
+      - /benchmark-config/orderservice.overrides.yaml
+      - --workers
+      - ${BENCHMARK_SERVICE_CORES}
+    volumes:
+      - ${BENCHMARK_CPPBOOST_CONFIG_DIR}:/benchmark-config:ro

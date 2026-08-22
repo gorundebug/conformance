@@ -1,0 +1,18 @@
+services:
+  inventoryservice:
+    command:
+      - --config
+      - /benchmark-config/inventoryservice.static_config.yaml
+      - --config_vars
+      - /benchmark-config/inventoryservice.config_vars.yaml
+    volumes:
+      - ${BENCHMARK_CPP_CONFIG_DIR}:/benchmark-config:ro
+
+  orderservice:
+    command:
+      - --config
+      - /benchmark-config/orderservice.static_config.yaml
+      - --config_vars
+      - /benchmark-config/orderservice.config_vars.yaml
+    volumes:
+      - ${BENCHMARK_CPP_CONFIG_DIR}:/benchmark-config:ro

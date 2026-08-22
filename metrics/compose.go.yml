@@ -1,0 +1,15 @@
+services:
+  analyticsservice:
+    environment:
+      ANALYTICS_SERVICE_ENVIRONMENT: debug
+      ORDER_EVENTS_BROKERS: redpanda:9092
+
+  inventoryservice:
+    environment:
+      INVENTORY_SERVICE_ENVIRONMENT: debug
+
+  orderservice:
+    environment:
+      ORDER_SERVICE_ENVIRONMENT: debug
+      ORDER_EVENTS_BROKERS: redpanda:9092
+      ORDER_PROCESSED_ENABLED: "true"

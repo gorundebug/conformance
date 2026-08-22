@@ -1,0 +1,43 @@
+services:
+  analyticsservice:
+    restart: "no"
+    command:
+      - --config
+      - /app/config/config.yaml
+      - --values
+      - /workspace/conformance/analyticsservice.overrides.yaml
+      - --workers
+      - "2"
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/cppboost:/workspace/conformance:ro
+
+  inventoryservice:
+    restart: "no"
+    command:
+      - --config
+      - /app/config/config.yaml
+      - --values
+      - /workspace/conformance/inventoryservice.overrides.yaml
+      - --workers
+      - "2"
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/cppboost:/workspace/conformance:ro
+
+  orderservice:
+    restart: "no"
+    command:
+      - --config
+      - /app/config/config.yaml
+      - --values
+      - /workspace/conformance/orderservice.overrides.yaml
+      - --workers
+      - "2"
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/cppboost:/workspace/conformance:ro
+    depends_on:
+      - inventoryservice
+
+volumes:
+  cpp-cmake-build:
+    external: true
+    name: cppboostexample_cpp-cmake-build

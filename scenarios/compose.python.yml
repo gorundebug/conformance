@@ -1,0 +1,13 @@
+services:
+  inventoryservice:
+    restart: "no"
+  orderservice:
+    restart: "no"
+    command:
+      - --config
+      - /workspace/config/config.yaml
+      - --overrides
+      - /scenario/orderservice.overrides.yaml
+    volumes:
+      - ${SERVICELIB_SCENARIO_ARTIFACTS_DIR}/python:/scenario:ro
+    depends_on: [inventoryservice]

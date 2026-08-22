@@ -1,0 +1,5 @@
+services:
+  inventoryservice:
+    restart: "no"
+  orderservice:
+    restart: "no"

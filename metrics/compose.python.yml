@@ -1,0 +1,29 @@
+services:
+  analyticsservice:
+    command:
+      - --config
+      - /workspace/config/config.yaml
+      - --overrides
+      - /workspace/conformance/analyticsservice.overrides.yaml
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/python:/workspace/conformance:ro
+
+  inventoryservice:
+    command:
+      - --config
+      - /workspace/config/config.yaml
+      - --overrides
+      - /workspace/conformance/inventoryservice.overrides.yaml
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/python:/workspace/conformance:ro
+
+  orderservice:
+    command:
+      - --config
+      - /workspace/config/config.yaml
+      - --overrides
+      - /workspace/conformance/orderservice.overrides.yaml
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/python:/workspace/conformance:ro
+    depends_on:
+      - inventoryservice

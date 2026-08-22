@@ -1,0 +1,3 @@
+services:
+  cpp-build:
+    image: servicelib-conformance-boost-cpp-example-build:latest

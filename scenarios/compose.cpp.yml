@@ -1,0 +1,13 @@
+services:
+  inventoryservice:
+    restart: "no"
+  orderservice:
+    restart: "no"
+    command:
+      - --config
+      - /app/static_config.yaml
+      - --config_vars
+      - /scenario/orderservice.config_vars.yaml
+    volumes:
+      - ${SERVICELIB_SCENARIO_ARTIFACTS_DIR}/cpp:/scenario:ro
+    depends_on: [inventoryservice]

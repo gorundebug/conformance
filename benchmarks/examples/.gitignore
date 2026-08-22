@@ -1,0 +1,3 @@
+.artifacts/
+.ruff_cache/
+__pycache__/

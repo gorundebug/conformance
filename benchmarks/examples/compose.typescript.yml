@@ -1,0 +1,10 @@
+services:
+  inventoryservice:
+    environment:
+      SERVICELIB_NOOP_METRICS: "1"
+
+  orderservice:
+    environment:
+      INVENTORY_SERVICE_API_CONNECTIONS_COUNT: ${BENCHMARK_GRPC_CONNECTIONS}
+      ORDER_PROCESSED_ENABLED: "false"
+      SERVICELIB_NOOP_METRICS: "1"

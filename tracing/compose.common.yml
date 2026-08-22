@@ -1,0 +1,11 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.136.0
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/tracing/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      - jaeger
+    networks:
+      - app_net

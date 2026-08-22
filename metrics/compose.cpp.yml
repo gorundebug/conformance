@@ -1,0 +1,52 @@
+services:
+  analyticsservice:
+    restart: "no"
+    command:
+      - /workspace/build/analyticsservice/example_analytics_service
+      - --config
+      - /workspace/conformance/analyticsservice.static_config.yaml
+      - --config_vars
+      - /workspace/conformance/analyticsservice.config_vars.yaml
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/cpp:/workspace/conformance:ro
+    depends_on:
+      - jaeger
+
+  inventoryservice:
+    restart: "no"
+    command:
+      - /workspace/build/inventoryservice/example_inventory_service
+      - --config
+      - /workspace/conformance/inventoryservice.static_config.yaml
+      - --config_vars
+      - /workspace/conformance/inventoryservice.config_vars.yaml
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/cpp:/workspace/conformance:ro
+    depends_on:
+      - jaeger
+
+  orderservice:
+    restart: "no"
+    command:
+      - /workspace/build/orderservice/example_order_service
+      - --config
+      - /workspace/conformance/orderservice.static_config.yaml
+      - --config_vars
+      - /workspace/conformance/orderservice.config_vars.yaml
+    volumes:
+      - ${SERVICELIB_CONFORMANCE_DIR}/.artifacts/metrics/cpp:/workspace/conformance:ro
+    depends_on:
+      - inventoryservice
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - app_net
+
+volumes:
+  cpp-cmake-build:
+    external: true
+    name: cppexample_cpp-cmake-build

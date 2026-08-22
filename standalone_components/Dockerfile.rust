@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1.7
+FROM rust:1.97-bookworm
+
+ARG TARGETARCH
+ARG OPENAPI_GENERATOR_VERSION=7.24.0
+RUN rm -f /etc/apt/apt.conf.d/docker-clean
+RUN --mount=type=cache,id=standalone-rust-apt-lists-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+    --mount=type=cache,id=standalone-rust-apt-cache-${TARGETARCH},target=/var/cache/apt,sharing=locked \
+    apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       ca-certificates cmake curl default-jre-headless make \
+    && curl --fail --location --silent --show-error \
+       "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/${OPENAPI_GENERATOR_VERSION}/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar" \
+       --output /opt/openapi-generator-cli.jar \
+    && printf '%s\n' '#!/bin/sh' \
+       'exec java -jar /opt/openapi-generator-cli.jar "$@"' \
+       > /usr/local/bin/openapi-generator \
+    && chmod 0755 /usr/local/bin/openapi-generator

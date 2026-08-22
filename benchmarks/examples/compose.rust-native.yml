@@ -1,0 +1,7 @@
+services:
+  inventoryservice:
+    environment:
+      TOKIO_WORKER_THREADS: ${BENCHMARK_SERVICE_CORES}
+  orderservice:
+    environment:
+      TOKIO_WORKER_THREADS: ${BENCHMARK_SERVICE_CORES}

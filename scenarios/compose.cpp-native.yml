@@ -1,0 +1,6 @@
+services:
+  inventoryservice:
+    restart: "no"
+  orderservice:
+    restart: "no"
+    depends_on: [inventoryservice]

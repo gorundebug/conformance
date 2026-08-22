@@ -1,0 +1,97 @@
+{
+  "boundary_type_substitutions": {
+    "userver :: formats :: yaml :: Value": "YamlValue",
+    "userver :: formats :: parse :: To": "TypeTag",
+    "userver :: ugrpc :: server :: CallContext": ":: grpc :: ServerContext",
+    "userver :: ugrpc :: client :: CallOptions": "CallOptions",
+    "config :: YamlValue": "YamlValue",
+    "config :: TypeTag": "TypeTag",
+    "UserverDataSink": "DataSink",
+    "UserverDataSource": "DataSource"
+  },
+  "signature_deviations": {
+    "datasink/grpc/bidistreaming.hpp": {
+      "reason": "asio-grpc generated clients expose AsyncSession instead of userver's callable stream object; the public Rpc alias selects that transport result while every endpoint method remains identical.",
+      "canonical_only": [
+        "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >"
+      ],
+      "boost_only": [
+        "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = typename detail :: BidirectionalStreamingRpcType < ClientFunction > :: type"
+      ]
+    },
+    "datasink/grpc/clientstreaming.hpp": {
+      "reason": "asio-grpc generated clients expose AsyncSession instead of userver's callable stream object; the public Rpc alias selects that transport result while every endpoint method remains identical.",
+      "canonical_only": [
+        "alias|servicelib::ClientStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >"
+      ],
+      "boost_only": [
+        "alias|servicelib::ClientStreamingEndpoint|using Rpc = typename detail :: ClientStreamingRpcType < ClientFunction > :: type"
+      ]
+    },
+    "datasink/grpc/common.hpp": {
+      "reason": "The external userver CallOptions type is replaced by an owned transport-neutral value type.",
+      "canonical_only": [],
+      "boost_only": [
+        "type|servicelib|struct CallOptions final"
+      ]
+    },
+    "datasource/grpc/nostreaming.hpp": {
+      "reason": "The asio-grpc server adapter must await graph completion without blocking an Asio worker; asyncHandle is the transport-boundary counterpart of canonical handle and preserves the same graph, metrics, tracing, cancellation and response semantics.",
+      "canonical_only": [],
+      "boost_only": [
+        "callable|servicelib::NoStreamingEndpoint|boost :: asio :: awaitable < Res > asyncHandle ( MessageContext , const Req & )"
+      ]
+    },
+    "runtime/config/loader.hpp": {
+      "reason": "The userver TaskProcessor constructor argument has no Boost counterpart; file polling owns one stoppable native thread.",
+      "canonical_only": [
+        "callable|servicelib::ConfigLoader|ConfigLoader ( Paths , YamlValue , log :: Logger & , metrics :: Metrics & , std :: string , userver :: engine :: TaskProcessor * = nullptr )"
+      ],
+      "boost_only": [
+        "callable|servicelib::ConfigLoader|ConfigLoader ( Paths , YamlValue , log :: Logger & , metrics :: Metrics & , std :: string )"
+      ]
+    },
+    "runtime/context.hpp": {
+      "reason": "The Boost transport needs an explicit reference-counted completion token to preserve canonical request-completion ordering across Asio coroutine and pooled execution boundaries; userver provides the equivalent lifetime tracking through its task runtime.",
+      "canonical_only": [],
+      "boost_only": [
+        "callable|servicelib::AsyncCompletionState|[[ nodiscard ]] static std :: shared_ptr < AsyncCompletionState > make ( std :: function < void ( ) > , std :: shared_ptr < AsyncCompletionToken > = { } )",
+        "callable|servicelib::AsyncCompletionState|[[ nodiscard ]] std :: shared_ptr < AsyncCompletionToken > retain ( )",
+        "callable|servicelib::AsyncCompletionState|explicit AsyncCompletionState ( std :: function < void ( ) > , std :: shared_ptr < AsyncCompletionToken > = { } )",
+        "callable|servicelib::AsyncCompletionState|void release ( ) noexcept",
+        "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken & operator = ( AsyncCompletionToken && ) noexcept = default",
+        "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken & operator = ( const AsyncCompletionToken & ) = delete",
+        "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken ( AsyncCompletionToken && ) noexcept = default",
+        "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken ( const AsyncCompletionToken & ) = delete",
+        "callable|servicelib::AsyncCompletionToken|explicit AsyncCompletionToken ( std :: shared_ptr < AsyncCompletionState > ) noexcept",
+        "callable|servicelib::AsyncCompletionToken|~ AsyncCompletionToken ( )",
+        "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withCompletion ( std :: shared_ptr < AsyncCompletionState > ) &&",
+        "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withCompletion ( std :: shared_ptr < AsyncCompletionState > ) const &",
+        "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withoutCompletion ( ) &&",
+        "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withoutCompletion ( ) const &",
+        "callable|servicelib::MessageContext|[[ nodiscard ]] std :: shared_ptr < AsyncCompletionToken > retainCompletion ( ) const",
+        "callable|servicelib|inline AsyncCompletionToken :: AsyncCompletionToken ( std :: shared_ptr < AsyncCompletionState > ) noexcept",
+        "callable|servicelib|inline AsyncCompletionToken :: ~ AsyncCompletionToken ( )",
+        "type|servicelib|class AsyncCompletionState",
+        "type|servicelib|class AsyncCompletionState final : public std :: enable_shared_from_this < AsyncCompletionState >",
+        "type|servicelib|class AsyncCompletionToken final"
+      ]
+    },
+    "runtime/detail/kafka_admin.hpp": {
+      "reason": "The userver Kafka producer adapter cannot query broker metadata directly, so its transport boundary owns the partition-count helper; the Boost librdkafka producer exposes the equivalent operation on its producer adapter.",
+      "canonical_only": [
+        "callable|servicelib|inline std :: uint32_t KafkaTopicPartitionCount ( const config :: KafkaDataConnectorConfig & , const std :: string & )"
+      ],
+      "boost_only": []
+    },
+    "runtime/telemetry/telemetry.hpp": {
+      "reason": "Factories whose only possible result is a userver telemetry backend are intentionally absent from the Boost runtime.",
+      "canonical_only": [
+        "callable|servicelib|inline log :: Logger & createUserverLogger ( )",
+        "callable|servicelib|inline std :: unique_ptr < metrics :: Metrics > createUserverMetrics ( :: userver :: utils :: statistics :: Storage & )",
+        "callable|servicelib|inline tracing :: Tracing & createUserverTracing ( )"
+      ],
+      "boost_only": []
+    }
+  }
+}

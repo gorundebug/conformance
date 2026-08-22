@@ -1,0 +1,32 @@
+services:
+  redpanda:
+    restart: "no"
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --set
+      - redpanda.auto_create_topics_enabled=false
+
+  analyticsservice:
+    restart: "no"
+    environment:
+      ORDER_EVENTS_BROKERS: redpanda:9092
+      ORDER_PROCESSED_ENABLED: "true"
+      SECDIST_CONFIG: '{"kafka_settings":{"kafka-consumer-order-events":{"brokers":"redpanda:9092"}}}'
+
+  inventoryservice:
+    restart: "no"
+
+  orderservice:
+    restart: "no"
+    environment:
+      ORDER_EVENTS_BROKERS: redpanda:9092
+      ORDER_PROCESSED_ENABLED: "true"
