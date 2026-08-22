@@ -43,7 +43,8 @@ anything. An existing shared checkout can be reused explicitly:
 ### Optional shared package proxy
 
 Generated examples include one project-independent Nexus proxy for Go, npm,
-PyPI, Cargo, Helm, Maven Central and Docker Hub artifacts. It is enabled only
+PyPI, Cargo, Helm, Maven Central, Debian/Ubuntu APT, Docker Hub and immutable GitHub/GitLab
+artifacts. It is enabled only
 when the caller exports one global data directory; conformance never enables
 it on its own:
 
@@ -56,10 +57,11 @@ make -C .dependencies/goexample SERVICEGEN_NEXUS_ACCEPT_EULA=true dependency-cac
 
 The quickstart derives portable host/container proxy variables automatically.
 Docker Desktop resolves `host.docker.internal` natively; Linux uses Docker's
-`host-gateway` mapping. The shared data survives `dependency-cache-down`;
-arbitrary Git clones and direct GitHub release downloads are outside the
-package-proxy contract. Without `SERVICEGEN_DEPENDENCY_PROXY_DIR`, all package
-downloads continue to use their normal upstreams.
+`host-gateway` mapping. The shared data survives `dependency-cache-down`.
+Pinned C++ sources populate their separate versioned source cache from
+immutable archives routed through Nexus. Without
+`SERVICEGEN_DEPENDENCY_PROXY_DIR`, all downloads continue to use their normal
+upstreams.
 
 The runners read the same path from `CONFORMANCE_DEPENDENCIES_DIR`; when it is
 unset, direct `make` and `python3 .../run.py` commands remain compatible with

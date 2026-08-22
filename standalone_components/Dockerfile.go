@@ -7,6 +7,14 @@ ARG PROTOC_VERSION=29.3
 ARG PROTOC_GEN_GO_VERSION=v1.36.3
 ARG PROTOC_GEN_GO_GRPC_VERSION=v1.5.1
 ARG OAPI_CODEGEN_VERSION=v2.4.1
+ARG SERVICEGEN_GITHUB_RAW_URL=https://github.com
+ARG SERVICEGEN_APT_DEBIAN_URL=
+ARG SERVICEGEN_APT_DEBIAN_SECURITY_URL=
+RUN if [ -n "$SERVICEGEN_APT_DEBIAN_URL$SERVICEGEN_APT_DEBIAN_SECURITY_URL" ]; then \
+      find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i \
+        -e "s|http://deb.debian.org/debian-security|$SERVICEGEN_APT_DEBIAN_SECURITY_URL|g" \
+        -e "s|http://deb.debian.org/debian|$SERVICEGEN_APT_DEBIAN_URL|g" {} +; \
+    fi
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
 RUN --mount=type=cache,id=standalone-go-apt-lists-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
@@ -20,7 +28,7 @@ RUN --mount=type=cache,id=standalone-go-apt-lists-${TARGETARCH},target=/var/lib/
          *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
        esac \
     && curl --fail --location --silent --show-error \
-       "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${protoc_arch}.zip" \
+       "${SERVICEGEN_GITHUB_RAW_URL}/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${protoc_arch}.zip" \
        --output /tmp/protoc.zip \
     && unzip -q /tmp/protoc.zip bin/protoc -d /usr/local \
     && rm -f /tmp/protoc.zip

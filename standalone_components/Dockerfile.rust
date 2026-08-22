@@ -3,6 +3,14 @@ FROM rust:1.97-bookworm
 
 ARG TARGETARCH
 ARG OPENAPI_GENERATOR_VERSION=7.24.0
+ARG SERVICEGEN_MAVEN_CENTRAL_URL=https://repo1.maven.org/maven2
+ARG SERVICEGEN_APT_DEBIAN_URL=
+ARG SERVICEGEN_APT_DEBIAN_SECURITY_URL=
+RUN if [ -n "$SERVICEGEN_APT_DEBIAN_URL$SERVICEGEN_APT_DEBIAN_SECURITY_URL" ]; then \
+      find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i \
+        -e "s|http://deb.debian.org/debian-security|$SERVICEGEN_APT_DEBIAN_SECURITY_URL|g" \
+        -e "s|http://deb.debian.org/debian|$SERVICEGEN_APT_DEBIAN_URL|g" {} +; \
+    fi
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
 RUN --mount=type=cache,id=standalone-rust-apt-lists-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     --mount=type=cache,id=standalone-rust-apt-cache-${TARGETARCH},target=/var/cache/apt,sharing=locked \
@@ -10,7 +18,7 @@ RUN --mount=type=cache,id=standalone-rust-apt-lists-${TARGETARCH},target=/var/li
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
        ca-certificates cmake curl default-jre-headless make \
     && curl --fail --location --silent --show-error \
-       "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/${OPENAPI_GENERATOR_VERSION}/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar" \
+       "${SERVICEGEN_MAVEN_CENTRAL_URL}/org/openapitools/openapi-generator-cli/${OPENAPI_GENERATOR_VERSION}/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar" \
        --output /opt/openapi-generator-cli.jar \
     && printf '%s\n' '#!/bin/sh' \
        'exec java -jar /opt/openapi-generator-cli.jar "$@"' \

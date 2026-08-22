@@ -578,9 +578,18 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
 
 
 def ensure_rust_image() -> None:
+    build_args: list[str] = []
+    for name in (
+        "SERVICEGEN_MAVEN_CENTRAL_URL",
+        "SERVICEGEN_APT_DEBIAN_URL",
+        "SERVICEGEN_APT_DEBIAN_SECURITY_URL",
+    ):
+        if value := docker_build_environment_value(name):
+            build_args.extend(["--build-arg", f"{name}={value}"])
     run_command(
         [
             "docker", "build",
+            *build_args,
             "-f", str(Path(__file__).with_name("Dockerfile.rust")),
             "-t", RUST_TOOLCHAIN_IMAGE,
             str(Path(__file__).parent),
@@ -591,9 +600,18 @@ def ensure_rust_image() -> None:
 
 
 def ensure_go_image() -> None:
+    build_args: list[str] = []
+    for name in (
+        "SERVICEGEN_GITHUB_RAW_URL",
+        "SERVICEGEN_APT_DEBIAN_URL",
+        "SERVICEGEN_APT_DEBIAN_SECURITY_URL",
+    ):
+        if value := docker_build_environment_value(name):
+            build_args.extend(["--build-arg", f"{name}={value}"])
     run_command(
         [
             "docker", "build",
+            *build_args,
             "-f", str(Path(__file__).with_name("Dockerfile.go")),
             "-t", GO_TOOLCHAIN_IMAGE,
             str(Path(__file__).parent),
@@ -601,6 +619,17 @@ def ensure_go_image() -> None:
         CONFORMANCE,
         log_name="go-toolchain",
     )
+
+
+def docker_build_environment_value(name: str) -> str | None:
+    value = os.environ.get(name)
+    if not value or not os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+        return value
+    host = os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_HOST", "localhost")
+    docker_host = os.environ.get(
+        "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+    )
+    return value.replace(f"://{host}:", f"://{docker_host}:")
 
 
 def build_cpp(

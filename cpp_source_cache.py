@@ -139,10 +139,10 @@ def prepare_command(framework: Path) -> list[str]:
         "-DCPPBOOSTSERVICELIB_ENABLE_OTEL=ON "
         "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON"
     )
-    populate = (
-        f"{configure} && "
-        f"cmake --build {container_cache} --target opentelemetry-proto"
-    )
+    # Every source, including opentelemetry-proto, is populated during
+    # configure from immutable archives. No dependency build target is needed
+    # merely to complete the source cache.
+    populate = configure
     locked = (
         f"if [ -f {ready} ]; then "
         f"echo \"[source-cache] reuse {cache_name(framework)}\"; "
@@ -158,12 +158,19 @@ def prepare_command(framework: Path) -> list[str]:
     run = (
         f"flock {container_cache}/.lock -c '{locked}'"
     )
-    return [
+    command = [
         "docker", "run", "--rm", "-v", f"{framework}:/workspace",
         "-v", f"{host_cache}:{container_cache}", "-w",
-        "/workspace", "cppboostservicelib-build:latest", "/bin/bash", "-lc",
-        run,
+        "/workspace",
     ]
+    github_raw_url = os.environ.get("SERVICEGEN_GITHUB_RAW_URL")
+    if github_raw_url:
+        command.extend(["--add-host", "host.docker.internal:host-gateway"])
+        command.extend(["--env", f"SERVICEGEN_GITHUB_RAW_URL={github_raw_url}"])
+    command.extend([
+        "cppboostservicelib-build:latest", "/bin/bash", "-lc", run,
+    ])
+    return command
 
 
 def ensure(framework: Path) -> Path:
