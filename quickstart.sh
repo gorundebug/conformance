@@ -136,6 +136,7 @@ for repo in "${REPOS[@]}"; do
   git clone --depth 1 "$ORG/$repo.git" "$dir"
 done
 
+PROXY_BIN_DIR=""
 if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
   proxy_script="$DEPENDENCIES_DIR/goexample/scripts/dependency-cache.generated.sh"
   if [ ! -x "$proxy_script" ]; then
@@ -145,10 +146,13 @@ if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
   export SERVICEGEN_NEXUS_CLIENT_HOST="${SERVICEGEN_DEPENDENCY_PROXY_HOST:-localhost}"
   eval "$("$proxy_script" env)"
   export SERVICEGEN_REAL_DOCKER="$(command -v docker)"
-  proxy_bin="$CONFORMANCE_ROOT/.artifacts/dependency-proxy-bin"
-  mkdir -p "$proxy_bin"
-  ln -sfn "$CONFORMANCE_ROOT/scripts/docker-dependency-proxy.sh" "$proxy_bin/docker"
-  export PATH="$proxy_bin:$PATH"
+  # Keep the wrapper outside .artifacts. A profile switch deliberately clears
+  # that directory before the suite starts; placing the wrapper there made
+  # PATH silently fall back to the real Docker CLI and leaked host-side
+  # localhost proxy URLs into container builds.
+  PROXY_BIN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/servicelib-proxy-bin.XXXXXX")"
+  ln -s "$CONFORMANCE_ROOT/scripts/docker-dependency-proxy.sh" "$PROXY_BIN_DIR/docker"
+  export PATH="$PROXY_BIN_DIR:$PATH"
   echo "==> Using shared dependency proxy (host: $SERVICEGEN_NEXUS_CLIENT_HOST, containers: ${SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST:-host.docker.internal})"
 fi
 
@@ -183,6 +187,10 @@ cleanup_run() {
   if [ -n "$PROFILE_TEMP_DIR" ]; then
     python3 -c 'import shutil, sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' \
       "$PROFILE_TEMP_DIR"
+  fi
+  if [ -n "$PROXY_BIN_DIR" ]; then
+    python3 -c 'import shutil, sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' \
+      "$PROXY_BIN_DIR"
   fi
 }
 trap cleanup_run EXIT INT TERM

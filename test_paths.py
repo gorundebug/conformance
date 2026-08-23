@@ -477,6 +477,13 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn('profile_workspace.py', quickstart)
         self.assertIn('CONFORMANCE_DEPENDENCIES_DIR="$DEPENDENCIES_DIR"', quickstart)
 
+    def test_quickstart_proxy_wrapper_survives_profile_artifact_cleanup(self) -> None:
+        quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
+        self.assertIn("servicelib-proxy-bin.XXXXXX", quickstart)
+        self.assertIn('export PATH="$PROXY_BIN_DIR:$PATH"', quickstart)
+        self.assertIn('shutil.rmtree(sys.argv[1], ignore_errors=True)', quickstart)
+        self.assertNotIn('.artifacts/dependency-proxy-bin', quickstart)
+
     def test_profile_switch_discards_only_incompatible_cpp_build_trees(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
 
