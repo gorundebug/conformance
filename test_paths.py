@@ -837,6 +837,10 @@ class DependencyRootTest(unittest.TestCase):
 
         self.assertIn("max_attempts=6", script)
         self.assertIn("attempt $attempt failed; retrying", script)
+        self.assertIn(
+            "-DCPPBOOSTSERVICELIB_GITHUB_ARCHIVE_BASE=",
+            script,
+        )
         self.assertIn(globals_["build_dir"](framework), script)
         self.assertTrue(any(
             value.startswith(str(globals_["cache_dir"](framework)) + ":")

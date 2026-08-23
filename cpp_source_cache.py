@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 
-SOURCE_CACHE_VERSION = b"servicelib-conformance-source-cache-v2\0"
+SOURCE_CACHE_VERSION = b"servicelib-conformance-source-cache-v3\0"
 CONFORMANCE_DIR = Path(__file__).resolve().parent
 CONTAINER_SOURCE_DIR = "/servicegen-cpp-source-cache"
 SOURCE_DIRECTORIES = {
@@ -161,7 +161,9 @@ def prepare_command(framework: Path) -> list[str]:
         "-DCPPBOOSTSERVICELIB_ENABLE_GRPC=ON "
         "-DCPPBOOSTSERVICELIB_ENABLE_KAFKA=ON "
         "-DCPPBOOSTSERVICELIB_ENABLE_OTEL=ON "
-        "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON"
+        "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
+        "-DCPPBOOSTSERVICELIB_GITHUB_ARCHIVE_BASE="
+        '"${SERVICEGEN_GITHUB_RAW_URL:-https://github.com}"'
     )
     # Every source, including opentelemetry-proto, is populated during
     # configure from immutable archives. No dependency build target is needed
