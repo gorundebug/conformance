@@ -11,12 +11,15 @@ endif
 	call-semantics standalone-components kubernetes \
 	generation profiling profiling-all profiling-tests \
 	benchmarks benchmark benchmarks-quick benchmarks-tests \
-	fast integration release resume all clean
+	fast integration release resume all clean dependency-source-cache-invalidate
 
 .NOTPARALLEL: fast integration release resume all
 
 test-paths:
 	python3 -m unittest test_paths
+
+dependency-source-cache-invalidate:
+	python3 cpp_source_cache.py invalidate
 
 tooling:
 	python3 run_suite.py tooling python3 tooling/run.py

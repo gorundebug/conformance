@@ -885,6 +885,38 @@ class DependencyRootTest(unittest.TestCase):
         )
         self.assertIn("host.docker.internal:host-gateway", command)
 
+    def test_source_cache_invalidation_preserves_unrelated_volumes(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory) / "cpp-sources"
+            cache.mkdir()
+            (cache / "prepared").write_text("yes")
+            listed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=(
+                    "servicelib-test_cpp-cmake-build-v1\n"
+                    "servicelib-test_cpp-ccache-v1\n"
+                    "unrelated_cpp-cmake-build-v1\n"
+                ),
+            )
+            with mock.patch.dict(
+                os.environ,
+                {"CONFORMANCE_CPP_SOURCE_CACHE_DIR": str(cache)},
+            ), mock.patch.object(
+                subprocess,
+                "run",
+                side_effect=[listed, subprocess.CompletedProcess([], 0)],
+            ) as run:
+                globals_["invalidate"]()
+
+            self.assertFalse(cache.exists())
+            self.assertEqual(
+                run.call_args_list[1].args[0],
+                ["docker", "volume", "rm", "servicelib-test_cpp-cmake-build-v1"],
+            )
+            self.assertEqual(run.call_count, 2)
+
     def test_native_scenarios_receive_the_shared_grpc_source_contexts(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "scenarios/run.py"))
         grpc_source = Path("/cache/grpc-src")

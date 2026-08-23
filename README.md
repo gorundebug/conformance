@@ -63,6 +63,16 @@ immutable archives routed through Nexus. Without
 `SERVICEGEN_DEPENDENCY_PROXY_DIR`, all downloads continue to use their normal
 upstreams.
 
+After changing any C++ dependency version or its population logic, invalidate
+the prepared sources and CMake state explicitly:
+
+```bash
+make dependency-source-cache-invalidate
+```
+
+This keeps compiler ccache and Nexus downloads. The next build configures a
+fresh dependency tree from the cached archives.
+
 The runners read the same path from `CONFORMANCE_DEPENDENCIES_DIR`; when it is
 unset, direct `make` and `python3 .../run.py` commands remain compatible with
 the development workspace where repositories sit next to `conformance`.
@@ -372,11 +382,11 @@ python3 transports/run.py --skip-build
 The machine-readable result is `.artifacts/transports/summary.json`. Bare
 `--parallel` is used for every CMake build; a passing local Release executable
 without the sanitizer and generator gates does not satisfy this suite.
-The first run prepares one versioned C++ dependency source cache per host
+The first run prepares one C++ dependency source cache per host
 architecture. Release, sanitizer, gRPC and Kafka builds keep independent CMake
 build trees but reuse those sources without downloading them again; the cache
-is invalidated automatically when the pinned versions or dependency setup
-changes. The generated streaming and Kafka recovery fixtures receive the same
+must be invalidated with `make dependency-source-cache-invalidate` whenever a
+pinned dependency or its population setup changes. The generated streaming and Kafka recovery fixtures receive the same
 cache as a read-only mount, so their disposable Docker build volumes do not
 trigger another dependency download.
 

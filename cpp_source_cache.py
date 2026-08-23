@@ -6,7 +6,9 @@ import hashlib
 import os
 import platform
 import re
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -27,6 +29,13 @@ SOURCE_DIRECTORIES = {
 REQUIRED_SOURCE_DIRECTORIES = tuple(dict.fromkeys(SOURCE_DIRECTORIES.values())) + (
     "opentelemetry-cpp-build/opentelemetry-proto-prefix/src/opentelemetry-proto",
 )
+
+
+def cache_root() -> Path:
+    return Path(os.environ.get(
+        "CONFORMANCE_CPP_SOURCE_CACHE_DIR",
+        CONFORMANCE_DIR / ".cpp-source-cache",
+    )).expanduser().resolve()
 
 
 def docker_url(url: str) -> tuple[str, str | None]:
@@ -68,11 +77,44 @@ def cache_name(framework: Path) -> str:
 
 
 def cache_dir(framework: Path) -> Path:
-    root = Path(os.environ.get(
-        "CONFORMANCE_CPP_SOURCE_CACHE_DIR",
-        CONFORMANCE_DIR / ".cpp-source-cache",
-    )).expanduser().resolve()
-    return root / cache_name(framework)
+    return cache_root() / cache_name(framework)
+
+
+def invalidate() -> None:
+    """Drop prepared sources and dependent CMake volumes, retaining ccache."""
+    root = cache_root()
+    forbidden = {Path("/").resolve(), Path.home().resolve(), CONFORMANCE_DIR}
+    if root in forbidden:
+        raise RuntimeError(f"refusing to remove unsafe source-cache path: {root}")
+    if root.exists():
+        shutil.rmtree(root)
+        print(f"[source-cache] removed {root}")
+    else:
+        print(f"[source-cache] no cache at {root}")
+
+    result = subprocess.run(
+        ["docker", "volume", "ls", "--format", "{{.Name}}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print("[source-cache] Docker unavailable; no CMake volumes removed")
+        return
+    prefixes = (
+        "cppexample_cpp-cmake-build",
+        "cppboostexample_cpp-cmake-build",
+        "cppboostservicelib-",
+        "servicelib-",
+    )
+    volumes = [
+        name for name in result.stdout.splitlines()
+        if "cpp-cmake-build" in name and name.startswith(prefixes)
+    ]
+    for volume in volumes:
+        subprocess.run(["docker", "volume", "rm", volume], check=True)
+        print(f"[source-cache] removed CMake volume {volume}")
+    print("[source-cache] ccache and Nexus data preserved")
 
 
 def source_dir(framework: Path) -> Path:
@@ -248,3 +290,9 @@ def ensure(framework: Path) -> Path:
     )
     print(f"[source-cache] reuse {cache_name(framework)}", flush=True)
     return sources
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] != ["invalidate"]:
+        raise SystemExit("usage: cpp_source_cache.py invalidate")
+    invalidate()
