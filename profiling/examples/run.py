@@ -193,7 +193,7 @@ LANGUAGES = (
         PROFILING_DIR / "compose.go-native.yml", "perf",
         "orderservice", "inventoryservice",
         repository="https://github.com/gorundebug/gonativeexample.git",
-        revision="v0.2.12",
+        revision="v0.2.13",
     ),
     Language("cpp", ROOT / "cppexample", PROFILING_DIR / "compose.cpp.yml", "perf", "example_order_service", "example_inventory_service"),
     Language(
@@ -608,6 +608,7 @@ def build_profiler_image(env: dict[str, str]) -> None:
         "SERVICEGEN_APT_DEBIAN_SECURITY_URL",
         "SERVICEGEN_GITHUB_RAW_URL",
         "PIP_INDEX_URL",
+        "PIP_TRUSTED_HOST",
     ):
         if value := docker_build_environment_value(env, name):
             build_args.extend(["--build-arg", f"{name}={value}"])
@@ -626,6 +627,8 @@ def docker_build_environment_value(env: dict[str, str], name: str) -> str | None
     docker_host = env.get(
         "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
     )
+    if name == "PIP_TRUSTED_HOST" and value == host:
+        return docker_host
     return value.replace(f"://{host}:", f"://{docker_host}:")
 
 
@@ -1290,7 +1293,7 @@ def profile_target(
     # measured load has finished.  A fixed 120-second timeout could therefore
     # reject a profile whose artifacts were already being finalized.
     profiler_exit_timeout = (
-        max(120, duration_seconds * 10)
+        max(300, duration_seconds * 16)
         if language.tool == "pyspy"
         else 120
     )

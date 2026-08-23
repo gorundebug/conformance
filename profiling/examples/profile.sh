@@ -28,7 +28,7 @@ folded_output="${output}.folded.txt"
 perf_frequency="${PROFILING_PERF_FREQUENCY:-997}"
 perf_event="${PROFILING_PERF_EVENT:-}"
 perf_period="${PROFILING_PERF_PERIOD:-}"
-pyspy_rate="${PROFILING_PYSPY_RATE:-10}"
+pyspy_rate="${PROFILING_PYSPY_RATE:-5}"
 pyspy_timeout="${PROFILING_PYSPY_TIMEOUT:-}"
 perf_event_args=()
 if [ -n "$perf_event" ]; then
@@ -78,7 +78,10 @@ case "$tool" in
     ;;
   pyspy)
     if [ -z "$pyspy_timeout" ]; then
-      pyspy_timeout=$((duration + 30))
+      pyspy_timeout=$((duration * 12))
+      if [ "$pyspy_timeout" -lt $((duration + 30)) ]; then
+        pyspy_timeout=$((duration + 30))
+      fi
     fi
     if [ -n "$ready_file" ]; then
       mkdir -p "$(dirname "$ready_file")"
