@@ -206,9 +206,23 @@ def ensure(framework: Path) -> Path:
     sources = source_dir(framework)
     missing = [name for name in REQUIRED_SOURCE_DIRECTORIES if not (sources / name).is_dir()]
     if missing:
+        build_proxy_args: list[str] = []
+        add_host: str | None = None
+        for name in (
+            "SERVICEGEN_APT_UBUNTU_ARCHIVE_URL",
+            "SERVICEGEN_APT_UBUNTU_SECURITY_URL",
+            "SERVICEGEN_APT_UBUNTU_PORTS_URL",
+        ):
+            if value := os.environ.get(name):
+                value, candidate = docker_url(value)
+                add_host = add_host or candidate
+                build_proxy_args.extend(["--build-arg", f"{name}={value}"])
+        if add_host is not None:
+            build_proxy_args[0:0] = ["--add-host", add_host]
         subprocess.run(
             [
-                "docker", "build", "-f", "Dockerfile.cmake", "-t",
+                "docker", "build", *build_proxy_args,
+                "-f", "Dockerfile.cmake", "-t",
                 "cppboostservicelib-build:latest", ".",
             ],
             cwd=framework,

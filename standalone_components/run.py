@@ -579,6 +579,10 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
 
 def ensure_rust_image() -> None:
     build_args: list[str] = []
+    if os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+        build_args.extend([
+            "--add-host", "host.docker.internal:host-gateway",
+        ])
     for name in (
         "SERVICEGEN_MAVEN_CENTRAL_URL",
         "SERVICEGEN_APT_DEBIAN_URL",
@@ -601,6 +605,10 @@ def ensure_rust_image() -> None:
 
 def ensure_go_image() -> None:
     build_args: list[str] = []
+    if os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+        build_args.extend([
+            "--add-host", "host.docker.internal:host-gateway",
+        ])
     for name in (
         "SERVICEGEN_GITHUB_RAW_URL",
         "SERVICEGEN_APT_DEBIAN_URL",
