@@ -634,7 +634,7 @@ class DependencyRootTest(unittest.TestCase):
             ):
                 build_name = (
                     "${SERVICEGEN_CPPBOOST_BUILD_VOLUME:-"
-                    "cppboostexample_cpp-cmake-build-v0.2.8}"
+                    "cppboostexample_cpp-cmake-build-v0.2.9}"
                 )
                 (root / name).write_text(
                     "volumes:\n"
