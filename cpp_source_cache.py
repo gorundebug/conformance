@@ -8,6 +8,7 @@ import platform
 import re
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 
 SOURCE_CACHE_VERSION = b"servicelib-conformance-source-cache-v2\0"
@@ -26,6 +27,29 @@ SOURCE_DIRECTORIES = {
 REQUIRED_SOURCE_DIRECTORIES = tuple(dict.fromkeys(SOURCE_DIRECTORIES.values())) + (
     "opentelemetry-cpp-build/opentelemetry-proto-prefix/src/opentelemetry-proto",
 )
+
+
+def docker_url(url: str) -> tuple[str, str | None]:
+    """Translate a host-local proxy URL for use inside a Docker container."""
+    parsed = urlsplit(url)
+    docker_host = os.environ.get(
+        "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST",
+        os.environ.get("SERVICEGEN_NEXUS_DOCKER_HOST", "host.docker.internal"),
+    )
+    if parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
+        rendered_host = (
+            f"[{docker_host}]" if ":" in docker_host else docker_host
+        )
+        netloc = rendered_host
+        if parsed.port is not None:
+            netloc += f":{parsed.port}"
+        parsed = parsed._replace(netloc=netloc)
+    add_host = (
+        "host.docker.internal:host-gateway"
+        if parsed.hostname == "host.docker.internal"
+        else None
+    )
+    return urlunsplit(parsed), add_host
 
 
 def cache_name(framework: Path) -> str:
@@ -165,7 +189,11 @@ def prepare_command(framework: Path) -> list[str]:
     ]
     github_raw_url = os.environ.get("SERVICEGEN_GITHUB_RAW_URL")
     if github_raw_url:
-        command.extend(["--add-host", "host.docker.internal:host-gateway"])
+        github_raw_url, add_host = docker_url(github_raw_url)
+        if add_host is not None:
+            # Docker Desktop resolves this name natively; host-gateway makes
+            # the same command work with Docker Engine on Linux.
+            command.extend(["--add-host", add_host])
         command.extend(["--env", f"SERVICEGEN_GITHUB_RAW_URL={github_raw_url}"])
     command.extend([
         "cppboostservicelib-build:latest", "/bin/bash", "-lc", run,

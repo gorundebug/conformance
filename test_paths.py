@@ -843,6 +843,44 @@ class DependencyRootTest(unittest.TestCase):
             for value in command
         ))
 
+    def test_source_cache_uses_docker_proxy_host_on_macos_and_linux(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))
+        dependency_root = Path(
+            os.environ.get(
+                "CONFORMANCE_DEPENDENCIES_DIR",
+                str(CONFORMANCE_DIR.parent),
+            )
+        )
+        framework = dependency_root / "cppboostservicelib"
+        old_raw = os.environ.get("SERVICEGEN_GITHUB_RAW_URL")
+        old_host = os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST")
+        try:
+            os.environ["SERVICEGEN_GITHUB_RAW_URL"] = (
+                "http://localhost:18081/repository/github-raw"
+            )
+            os.environ["SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST"] = (
+                "host.docker.internal"
+            )
+            command = globals_["prepare_command"](framework)
+        finally:
+            if old_raw is None:
+                os.environ.pop("SERVICEGEN_GITHUB_RAW_URL", None)
+            else:
+                os.environ["SERVICEGEN_GITHUB_RAW_URL"] = old_raw
+            if old_host is None:
+                os.environ.pop(
+                    "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", None
+                )
+            else:
+                os.environ["SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST"] = old_host
+
+        self.assertIn(
+            "SERVICEGEN_GITHUB_RAW_URL=http://host.docker.internal:18081/"
+            "repository/github-raw",
+            command,
+        )
+        self.assertIn("host.docker.internal:host-gateway", command)
+
     def test_native_scenarios_receive_the_shared_grpc_source_contexts(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "scenarios/run.py"))
         grpc_source = Path("/cache/grpc-src")
