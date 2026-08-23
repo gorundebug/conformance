@@ -2,6 +2,6 @@ module servicelib-conformance-serde-probe
 
 go 1.25.4
 
-require github.com/gorundebug/servicelib v0.2.10
+require github.com/gorundebug/servicelib v0.2.11
 
 replace github.com/gorundebug/servicelib => ../../../servicelib
