@@ -121,7 +121,7 @@ tracing:
 metrics:
 	python3 run_suite.py metrics python3 metrics/run.py
 
-dashboards: metrics kafka transports dashboards-core
+dashboards: metrics kafka temporal transports dashboards-core
 
 dashboards-core:
 	python3 run_suite.py dashboards python3 dashboards/run.py

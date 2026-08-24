@@ -18,6 +18,7 @@ ROOT = Path(
 METRICS_ARTIFACTS = CONFORMANCE / ".artifacts" / "metrics"
 KAFKA_ARTIFACTS = CONFORMANCE / ".artifacts" / "kafka"
 TRANSPORTS_ARTIFACT = CONFORMANCE / ".artifacts" / "transports" / "summary.json"
+TEMPORAL_ARTIFACT = CONFORMANCE / ".artifacts" / "temporal" / "summary.json"
 ARTIFACT = CONFORMANCE / ".artifacts" / "dashboards" / "summary.json"
 SERVICES = ("analyticsservice", "inventoryservice", "orderservice")
 LANGUAGES = ("go", "cpp", "cppboost", "python", "rust", "typescript")
@@ -326,6 +327,92 @@ def validate_language(
     }
 
 
+def validate_temporal_dashboard() -> dict[str, object]:
+    errors: list[str] = []
+    copies: list[str] = []
+    contents: list[str] = []
+    for language in LANGUAGES:
+        path = (
+            ROOT
+            / EXAMPLES[language]
+            / "automationservice"
+            / "grafana"
+            / "dashboards" / "13_temporal.generated.jsonnet"
+        )
+        if not path.is_file():
+            errors.append(f"missing Temporal dashboard: {path}")
+            continue
+        text = path.read_text()
+        copies.append(str(path.relative_to(ROOT)))
+        contents.append(text)
+    if contents and any(text != contents[0] for text in contents[1:]):
+        errors.append("Temporal dashboard sources differ across languages")
+
+    source = contents[0] if contents else ""
+    required_queries = {
+        "service_requests",
+        "temporal_worker_task_slots_available",
+        "temporal_worker_task_slots_used",
+        "temporal_request_latency_seconds_bucket",
+        "temporal_activity_schedule_to_start_latency_seconds_bucket",
+        "temporal_activity_execution_latency_seconds_bucket",
+        "stream_messages_total",
+    }
+    query_metrics = dashboard_query_metrics(source)
+    missing_queries = sorted(required_queries - query_metrics)
+    if missing_queries:
+        errors.append(
+            "Temporal dashboard misses canonical queries " + repr(missing_queries)
+        )
+    if re.search(r"servicelib_.*durable.*latency", source):
+        errors.append("Temporal dashboard uses a duplicate ServiceLib latency metric")
+
+    if not TEMPORAL_ARTIFACT.is_file():
+        errors.append("Temporal artifacts are absent; run `make temporal` first")
+        temporal_result: dict[str, object] = {}
+    else:
+        temporal_result = json.loads(TEMPORAL_ARTIFACT.read_text())
+        if temporal_result.get("status") != "pass":
+            errors.append("Temporal dashboard requires a passing Temporal run")
+    implementations = temporal_result.get("implementations", {})
+    live_evidence: dict[str, list[str]] = {}
+    required_sdk_series = {
+        "temporal_worker_task_slots_available",
+        "temporal_worker_task_slots_used",
+        "temporal_request_latency_seconds_bucket",
+        "temporal_activity_schedule_to_start_latency_seconds_bucket",
+        "temporal_activity_execution_latency_seconds_bucket",
+    }
+    if isinstance(implementations, dict):
+        for language in ("go", "python", "typescript"):
+            implementation = implementations.get(language, {})
+            metrics = (
+                implementation.get("temporalMetrics", {})
+                if isinstance(implementation, dict)
+                else {}
+            )
+            names = (
+                set(metrics.get("sdkMetricNames", []))
+                if isinstance(metrics, dict)
+                else set()
+            )
+            live_evidence[language] = sorted(names & required_sdk_series)
+            missing = sorted(required_sdk_series - names)
+            if missing:
+                errors.append(
+                    f"{language}: Temporal SDK does not export dashboard series {missing}"
+                )
+
+    return {
+        "status": "pass" if not errors else "fail",
+        "copies": copies,
+        "panel_query_metrics": sorted(query_metrics),
+        "live_sdk_evidence": live_evidence,
+        "duplicate_latency_metric": False,
+        "errors": errors,
+    }
+
+
 def main() -> int:
     metrics_summary = METRICS_ARTIFACTS / "summary.json"
     if not metrics_summary.is_file():
@@ -390,15 +477,20 @@ def main() -> int:
         )
         for language in LANGUAGES
     }
+    temporal_dashboard = validate_temporal_dashboard()
     errors = [
         f"{language}: {error}"
         for language, result in implementations.items()
         for error in result["errors"]
     ]
+    errors.extend(
+        f"temporal: {error}" for error in temporal_dashboard["errors"]
+    )
     summary = {
         "status": "pass" if not errors else "fail",
         "languages": list(LANGUAGES),
         "implementations": implementations,
+        "temporal": temporal_dashboard,
         "errors": errors,
         "http_client_live_traffic": True,
         "kafka_failure_recovery_metrics": True,

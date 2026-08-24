@@ -316,10 +316,13 @@ def verify_temporal_metric_sources(
         try:
             server = fetch_text(TEMPORAL_SERVER_METRICS_URL)
             sdk = fetch_text(TEMPORAL_SDK_METRICS_URL)
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "temporal-server.metrics.txt").write_text(server)
+            (output / "temporal-sdk.metrics.txt").write_text(sdk)
             required_sdk = (
                 "temporal_worker_task_slots_available",
-                "temporal_activity_execution_latency_bucket",
-                "temporal_activity_schedule_to_start_latency_bucket",
+                "temporal_activity_execution_latency_seconds_bucket",
+                "temporal_activity_schedule_to_start_latency_seconds_bucket",
             )
             if "service_requests" not in server:
                 raise RuntimeError("official Temporal Server metrics are absent")
@@ -338,9 +341,6 @@ def verify_temporal_metric_sources(
                 raise RuntimeError(
                     "Prometheus has not scraped both Temporal metric owners yet"
                 )
-            output.mkdir(parents=True, exist_ok=True)
-            (output / "temporal-server.metrics.txt").write_text(server)
-            (output / "temporal-sdk.metrics.txt").write_text(sdk)
             return {
                 "serverSeriesPresent": True,
                 "sdkSeriesPresent": True,
