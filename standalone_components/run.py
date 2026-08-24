@@ -686,14 +686,17 @@ def build_cpp(
             "-DSERVICELIB_SOURCE_DIR=/opt/servicelib",
             "-DUSERVER_SOURCE_DIR=/opt/userver",
         ])
+        protoc_commands = [
+            "&&", "conan_protoc=$(command -v protoc)",
+        ]
+        protoc_definition = ['-DProtobuf_PROTOC_EXECUTABLE="$conan_protoc"']
     else:
         definitions.extend([
             "-DCPPBOOSTSERVICELIB_SOURCE_DIR=/opt/servicelib",
-            "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=FETCH",
+            "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=CONAN",
         ])
-        definitions.append(cpp_source_cache.cmake_args(
-            root / LANGUAGES[language_name].framework
-        ).strip())
+        protoc_commands = []
+        protoc_definition = []
     service_targets = {
         "analyticsservice": (
             "example_analytics_service",
@@ -720,9 +723,21 @@ def build_cpp(
             f"cmake --build {build_dir} --target "
             f"{' '.join(build_targets)} --parallel"
         )
+    conan_dir = "/workspace/build/conan-standalone-debug"
     commands = [
+        f"./scripts/conan-install.generated.sh Debug {conan_dir}",
+        "&&", f"conan_toolchain=$(cat {conan_dir}/toolchain.path)",
+        "&&", 'conan_generators="${conan_toolchain%/*}"',
+        "&&", 'source "$conan_generators/conanbuild.sh"',
+        *protoc_commands,
+        "&&", f"cmake -E remove_directory {build_dir}",
+        "&&",
         f"cmake -S /standalone/{component} -B {build_dir} -G Ninja",
         "-DCMAKE_BUILD_TYPE=Debug",
+        '-DCMAKE_TOOLCHAIN_FILE="$conan_toolchain"',
+        '-DCMAKE_MODULE_PATH="$conan_generators"',
+        '-DCMAKE_PREFIX_PATH="$conan_generators"',
+        *protoc_definition,
         *definitions,
         "&&", build_command,
     ]

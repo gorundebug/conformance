@@ -270,6 +270,21 @@ class DependencyRootTest(unittest.TestCase):
         self.assertGreaterEqual(source.count('"conan" / "dependencies_generated.py"'), 2)
         self.assertNotIn('"cmake" / "DependencyVersions.cmake"', source)
 
+    def test_standalone_cpp_builds_install_conan_graph_before_cmake(self) -> None:
+        source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
+        install = "./scripts/conan-install.generated.sh Debug"
+        toolchain = '-DCMAKE_TOOLCHAIN_FILE="$conan_toolchain"'
+        module_path = '-DCMAKE_MODULE_PATH="$conan_generators"'
+        prefix_path = '-DCMAKE_PREFIX_PATH="$conan_generators"'
+        protoc = '-DProtobuf_PROTOC_EXECUTABLE="$conan_protoc"'
+        self.assertIn(install, source)
+        self.assertIn(toolchain, source)
+        self.assertIn(module_path, source)
+        self.assertIn(prefix_path, source)
+        self.assertIn(protoc, source)
+        self.assertLess(source.index(install), source.index(toolchain))
+        self.assertIn("-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=CONAN", source)
+
     def test_aggregate_prints_complete_terminal_summary(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "aggregate.py"))
         suites = globals_["SUITES"]
