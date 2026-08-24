@@ -45,11 +45,14 @@ GO_TOOLCHAIN_IMAGE = f"servicelib-standalone-go:{GO_VERSION}"
 RUN_ID = f"servicegen-standalone-{os.getpid()}-{int(time.time())}"
 ACTIVE_CONTAINERS: set[str] = set()
 
-SERVICES = ("analyticsservice", "inventoryservice", "orderservice")
+SERVICES = (
+    "analyticsservice", "automationservice", "inventoryservice", "orderservice",
+)
 MODULES = ("inventory_service_api", "model", "order_service_api")
 COMPONENTS = SERVICES + MODULES
 DECLARED_MODULES: dict[str, tuple[str, ...]] = {
     "analyticsservice": ("model",),
+    "automationservice": (),
     "inventoryservice": ("inventory_service_api", "model"),
     "orderservice": (
         "inventory_service_api",
@@ -271,6 +274,7 @@ def materialize_typescript(
         "packages:\n" + "".join(f'  - "{item}"\n' for item in workspace)
         + "\nallowBuilds:\n"
         + "  '@confluentinc/kafka-javascript': true\n"
+        + "  '@swc/core': true\n"
         + "  esbuild: true\n"
         + "  protobufjs: false\n"
     )
@@ -286,6 +290,24 @@ MATERIALIZERS = {
 }
 
 
+def implementation_language(
+    root: Path, requested_language: str, component: str,
+) -> str:
+    """Return the generated implementation, including documented fallbacks."""
+    component_root = root / LANGUAGES[requested_language].example / component
+    markers = (
+        ("go", "go.mod"),
+        ("python", "pyproject.toml"),
+        ("rust", "Cargo.toml"),
+        ("typescript", "package.json"),
+    )
+    if component in SERVICES:
+        for language_name, marker in markers:
+            if (component_root / marker).is_file():
+                return language_name
+    return requested_language
+
+
 def materialize_component(
     root: Path,
     language_name: str,
@@ -295,8 +317,16 @@ def materialize_component(
     if target.exists():
         shutil.rmtree(target)
     target.mkdir(parents=True)
-    language = LANGUAGES[language_name]
-    MATERIALIZERS[language_name](root, language, component, target)
+    requested = LANGUAGES[language_name]
+    implementation = implementation_language(root, language_name, component)
+    implementation_descriptor = Language(
+        implementation,
+        requested.example,
+        LANGUAGES[implementation].framework,
+    )
+    MATERIALIZERS[implementation](
+        root, implementation_descriptor, component, target,
+    )
     assert_plain_filesystem_tree(target)
 
 
@@ -777,25 +807,38 @@ def main() -> int:
     matrix: dict[str, dict[str, object]] = {}
     failures: list[str] = []
     cpp_contexts: dict[str, CppContext] = {}
+    unavailable_implementations: set[str] = set()
+    required_implementations = {
+        implementation_language(root, language_name, component)
+        for language_name in languages
+        for component in components
+    }
     try:
-        if not args.prepare_only and "go" in languages:
+        if not args.prepare_only and "go" in required_implementations:
             try:
                 ensure_go_image()
             except Exception as error:  # noqa: BLE001
                 failures.append(f"go:toolchain: {error}")
                 print(f"[standalone] FAIL go:toolchain: {error}", file=sys.stderr)
-                languages = [name for name in languages if name != "go"]
-        if not args.prepare_only and "rust" in languages:
+                unavailable_implementations.add("go")
+        if not args.prepare_only and "rust" in required_implementations:
             try:
                 ensure_rust_image()
             except Exception as error:  # noqa: BLE001
                 failures.append(f"rust:toolchain: {error}")
                 print(f"[standalone] FAIL rust:toolchain: {error}", file=sys.stderr)
-                languages = [name for name in languages if name != "rust"]
+                unavailable_implementations.add("rust")
         for language_name in languages:
             language_results: dict[str, object] = {}
             matrix[language_name] = language_results
-            if not args.prepare_only and language_name in {"cpp", "cppboost"}:
+            if (
+                not args.prepare_only
+                and language_name in {"cpp", "cppboost"}
+                and language_name in {
+                    implementation_language(root, language_name, component)
+                    for component in components
+                }
+            ):
                 try:
                     cpp_contexts[language_name] = ensure_cpp_image(root, language_name)
                 except Exception as error:  # noqa: BLE001
@@ -804,29 +847,37 @@ def main() -> int:
                     continue
             for component in components:
                 label = f"{language_name}:{component}"
+                implementation = implementation_language(
+                    root, language_name, component,
+                )
                 target = workspace_parent / language_name / component
                 print(f"[standalone] START {label}", flush=True)
                 item: dict[str, object] = {
                     "declared_local_modules": list(DECLARED_MODULES[component]),
                     "git_required": False,
+                    "implementation_language": implementation,
                     "workspace": str(target),
                 }
                 language_results[component] = item
                 item_started = time.monotonic()
                 try:
+                    if implementation in unavailable_implementations:
+                        raise RuntimeError(
+                            f"{implementation} toolchain preparation failed"
+                        )
                     materialize_component(root, language_name, component, target)
                     item["materialized"] = True
                     if not args.prepare_only:
-                        if language_name in {"cpp", "cppboost"}:
+                        if implementation in {"cpp", "cppboost"}:
                             build_cpp(
                                 root,
                                 target,
-                                language_name,
+                                implementation,
                                 component,
                                 cpp_contexts[language_name],
                             )
                         else:
-                            BUILDERS[language_name](target, component)
+                            BUILDERS[implementation](target, component)
                         item["build_test"] = "pass"
                     else:
                         item["build_test"] = "not-run"

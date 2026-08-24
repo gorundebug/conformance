@@ -66,6 +66,20 @@ class StandaloneComponentTest(unittest.TestCase):
             self.assertNotIn("unusedmodule", workspace)
             self.assertFalse((target / "inventory_service_api").exists())
 
+    def test_unsupported_temporal_language_uses_generated_go_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            automation = root / "cppexample" / "automationservice"
+            automation.mkdir(parents=True)
+            (automation / "go.mod").write_text(
+                "module example/automationservice\n\ngo 1.99.2\n"
+            )
+
+            self.assertEqual(
+                run.implementation_language(root, "cpp", "automationservice"),
+                "go",
+            )
+
     def test_typescript_override_preserves_public_package_names(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -105,6 +119,10 @@ class StandaloneComponentTest(unittest.TestCase):
             )
             self.assertEqual(
                 isolated["name"], "@gorundebug/tsexample-analyticsservice"
+            )
+            self.assertIn(
+                "  '@swc/core': true",
+                (target / "pnpm-workspace.yaml").read_text(),
             )
 
     def test_diagnostic_summary_is_separate_from_authoritative_summary(self) -> None:
