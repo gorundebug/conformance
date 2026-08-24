@@ -17,6 +17,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
+import go_toolchain
 
 HERE = Path(__file__).resolve().parent
 CONFORMANCE_DIR = HERE.parent
@@ -126,6 +127,7 @@ def environment(implementation: Implementation) -> dict[str, str]:
     env["SERVICELIB_CONFORMANCE_DEPENDENCIES_DIR"] = str(ROOT)
     env["SERVICELIB_CONFORMANCE_DIR"] = str(CONFORMANCE_DIR)
     env["SERVICELIB_SCENARIO_ARTIFACTS_DIR"] = str(ARTIFACTS)
+    env["SERVICEGEN_GO_TOOLCHAIN_IMAGE"] = go_toolchain.docker_image(ROOT)
     if implementation.name == "go":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     elif implementation.name == "cpp":
@@ -194,7 +196,7 @@ def prepare_grpc_probe() -> None:
         "GOCACHE=/go-cache",
         "--env",
         "GOMODCACHE=/go/pkg/mod",
-        "golang:1.25-bookworm",
+        go_toolchain.docker_image(ROOT),
         "go",
         "build",
         "-trimpath",

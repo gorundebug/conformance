@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
+import go_toolchain
 import typescript_toolchain
 
 
@@ -650,7 +651,7 @@ def main() -> int:
                 "servicelib-conformance-go-build-cache:"
                 "/root/.cache/go-build"
             ),
-            "--workdir", "/workspace", "golang:1.25-bookworm",
+            "--workdir", "/workspace", go_toolchain.docker_image(ROOT),
             "go", "test", "./runtime/telemetry/opentelemetry", "-run",
             "^TestOTelMetricNames/HTTPClient$", "-count=1",
         ],

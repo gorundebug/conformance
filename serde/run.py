@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
+import go_toolchain
 import typescript_toolchain
 
 
@@ -461,7 +462,7 @@ def main() -> int:
             *repository_mounts(),
             "-w",
             "/repo/conformance/serde/go_probe",
-            "golang:1.25-bookworm",
+            go_toolchain.docker_image(ROOT),
             "go",
             "run",
             ".",
@@ -580,7 +581,7 @@ def main() -> int:
             "-e", "GOCACHE=/tmp/go-cache",
             *repository_mounts(),
             "-w", "/repo/conformance/serde/protobuf_go_probe",
-            "golang:1.25-bookworm",
+            go_toolchain.docker_image(ROOT),
             "go", "run", ".",
         ],
         ROOT,

@@ -23,6 +23,11 @@ def example_version(root: Path) -> str:
     return workspace_version(root / "goexample" / "go.work")
 
 
+def docker_image(root: Path) -> str:
+    """Return the Go toolchain image matching the canonical generated workspace."""
+    return f"golang:{example_version(root)}-bookworm"
+
+
 def render_workspace(version: str, modules: list[Path] | tuple[Path, ...]) -> str:
     body = "".join(f"\t{module.resolve()}\n" for module in modules)
     return f"go {version}\n\nuse (\n{body})\n"

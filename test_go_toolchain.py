@@ -8,6 +8,16 @@ import go_toolchain
 
 
 class GoToolchainTest(unittest.TestCase):
+    def test_docker_image_uses_the_canonical_workspace_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            example = root / "goexample"
+            example.mkdir()
+            (example / "go.work").write_text("go 1.99.2\n")
+            self.assertEqual(
+                "golang:1.99.2-bookworm", go_toolchain.docker_image(root)
+            )
+
     def test_reads_workspace_version_and_renders_it_without_a_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

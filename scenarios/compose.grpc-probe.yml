@@ -1,6 +1,6 @@
 services:
   grpc-probe:
-    image: golang:1.25-bookworm
+    image: ${SERVICEGEN_GO_TOOLCHAIN_IMAGE:?SERVICEGEN_GO_TOOLCHAIN_IMAGE is required}
     entrypoint: [/scenario-artifacts/grpc-probe]
     working_dir: /
     volumes:
