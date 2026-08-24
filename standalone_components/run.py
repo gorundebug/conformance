@@ -29,6 +29,7 @@ CONFORMANCE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(CONFORMANCE))
 
 import cpp_source_cache  # noqa: E402
+import go_toolchain  # noqa: E402
 
 
 DEFAULT_ROOT = Path(
@@ -39,7 +40,8 @@ ARTIFACTS = CONFORMANCE / ".artifacts" / "standalone-components"
 SUMMARY = ARTIFACTS / "summary.json"
 DIAGNOSTIC_SUMMARY = ARTIFACTS / "diagnostic-summary.json"
 RUST_TOOLCHAIN_IMAGE = "servicelib-standalone-rust:1.97"
-GO_TOOLCHAIN_IMAGE = "servicelib-standalone-go:1.25.4"
+GO_VERSION = go_toolchain.example_version(DEFAULT_ROOT)
+GO_TOOLCHAIN_IMAGE = f"servicelib-standalone-go:{GO_VERSION}"
 RUN_ID = f"servicegen-standalone-{os.getpid()}-{int(time.time())}"
 ACTIVE_CONTAINERS: set[str] = set()
 
@@ -151,12 +153,7 @@ def materialize_go(root: Path, language: Language, component: str, target: Path)
     copy_source(root / language.framework, target / language.framework)
 
     uses = [component, *DECLARED_MODULES[component], language.framework]
-    go_version = "1.25.4"
-    source_work = example / "go.work"
-    if source_work.is_file():
-        match = re.search(r"(?m)^go\s+(\S+)", source_work.read_text())
-        if match:
-            go_version = match.group(1)
+    go_version = go_toolchain.workspace_version(example / "go.work")
     body = "\n".join(f"\t./{entry}" for entry in uses)
     (target / "go.work").write_text(f"go {go_version}\n\nuse (\n{body}\n)\n")
 
@@ -619,6 +616,7 @@ def ensure_go_image() -> None:
     run_command(
         [
             "docker", "build",
+            "--build-arg", f"GO_VERSION={GO_VERSION}",
             *build_args,
             "-f", str(Path(__file__).with_name("Dockerfile.go")),
             "-t", GO_TOOLCHAIN_IMAGE,

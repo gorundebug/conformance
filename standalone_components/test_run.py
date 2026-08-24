@@ -48,17 +48,18 @@ class StandaloneComponentTest(unittest.TestCase):
             for name in (*run.COMPONENTS, "unusedmodule"):
                 (example / name).mkdir(parents=True)
                 (example / name / "go.mod").write_text(
-                    f"module github.com/gorundebug/{name}\n\ngo 1.25.4\n"
+                    f"module github.com/gorundebug/{name}\n\ngo 1.99.2\n"
                 )
-            (example / "go.work").write_text("go 1.25.4\n")
+            (example / "go.work").write_text("go 1.99.2\n")
             (root / "servicelib").mkdir()
             (root / "servicelib" / "go.mod").write_text(
-                "module github.com/gorundebug/servicelib\n\ngo 1.25.4\n"
+                "module github.com/gorundebug/servicelib\n\ngo 1.99.2\n"
             )
             target = root / "isolated"
             run.materialize_component(root, "go", "analyticsservice", target)
 
             workspace = (target / "go.work").read_text()
+            self.assertIn("go 1.99.2", workspace)
             self.assertIn("./analyticsservice", workspace)
             self.assertIn("./model", workspace)
             self.assertIn("./servicelib", workspace)

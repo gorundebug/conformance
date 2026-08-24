@@ -19,6 +19,7 @@ import zipfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
+import go_toolchain
 
 
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
@@ -58,8 +59,9 @@ def active_example_profile() -> str:
 
 
 def write_local_go_work(path: Path, modules: tuple[Path, ...]) -> None:
-    body = "".join(f"\t{module.resolve()}\n" for module in modules)
-    path.write_text(f"go 1.25.4\n\nuse (\n{body})\n")
+    path.write_text(
+        go_toolchain.render_workspace(go_toolchain.example_version(ROOT), modules)
+    )
 
 
 def generator_preflight_environment(environment: dict[str, str]) -> dict[str, str]:

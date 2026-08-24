@@ -6,14 +6,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 
 CONFORMANCE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(CONFORMANCE))
+
+import go_toolchain  # noqa: E402
+
+
 ROOT = Path(
     os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)
 ).expanduser().resolve()
@@ -244,9 +251,10 @@ def runtime_probe(example: Path) -> None:
     local_go_work = ARTIFACTS / "go.work"
     go_modules = sorted(path.parent for path in example.rglob("go.mod"))
     local_go_work.write_text(
-        "go 1.25.4\n\nuse (\n"
-        + "".join(f"\t{module}\n" for module in go_modules)
-        + ")\n\nreplace github.com/gorundebug/servicelib => "
+        go_toolchain.render_workspace(
+            go_toolchain.workspace_version(example / "go.work"), go_modules,
+        )
+        + "\nreplace github.com/gorundebug/servicelib => "
         + str(ROOT / "servicelib")
         + "\n"
     )
@@ -498,6 +506,17 @@ def runtime_probe(example: Path) -> None:
     print("[kubernetes] PASS  go local k3s runtime", flush=True)
 
 
+def disposable_runtime_example(source: Path, destination: Path) -> Path:
+    """Copy generated inputs so build preparation cannot mutate a checkout."""
+    ignored = shutil.ignore_patterns(
+        ".git", ".idea", ".venv", "build", "dist", "node_modules", "target",
+        "tools",
+    )
+    target = destination / source.name
+    shutil.copytree(source, target, ignore=ignored)
+    return target
+
+
 def write_summary(status: str, error: str | None = None) -> None:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     value: dict[str, object] = {
@@ -523,7 +542,13 @@ def main() -> int:
         for language, directory in EXAMPLES.items():
             validate_example(language, ROOT / directory)
         if not args.static_only:
-            runtime_probe(ROOT / EXAMPLES["go"])
+            ARTIFACTS.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(
+                prefix="runtime-", dir=ARTIFACTS,
+            ) as directory:
+                runtime_probe(disposable_runtime_example(
+                    ROOT / EXAMPLES["go"], Path(directory),
+                ))
     except Exception as error:  # noqa: BLE001
         write_summary("fail", str(error))
         print(f"Kubernetes conformance failed: {error}", file=sys.stderr)

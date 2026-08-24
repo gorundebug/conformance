@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
-FROM golang:1.25.4-bookworm
+ARG GO_VERSION
+FROM golang:${GO_VERSION}-bookworm
 
 ARG TARGETARCH
 ARG PROTOC_VERSION=29.3
