@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import socket
@@ -19,7 +20,9 @@ ROOT = Path(
 ARTIFACTS = CONFORMANCE / ".artifacts" / "kubernetes"
 SUMMARY = ARTIFACTS / "summary.json"
 HELM_IMAGE = "alpine/helm:4.2.3"
-SERVICES = ("analyticsservice", "inventoryservice", "orderservice")
+SERVICES = (
+    "analyticsservice", "automationservice", "inventoryservice", "orderservice",
+)
 EXAMPLES = {
     "go": "goexample",
     "cpp": "cppexample",
@@ -64,6 +67,36 @@ def free_port() -> int:
         return int(listener.getsockname()[1])
 
 
+def edge_calls(value: dict[str, object], source: str, target: str) -> int:
+    nodes = value.get("nodes")
+    edges = value.get("edges")
+    if not isinstance(nodes, list) or not isinstance(edges, list):
+        raise RuntimeError("status graph has no nodes/edges")
+    node_ids = {
+        str(node.get("label", "")).split("(", 1)[0]: node.get("id")
+        for node in nodes if isinstance(node, dict)
+    }
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        if edge.get("from") != node_ids.get(source):
+            continue
+        if edge.get("to") != node_ids.get(target):
+            continue
+        label = str(edge.get("label", ""))
+        marker = "calls:"
+        position = label.find(marker)
+        if position < 0:
+            return 0
+        digits = []
+        for character in label[position + len(marker):].lstrip():
+            if not character.isdigit():
+                break
+            digits.append(character)
+        return int("".join(digits)) if digits else 0
+    raise RuntimeError(f"status graph has no {source!r}->{target!r} edge")
+
+
 def validate_example(language: str, example: Path) -> None:
     print(f"[kubernetes] START {language} static contract", flush=True)
     required = [
@@ -74,6 +107,8 @@ def validate_example(language: str, example: Path) -> None:
         example / "kubernetes" / "otel-collector-values.generated.yaml",
         example / "kubernetes" / "registries.generated.yaml",
         example / "kubernetes" / "redpanda-values.generated.yaml",
+        example / "kubernetes" / "temporal-postgresql.generated.yaml",
+        example / "kubernetes" / "temporal-values.generated.yaml",
         example / "scripts" / "kubernetes.generated.sh",
     ]
     for service in SERVICES:
@@ -117,7 +152,8 @@ def validate_example(language: str, example: Path) -> None:
     for token in (
         "kube-prometheus-stack", "opentelemetry-collector", "jaegertracing/jaeger",
         "grafana/loki", "OTEL_EXPORTER_OTLP_ENDPOINT", "grafana_dashboard=1",
-        "annotate configmap",
+        "annotate configmap", "temporal/temporal", "temporal-frontend:7233",
+        "temporal operator cluster health",
     ):
         if token not in project_script:
             raise RuntimeError(
@@ -182,8 +218,8 @@ def validate_example(language: str, example: Path) -> None:
         example,
     )
     chart_command = (
-        "for chart in analyticsservice/helm inventoryservice/helm "
-        "orderservice/helm; do "
+        "for chart in " + " ".join(f"{service}/helm" for service in SERVICES)
+        + "; do "
         "helm lint \"$chart\" --values \"$chart/values.generated.yaml\" "
         "--values \"$chart/values.yaml\"; "
         "helm template conformance \"$chart\" "
@@ -229,6 +265,55 @@ def runtime_probe(example: Path) -> None:
     try:
         run([*script, "up"], example, environment)
         run([*script, "test"], example, environment)
+        automation_status_path = (
+            "/api/v1/namespaces/servicelib-conformance/services/"
+            "http:automationservice:9094/proxy/status/data"
+        )
+        initial_automation_status = json.loads(capture(
+            [*kubectl, "get", "--raw", automation_status_path],
+            example, environment,
+        ))
+        initial_temporal_calls = edge_calls(
+            initial_automation_status, "Temporal Schedule", "Make Temporal Job",
+        )
+        run(
+            [
+                *kubectl, "--namespace", "servicelib-conformance", "exec",
+                "deployment/temporal-admintools", "--", "temporal", "schedule",
+                "trigger", "--schedule-id", "example-automation-schedule",
+                "--address", "temporal-frontend:7233", "--namespace", "default",
+            ],
+            example, environment,
+        )
+        temporal_deadline = time.monotonic() + 90
+        temporal_calls = initial_temporal_calls
+        durable_calls = 0
+        while time.monotonic() < temporal_deadline:
+            automation_status = json.loads(capture(
+                [*kubectl, "get", "--raw", automation_status_path],
+                example, environment, verbose=False,
+            ))
+            temporal_calls = edge_calls(
+                automation_status, "Temporal Schedule", "Make Temporal Job",
+            )
+            durable_calls = edge_calls(
+                automation_status, "Consume Durable Job", "Process Durable Job",
+            )
+            if temporal_calls > initial_temporal_calls and durable_calls > 0:
+                print(
+                    "[kubernetes] PASS  Temporal Schedule -> function -> "
+                    "DurableCall graph",
+                    flush=True,
+                )
+                break
+            time.sleep(0.5)
+        else:
+            raise RuntimeError(
+                "Kubernetes Temporal trigger did not traverse the Automation "
+                "Service graph: "
+                f"schedule calls {initial_temporal_calls}->{temporal_calls}, "
+                f"durable calls={durable_calls}"
+            )
         request_body = json.dumps({
             "customer_id": "kubernetes-check",
             "items": [{
@@ -328,7 +413,8 @@ def runtime_probe(example: Path) -> None:
             }
             log_services = set(loki.get("data", []))
             expected_services = {
-                "Analytics Service", "Inventory Service", "Order Service",
+                "Analytics Service", "Automation Service", "Inventory Service",
+                "Order Service",
             }
             telemetry_status = (
                 f"jaeger={sorted(jaeger_services)}, "
@@ -416,10 +502,17 @@ def write_summary(status: str, error: str | None = None) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--static-only", action="store_true",
+        help="lint generated Compose and Helm artifacts without starting k3s",
+    )
+    args = parser.parse_args()
     try:
         for language, directory in EXAMPLES.items():
             validate_example(language, ROOT / directory)
-        runtime_probe(ROOT / EXAMPLES["go"])
+        if not args.static_only:
+            runtime_probe(ROOT / EXAMPLES["go"])
     except Exception as error:  # noqa: BLE001
         write_summary("fail", str(error))
         print(f"Kubernetes conformance failed: {error}", file=sys.stderr)
