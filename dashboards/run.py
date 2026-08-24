@@ -392,7 +392,7 @@ def validate_temporal_dashboard() -> dict[str, object]:
                 else {}
             )
             names = (
-                set(metrics.get("sdkMetricNames", []))
+                set(metrics.get("canonicalPrometheusMetricNames", []))
                 if isinstance(metrics, dict)
                 else set()
             )

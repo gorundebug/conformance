@@ -320,13 +320,23 @@ def verify_temporal_metric_sources(
             (output / "temporal-server.metrics.txt").write_text(server)
             (output / "temporal-sdk.metrics.txt").write_text(sdk)
             required_sdk = (
-                "temporal_worker_task_slots_available",
-                "temporal_activity_execution_latency_seconds_bucket",
-                "temporal_activity_schedule_to_start_latency_seconds_bucket",
+                ("temporal_worker_task_slots_available",),
+                (
+                    "temporal_activity_execution_latency_seconds_bucket",
+                    "temporal_activity_execution_latency_bucket",
+                ),
+                (
+                    "temporal_activity_schedule_to_start_latency_seconds_bucket",
+                    "temporal_activity_schedule_to_start_latency_bucket",
+                ),
             )
             if "service_requests" not in server:
                 raise RuntimeError("official Temporal Server metrics are absent")
-            missing = [metric for metric in required_sdk if metric not in sdk]
+            missing = [
+                alternatives
+                for alternatives in required_sdk
+                if not any(metric in sdk for metric in alternatives)
+            ]
             if missing:
                 raise RuntimeError(f"official Temporal SDK metrics are absent: {missing}")
             if re.search(r"servicelib_.*durable.*latency", sdk):
@@ -341,6 +351,25 @@ def verify_temporal_metric_sources(
                 raise RuntimeError(
                     "Prometheus has not scraped both Temporal metric owners yet"
                 )
+            canonical_sdk_metrics = (
+                "temporal_worker_task_slots_available",
+                "temporal_worker_task_slots_used",
+                "temporal_request_latency_seconds_bucket",
+                "temporal_activity_schedule_to_start_latency_seconds_bucket",
+                "temporal_activity_execution_latency_seconds_bucket",
+            )
+            missing_canonical = [
+                metric
+                for metric in canonical_sdk_metrics
+                if not prometheus_query(
+                    f'{metric}{{telemetry_source="temporal-sdk"}}'
+                )
+            ]
+            if missing_canonical:
+                raise RuntimeError(
+                    "Prometheus did not normalize Temporal SDK metrics: "
+                    f"{missing_canonical}"
+                )
             return {
                 "serverSeriesPresent": True,
                 "sdkSeriesPresent": True,
@@ -349,6 +378,7 @@ def verify_temporal_metric_sources(
                 "duplicateServiceLibLatency": False,
                 "serverMetricNames": exported_metric_names(server),
                 "sdkMetricNames": exported_metric_names(sdk),
+                "canonicalPrometheusMetricNames": list(canonical_sdk_metrics),
             }
         except (OSError, urllib.error.URLError, json.JSONDecodeError, RuntimeError) as error:
             last_error = error
