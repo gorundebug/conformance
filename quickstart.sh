@@ -17,6 +17,7 @@ set -euo pipefail
 # Anything after the flags is forwarded to the run, e.g.:
 #   ./quickstart.sh -- tracing                       # only the tracing suite
 #   ./quickstart.sh -- metrics                       # only the metrics suite
+#   ./quickstart.sh -- temporal                      # Temporal Schedule/Task Queue/DurableCall
 #   ./quickstart.sh -- scenarios                     # framework/native scenarios
 #   ./quickstart.sh -- call-semantics                # FunctionCall graph (default)
 #   ./quickstart.sh --profile current -- call-semantics  # pooled graph

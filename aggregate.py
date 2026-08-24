@@ -16,7 +16,7 @@ SUITES = (
     "tooling", "structure", "signatures", "config", "config-schema",
     "config-runtime", "config-runtime-go", "config-runtime-typescript",
     "dependencies", "standalone-components", "pools",
-    "operators", "serde", "transports", "kafka", "tracing", "metrics",
+    "operators", "serde", "transports", "kafka", "temporal", "tracing", "metrics",
     "dashboards", "logging",
     "scenarios", "call-semantics", "generation", "kubernetes", "profiling",
 )
@@ -33,6 +33,7 @@ LANGUAGE_SUITES = {
         "go", "canonical-cpp", "cppboost", "python", "rust", "typescript",
     },
     "kafka": {"go", "cpp", "cppboost", "python", "rust", "typescript"},
+    "temporal": {"go", "python", "typescript"},
     "tracing": {"go", "cpp", "cppboost", "python", "rust", "typescript"},
     "metrics": {"go", "cpp", "cppboost", "python", "rust", "typescript"},
     "dashboards": {"go", "cpp", "cppboost", "python", "rust", "typescript"},

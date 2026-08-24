@@ -7,7 +7,7 @@ endif
 .PHONY: test-paths tooling structure signatures config config-core config-schema \
 	config-runtime config-runtime-core config-runtime-go \
 	config-runtime-typescript dependencies pools operators serde transports \
-	kafka tracing metrics dashboards dashboards-core logging scenarios \
+	kafka temporal tracing metrics dashboards dashboards-core logging scenarios \
 	call-semantics standalone-components kubernetes \
 	generation profiling profiling-all profiling-tests \
 	benchmarks benchmark benchmarks-quick benchmarks-tests \
@@ -31,7 +31,7 @@ release: fast integration profiling
 
 fast: tooling structure signatures config pools operators serde
 
-integration: config-runtime dependencies standalone-components transports kafka tracing metrics dashboards logging scenarios call-semantics generation kubernetes
+integration: config-runtime dependencies standalone-components transports kafka temporal tracing metrics dashboards logging scenarios call-semantics generation kubernetes
 
 resume:
 	python3 resume.py
@@ -81,6 +81,9 @@ transports:
 
 kafka:
 	python3 run_suite.py kafka python3 kafka/run.py
+
+temporal:
+	python3 run_suite.py temporal python3 temporal/run.py
 
 tracing:
 	python3 run_suite.py tracing python3 tracing/run.py

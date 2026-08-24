@@ -358,6 +358,31 @@ python3 kafka/run.py --skip-build
 Consumer-group snapshots and the matrix result are written to
 `.artifacts/kafka/`.
 
+## Temporal scheduling and durable execution
+
+The Temporal gate runs the supported Go, Python and TypeScript Automation
+Service implementations against the pinned real Temporal Server and PostgreSQL
+infrastructure. For each language it creates and validates the generated
+Schedule, stops the Worker, queues more executions than the configured Activity
+capacity, restarts the same service, and verifies that the durable backlog is
+pulled by available Worker slots. The observed graph must include the scheduled
+input, symmetric Temporal endpoint Workflow, `DurableCall` Workflow/Activity,
+the unchanged target Map node, and its normal result link. It also waits for one
+process-local cron firing and therefore distinguishes local scheduling from
+Temporal-owned recovery.
+
+```bash
+make temporal
+python3 temporal/run.py --language go
+python3 temporal/run.py --skip-build
+```
+
+Workflow listings and `/status/data` snapshots are stored below
+`.artifacts/temporal/`. C++ and Rust are deliberately absent from this runtime
+matrix: there is no production-supported official Temporal SDK for those
+frameworks, while their generated projects use the Go Automation Service
+fallback.
+
 ## C++ gRPC and Kafka transport conformance
 
 The transport gate executes the canonical C++ endpoint contract and the real
