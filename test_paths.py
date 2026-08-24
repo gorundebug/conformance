@@ -285,6 +285,11 @@ class DependencyRootTest(unittest.TestCase):
         self.assertLess(source.index(install), source.index(toolchain))
         self.assertIn("-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=CONAN", source)
 
+    def test_standalone_rust_runs_only_declared_generation_targets(self) -> None:
+        source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
+        self.assertIn('r"(?m)^generate\\s*:"', source)
+        self.assertIn('if re.search(', source)
+
     def test_aggregate_prints_complete_terminal_summary(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "aggregate.py"))
         suites = globals_["SUITES"]

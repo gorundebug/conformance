@@ -517,15 +517,23 @@ def build_python(target: Path, component: str) -> None:
 
 def build_rust(target: Path, component: str) -> None:
     package = component_package_name("rust", target / component)
-    generation_targets = [*DECLARED_MODULES[component], component]
+    generation_targets = [
+        item
+        for item in (*DECLARED_MODULES[component], component)
+        if re.search(
+            r"(?m)^generate\s*:",
+            (target / item / "Makefile").read_text(),
+        )
+    ]
     generation = " && ".join(
         f"make -C /workspace/{item} generate"
         for item in generation_targets
     )
-    script = " && ".join([
+    phases = [
         generation,
         " ".join(["cargo", "test", "-p", package, "--all-targets"]),
-    ])
+    ]
+    script = " && ".join(phase for phase in phases if phase)
     name = container_name("rust", component)
     run_command(
         [
