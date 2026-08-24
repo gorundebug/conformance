@@ -349,13 +349,15 @@ def boost_serde_script(skip_build: bool) -> str:
         )
     source_args = cpp_source_cache.cmake_args(BOOST)
     return (
-        f"cmake --preset debug {source_args}&& "
-        "cmake --build --preset debug --parallel --target "
+        "cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug "
+        f"-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON {source_args}&& "
+        "cmake --build build/debug --parallel --target "
         "cppboostservicelib_serde_test && "
         "ctest --test-dir build/debug --output-on-failure "
         "-R cppboostservicelib_serde_test && "
-        f"cmake --preset release {source_args}&& "
-        "cmake --build --preset release --parallel --target "
+        "cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release "
+        f"-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON {source_args}&& "
+        "cmake --build build/release --parallel --target "
         "cppboostservicelib_serde_test && "
         "ctest --test-dir build/release --output-on-failure "
         "-R cppboostservicelib_serde_test"
@@ -600,8 +602,10 @@ def main() -> int:
     canonical_protobuf_compose.extend([
         "--rm", *repository_mounts(), "cpp-build",
         "/bin/bash", "-lc",
+        "./scripts/conan-install.generated.sh Release /workspace/build/conan-release && "
+        "conan_toolchain=$(cat /workspace/build/conan-release/toolchain.path) && "
         "trap 'cmake --preset docker-release -U CMAKE_PROJECT_INCLUDE >/dev/null' EXIT; "
-        "cmake --preset docker-release "
+        "cmake --fresh --preset docker-release -DCMAKE_TOOLCHAIN_FILE=$conan_toolchain "
         "-DCMAKE_PROJECT_INCLUDE=/repo/conformance/serde/protobuf_probe.cmake && "
         "cmake --build --preset docker-release --parallel --target "
         "servicelib_protobuf_wire_probe && "
@@ -625,8 +629,10 @@ def main() -> int:
     boost_protobuf_compose.extend([
         "--rm", *boost_source_mount_args(), *repository_mounts(), "cpp-build",
         "/bin/bash", "-lc",
+        "./scripts/conan-install.generated.sh Release /workspace/build/conan-release && "
+        "conan_toolchain=$(cat /workspace/build/conan-release/toolchain.path) && "
         "trap 'cmake --preset docker-release -U CMAKE_PROJECT_INCLUDE >/dev/null' EXIT; "
-        "cmake --preset docker-release "
+        "cmake --fresh --preset docker-release -DCMAKE_TOOLCHAIN_FILE=$conan_toolchain "
         "-DCMAKE_PROJECT_INCLUDE=/repo/conformance/serde/protobuf_probe.cmake && "
         "cmake --build --preset docker-release --parallel --target "
         "servicelib_protobuf_wire_probe && "

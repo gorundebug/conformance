@@ -1,3 +1,9 @@
 services:
   cpp-build:
     image: servicelib-conformance-boost-cpp-example-build:latest
+    volumes:
+      - canonical-cpp-conan2:/conan
+
+volumes:
+  canonical-cpp-conan2:
+    name: cppexample_cpp-conan2

@@ -814,6 +814,7 @@ class DependencyRootTest(unittest.TestCase):
 
         self.assertIn(expected, pools["boost_framework_build_script"]())
         self.assertIn(expected, serde["boost_serde_script"](False))
+        self.assertNotIn("cmake --preset", serde["boost_serde_script"](False))
         self.assertNotIn("FETCHCONTENT_SOURCE_DIR", serde["boost_serde_script"](True))
         self.assertIn(
             serde["cpp_source_cache"].source_mount(serde["BOOST"]),
@@ -836,6 +837,13 @@ class DependencyRootTest(unittest.TestCase):
         self.assertTrue((CONFORMANCE_DIR / "serde/typescript_probe.mjs").is_file())
         self.assertTrue((serde["RUST"] / "examples/serde_wire_probe.rs").is_file())
         self.assertIn("compare_wire_fixtures(go_fixtures", source)
+        self.assertIn(
+            "name: cppexample_cpp-conan2",
+            (CONFORMANCE_DIR / "serde/compose.boost.yml").read_text(),
+        )
+        self.assertGreaterEqual(
+            source.count("./scripts/conan-install.generated.sh Release"), 2
+        )
 
     def test_source_cache_population_retries_without_changing_cache(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))
