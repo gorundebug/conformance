@@ -22,6 +22,7 @@ ROOT = Path(
 ARTIFACTS = CONFORMANCE / ".artifacts" / "temporal"
 SCHEDULE_ID = "example-automation-schedule"
 CALLS_RE = re.compile(r"(?:^|\n)calls:\s*(\d+)")
+PROM_LABEL_RE = re.compile(r'(\w+)="((?:\\.|[^"\\])*)"')
 
 
 @dataclass(frozen=True)
@@ -69,12 +70,13 @@ def environment(language: Language) -> dict[str, str]:
 def run(
     command: list[str], *, cwd: Path, env: dict[str, str],
     capture: bool = False, check: bool = True, announce: bool = True,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if announce:
         print("-", " ".join(command), flush=True)
     return subprocess.run(
         command, cwd=cwd, env=env, check=check, text=True,
-        capture_output=capture,
+        capture_output=capture, timeout=timeout,
     )
 
 
@@ -181,6 +183,64 @@ def wait_status(
     )
 
 
+def fetch_text(url: str, timeout: float = 5) -> str:
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        if response.status != 200:
+            raise RuntimeError(f"{url} returned HTTP {response.status}")
+        return response.read().decode("utf-8")
+
+
+def metric_value(text: str, metric: str, labels: dict[str, str]) -> float:
+    for line in text.splitlines():
+        if not line.startswith(metric + "{"):
+            continue
+        label_text, separator, value_text = line.partition("}")
+        if separator == "":
+            continue
+        actual = {
+            key: bytes(value, "utf-8").decode("unicode_escape")
+            for key, value in PROM_LABEL_RE.findall(label_text)
+        }
+        if all(actual.get(key) == value for key, value in labels.items()):
+            return float(value_text.strip().split()[0])
+    raise RuntimeError(f"metric {metric}{labels} is absent")
+
+
+def verify_metrics(jobs: int) -> dict[str, float]:
+    text = fetch_text("http://localhost:9094/metrics")
+    expected = {
+        "localCronMessages": (
+            "datasource_endpoint_messages_total",
+            {"connector": "Local Cron", "endpoint": "Local Schedule"},
+            1,
+        ),
+        "temporalScheduleMessages": (
+            "datasource_endpoint_messages_total",
+            {"connector": "Temporal", "endpoint": "Temporal Schedule"},
+            jobs,
+        ),
+        "temporalJobInputs": (
+            "datasource_endpoint_messages_total",
+            {"connector": "Temporal", "endpoint": "Durable Job"},
+            jobs,
+        ),
+        "temporalJobSubmissions": (
+            "datasink_endpoint_messages_total",
+            {"connector": "Temporal", "endpoint": "Durable Job"},
+            jobs,
+        ),
+    }
+    result: dict[str, float] = {}
+    for name, (metric, labels, minimum) in expected.items():
+        value = metric_value(text, metric, labels)
+        if value < minimum:
+            raise RuntimeError(
+                f"{metric}{labels}={value}, expected at least {minimum}"
+            )
+        result[name] = value
+    return result
+
+
 def edge_calls(status: dict[str, object], source: str, target: str) -> int:
     nodes = status.get("nodes")
     edges = status.get("edges")
@@ -224,6 +284,91 @@ def trigger_schedule(
         # all executions still remain queued because the Worker is stopped.
         if index + 1 < count:
             time.sleep(1.05)
+
+
+def temporal_cli(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    *arguments: str,
+    capture: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    return run(
+        compose_command(
+            language, overlay, "run", "--rm", "--no-deps",
+            "--entrypoint", "temporal", "temporal-create-namespace",
+            *arguments, "--address", "temporal:7233", "--namespace", "default",
+        ),
+        cwd=language.example, env=env, capture=capture, check=check,
+    )
+
+
+def verify_schedule_reuse(
+    language: Language, overlay: Path, env: dict[str, str],
+) -> str:
+    result = temporal_cli(
+        language, overlay, env,
+        "schedule", "describe", "--schedule-id", SCHEDULE_ID,
+        "--output", "json", capture=True,
+    )
+    description = result.stdout
+    if "servicegen.temporal-endpoint.v1" not in description:
+        raise RuntimeError("Temporal Schedule does not reference the endpoint Workflow")
+    if (
+        "servicegen.managedBy" not in description
+        or "servicegen.owner" not in description
+        or "servicegen.callId" not in description
+    ):
+        raise RuntimeError("Temporal Schedule ownership memo is absent")
+    return description
+
+
+def verify_schedule_ownership_collision(
+    language: Language, overlay: Path, env: dict[str, str],
+) -> str:
+    run(
+        compose_command(language, overlay, "stop", "automationservice"),
+        cwd=language.example, env=env,
+    )
+    temporal_cli(
+        language, overlay, env,
+        "schedule", "delete", "--schedule-id", SCHEDULE_ID,
+    )
+    temporal_cli(
+        language, overlay, env,
+        "schedule", "create",
+        "--schedule-id", SCHEDULE_ID,
+        "--cron", "0 0 1 1 *",
+        "--time-zone", "UTC",
+        "--workflow-id", "servicegen/conformance/foreign-schedule",
+        "--type", "servicegen.temporal-endpoint.v1",
+        "--task-queue", "automation-schedules",
+        "--paused",
+        "--schedule-memo", 'servicegen.managedBy="foreign"',
+        "--schedule-memo", 'servicegen.owner="foreign"',
+        "--schedule-memo", f'servicegen.callId="{SCHEDULE_ID}"',
+    )
+    try:
+        result = run(
+            compose_command(
+                language, overlay, "run", "--rm", "--no-deps",
+                "automationservice",
+            ),
+            cwd=language.example, env=env, capture=True, check=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            "service adopted a foreign Temporal Schedule instead of rejecting it"
+        ) from error
+    output = (result.stdout + result.stderr).strip()
+    if result.returncode == 0 or "ownership collision" not in output:
+        raise RuntimeError(
+            "service did not reject a foreign Temporal Schedule ownership boundary\n"
+            + output
+        )
+    return output
 
 
 def workflow_list(
@@ -317,11 +462,13 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         )
         status = wait_graph(language, overlay, env, jobs)
         status = wait_local_cron(language, overlay, env)
+        schedule_description = verify_schedule_reuse(language, overlay, env)
         workflows = workflow_list(language, overlay, env)
         if workflows.count("servicegen.temporal-endpoint.v1") < jobs * 2:
             raise RuntimeError("Temporal endpoint Workflow executions are missing")
         if workflows.count("servicegen.durable-link.v1") < jobs:
             raise RuntimeError("DurableCall Workflow executions are missing")
+        metrics = verify_metrics(jobs)
         result = {
             "status": "pass",
             "queuedJobs": jobs,
@@ -335,11 +482,23 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             "durableCallActivations": edge_calls(
                 status, "Consume Durable Job", "Process Durable Job"
             ),
+            "metrics": metrics,
+            "scheduleReuse": True,
         }
         (ARTIFACTS / language.name / "workflows.txt").write_text(workflows)
         (ARTIFACTS / language.name / "status.json").write_text(
             json.dumps(status, indent=2, sort_keys=True) + "\n"
         )
+        (ARTIFACTS / language.name / "schedule.json").write_text(
+            schedule_description
+        )
+        collision = verify_schedule_ownership_collision(
+            language, overlay, env
+        )
+        (ARTIFACTS / language.name / "ownership-collision.log").write_text(
+            collision + "\n"
+        )
+        result["ownershipCollisionRejected"] = True
         return result
     finally:
         run(down, cwd=language.example, env=env, check=False)
