@@ -40,8 +40,8 @@ ARTIFACTS = CONFORMANCE / ".artifacts" / "standalone-components"
 SUMMARY = ARTIFACTS / "summary.json"
 DIAGNOSTIC_SUMMARY = ARTIFACTS / "diagnostic-summary.json"
 RUST_TOOLCHAIN_IMAGE = "servicelib-standalone-rust:1.97"
-GO_VERSION = go_toolchain.example_version(DEFAULT_ROOT)
-GO_TOOLCHAIN_IMAGE = f"servicelib-standalone-go:{GO_VERSION}"
+GO_VERSION = ""
+GO_TOOLCHAIN_IMAGE = ""
 RUN_ID = f"servicegen-standalone-{os.getpid()}-{int(time.time())}"
 ACTIVE_CONTAINERS: set[str] = set()
 
@@ -783,8 +783,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    global GO_VERSION, GO_TOOLCHAIN_IMAGE
     args = parse_args()
     root = args.local_root.expanduser().resolve()
+    GO_VERSION = go_toolchain.example_version(root)
+    GO_TOOLCHAIN_IMAGE = f"servicelib-standalone-go:{GO_VERSION}"
     languages = selected(args.language, LANGUAGES)
     components = selected(args.component, COMPONENTS)
     if not root.is_dir():

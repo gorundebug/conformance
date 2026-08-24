@@ -467,7 +467,12 @@ class DependencyRootTest(unittest.TestCase):
         )
         self.assertEqual(
             set(standalone["SERVICES"]),
-            {"analyticsservice", "inventoryservice", "orderservice"},
+            {
+                "analyticsservice",
+                "automationservice",
+                "inventoryservice",
+                "orderservice",
+            },
         )
 
     def test_quickstart_supports_full_current_profile(self) -> None:
