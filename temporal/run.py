@@ -208,7 +208,7 @@ def edge_calls(status: dict[str, object], source: str, target: str) -> int:
 def trigger_schedule(
     language: Language, overlay: Path, env: dict[str, str], count: int,
 ) -> None:
-    for _ in range(count):
+    for index in range(count):
         run(
             compose_command(
                 language, overlay, "run", "--rm", "--no-deps",
@@ -219,6 +219,11 @@ def trigger_schedule(
             ),
             cwd=language.example, env=env,
         )
+        # Temporal Schedule derives the started Workflow ID suffix from the
+        # scheduled second. Keep distinct manual firings in distinct seconds;
+        # all executions still remain queued because the Worker is stopped.
+        if index + 1 < count:
+            time.sleep(1.05)
 
 
 def workflow_list(
