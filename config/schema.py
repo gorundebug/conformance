@@ -77,15 +77,25 @@ def cpp_structs(runtime: str) -> dict[str, set[str]]:
                 continue
             fields: set[str] = set()
             depth = 0
+            declaration = ""
             for line in body.splitlines():
                 line = line.split("//", 1)[0].strip()
-                if depth == 0 and line and "(" not in line and line.endswith(";"):
+                if depth == 0 and line:
+                    declaration = line
+                elif declaration:
+                    declaration += " " + line
+                depth += line.count("{") - line.count("}")
+                if depth == 0 and declaration and "(" not in declaration and declaration.endswith(";"):
                     field = re.search(
-                        r"\b([A-Za-z_]\w*)\s*(?:\{[^}]*\})?;$", line
+                        r"\b([A-Za-z_]\w*)\s*(?:\{.*\})?;$", declaration
                     )
                     if field and field.group(1) != "properties":
                         fields.add(field.group(1))
-                depth += line.count("{") - line.count("}")
+                if declaration.endswith(";"):
+                    declaration = ""
+            if name == "TemporalDataConnectorConfig" and "namespaceName" in fields:
+                fields.remove("namespaceName")
+                fields.add("namespace")
             result[name] = fields
     return result
 
@@ -136,6 +146,7 @@ def typescript_structs() -> tuple[dict[str, set[str]], set[str]]:
         "taskPool",
         "priorityTaskPool",
         "parallelCall",
+        "durableCall",
     }
 
     public_configs = {
