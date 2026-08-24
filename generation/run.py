@@ -703,7 +703,11 @@ def main() -> int:
         generation_env.update({
             "SERVICEGEN_EXAMPLE_ARCHIVE_DIR": str(archive_dir),
             "SERVICEGEN_EXAMPLE_PROFILE": profile,
-            "GOCACHE": os.environ.get("GOCACHE", "/tmp/servicegen-go-build"),
+            # A checkout may have had its history squashed while a process-wide
+            # Go build cache still contains actions for the old source tree.
+            # Generation parity is a release gate, so compile the generator in
+            # a disposable cache while retaining the normal module cache.
+            "GOCACHE": str(temporary / "go-build-cache"),
             "GOWORK": str(local_go_work),
         })
         preflight_env = generator_preflight_environment(generation_env)
