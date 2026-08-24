@@ -435,15 +435,18 @@ def wait_workflow_canceled(
 def verify_queued_cancellation(
     language: Language, overlay: Path, env: dict[str, str],
 ) -> str:
+    # Pause regular admission before the manual firing. Otherwise a test that
+    # crosses a minute boundary can observe an unrelated scheduled Workflow
+    # and incorrectly attribute its graph activation to the canceled firing.
+    temporal_cli(
+        language, overlay, env,
+        "schedule", "toggle", "--schedule-id", SCHEDULE_ID, "--pause",
+    )
     trigger_schedule(language, overlay, env, 1)
     workflow_id = running_scheduled_workflow_id(language, overlay, env)
     temporal_cli(
         language, overlay, env,
         "workflow", "cancel", "--workflow-id", workflow_id,
-    )
-    temporal_cli(
-        language, overlay, env,
-        "schedule", "toggle", "--schedule-id", SCHEDULE_ID, "--pause",
     )
     run(
         compose_command(
@@ -484,6 +487,152 @@ def workflow_list(
         cwd=language.example, env=env, capture=True,
     )
     return result.stdout
+
+
+def durable_link_identity(workflows: str) -> tuple[int, int, int]:
+    matches = {
+        (int(service), int(source), int(target))
+        for service, source, target in re.findall(
+            r"servicegen/durable/(\d+)/(\d+)/(\d+)/", workflows
+        )
+    }
+    if len(matches) != 1:
+        raise RuntimeError(
+            "expected exactly one DurableCall link identity, found "
+            + repr(sorted(matches))
+        )
+    return next(iter(matches))
+
+
+def invalid_durable_request(
+    language: Language, service: int, source: int, target: int,
+) -> dict[str, object]:
+    activity_type = f"servicegen.durable.{service}.{source}.{target}.v1"
+    if language.name == "python":
+        return {
+            "activity_type": activity_type,
+            "activity_start_to_close_millis": 2_000,
+            "activity_heartbeat_millis": 0,
+            "maximum_attempts": 3,
+            "priority": 3,
+            "envelope": {
+                "version": 0,
+                "from_id": source,
+                "to_id": target,
+                "call_id": "conformance-retry",
+                "stream_id": "conformance-retry",
+                "priority": 0,
+                "deadline_unix_nano": 0,
+                "sampling_enabled": False,
+                "payload": [],
+            },
+        }
+    deadline_name = (
+        "deadlineUnixNano" if language.name == "go" else "deadlineUnixMillis"
+    )
+    request: dict[str, object] = {
+        "activityType": activity_type,
+        "maximumAttempts": 3,
+        "priority": 3,
+        "envelope": {
+            "version": 0,
+            "from": source,
+            "to": target,
+            "callId": "conformance-retry",
+            "streamId": "conformance-retry",
+            "priority": 0,
+            deadline_name: 0,
+            "samplingEnabled": False,
+            "payload": "" if language.name == "go" else [],
+        },
+    }
+    if language.name == "go":
+        request["activityStartToCloseMillis"] = 2_000
+        request["activityHeartbeatMillis"] = 0
+    else:
+        request["activityStartToCloseTimeout"] = 2_000
+        request["activityHeartbeatTimeout"] = 0
+    return request
+
+
+def wait_workflow_failed(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    workflow_id: str,
+    timeout: float = 30,
+) -> str:
+    deadline = time.monotonic() + timeout
+    last = ""
+    while time.monotonic() < deadline:
+        result = temporal_cli(
+            language, overlay, env,
+            "workflow", "describe", "--workflow-id", workflow_id,
+            "--output", "json", capture=True,
+        )
+        last = result.stdout
+        if "FAILED" in last.upper():
+            return last
+        time.sleep(0.5)
+    raise RuntimeError(f"Workflow {workflow_id} did not fail after retries\n{last}")
+
+
+def maximum_activity_attempt(history: object) -> int:
+    attempts: list[int] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "attempt":
+                    try:
+                        attempts.append(int(child))
+                    except (TypeError, ValueError):
+                        pass
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(history)
+    return max(attempts, default=0)
+
+
+def verify_durable_retry(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    workflows: str,
+) -> tuple[int, str]:
+    service, source, target = durable_link_identity(workflows)
+    workflow_id = (
+        f"servicegen/conformance/retry/{language.name}/{time.time_ns()}"
+    )
+    request = invalid_durable_request(language, service, source, target)
+    temporal_cli(
+        language, overlay, env,
+        "workflow", "start",
+        "--workflow-id", workflow_id,
+        "--type", "servicegen.durable-link.v1",
+        "--task-queue", "automation-durable-calls",
+        "--execution-timeout", "20s",
+        "--input", json.dumps(request, separators=(",", ":")),
+    )
+    wait_workflow_failed(language, overlay, env, workflow_id)
+    history_result = temporal_cli(
+        language, overlay, env,
+        "workflow", "show", "--workflow-id", workflow_id,
+        "--output", "json", capture=True,
+    )
+    try:
+        history = json.loads(history_result.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Temporal retry history returned invalid JSON") from error
+    attempts = maximum_activity_attempt(history)
+    if attempts != 3:
+        raise RuntimeError(
+            f"DurableCall retry used {attempts} attempts, expected exactly 3"
+        )
+    return attempts, history_result.stdout
 
 
 def wait_graph(
@@ -569,6 +718,9 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             raise RuntimeError("Temporal endpoint Workflow executions are missing")
         if workflows.count("servicegen.durable-link.v1") < jobs:
             raise RuntimeError("DurableCall Workflow executions are missing")
+        retry_attempts, retry_history = verify_durable_retry(
+            language, overlay, env, workflows
+        )
         metrics = verify_metrics(jobs)
         result = {
             "status": "pass",
@@ -586,6 +738,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             "metrics": metrics,
             "scheduleReuse": True,
             "queuedCancellation": True,
+            "durableRetryAttempts": retry_attempts,
         }
         (ARTIFACTS / language.name / "workflows.txt").write_text(workflows)
         (ARTIFACTS / language.name / "status.json").write_text(
@@ -596,6 +749,9 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         )
         (ARTIFACTS / language.name / "canceled-workflow.json").write_text(
             canceled
+        )
+        (ARTIFACTS / language.name / "retry-history.json").write_text(
+            retry_history
         )
         collision = verify_schedule_ownership_collision(
             language, overlay, env
