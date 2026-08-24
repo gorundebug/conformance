@@ -501,10 +501,18 @@ def boost_source_cache_command() -> list[str]:
     return cpp_source_cache.prepare_command(BOOST)
 
 
-def boost_generator_environment() -> dict[str, str]:
+def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[str, str]:
     environment = os.environ.copy()
     environment["SERVICEGEN_RUN_DOCKER_TESTS"] = "1"
-    cpp_source_cache.configure_environment(environment, BOOST)
+    if prepare_source_cache:
+        cpp_source_cache.configure_environment(environment, BOOST)
+    else:
+        environment["SERVICEGEN_CPPBOOST_SOURCE_CACHE_DIR"] = str(
+            cpp_source_cache.source_dir(BOOST)
+        )
+        environment["SERVICEGEN_CPPBOOST_BUILD_VOLUME"] = (
+            cpp_source_cache.build_volume_name(BOOST)
+        )
     environment["GOCACHE"] = "/tmp/servicegen-go-build"
     environment["GOWORK"] = "off"
     return environment

@@ -708,7 +708,9 @@ class DependencyRootTest(unittest.TestCase):
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "transports/run.py"))
         source_cache = globals_["boost_source_cache_build_dir"]()
         source_arguments = globals_["boost_source_cache_cmake_args"]()
-        generator_environment = globals_["boost_generator_environment"]()
+        generator_environment = globals_["boost_generator_environment"](
+            prepare_source_cache=False
+        )
         grpc = globals_["boost_command"]("build/grpc-test", False, False)[-1]
         kafka = globals_["boost_kafka_command"](
             "build/kafka-test", True, False
