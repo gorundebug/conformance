@@ -242,12 +242,14 @@ terminal as well.
 
 The `standalone-components` gate proves that every generated service and
 schema/API module can be consumed as an independent project. For each of Go,
-userver C++, Boost C++, Python, Rust and TypeScript it creates six separate
+userver C++, Boost C++, Python, Rust and TypeScript it creates seven separate
 temporary filesystem trees and builds/tests `analyticsservice`,
-`inventoryservice`, `orderservice`, `inventory_service_api`, `model` and
-`order_service_api` one at a time. A service tree contains only that service,
-its declared generated modules and its local framework checkout; a root
-workspace build does not satisfy the gate.
+`automationservice`, `inventoryservice`, `orderservice`,
+`inventory_service_api`, `model` and `order_service_api` one at a time. The
+Automation Service is native Go/Python/TypeScript; C++/Boost/Rust project
+variants build their generated Go fallback. A service tree contains only that
+service, its declared generated modules and its local framework checkout; a
+root workspace build does not satisfy the gate.
 
 Go protobuf and OpenAPI outputs are regenerated inside a pinned cached
 toolchain image before compilation. This keeps the test valid for disposable
