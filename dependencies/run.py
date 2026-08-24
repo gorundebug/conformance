@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import runpy
 import subprocess
 import sys
 from pathlib import Path
@@ -56,6 +57,19 @@ CPPBOOST_SNAPSHOT = {
     "librdkafka": "RDKAFKA",
     "opentelemetry-cpp": "OPENTELEMETRY",
     "googletest": "GOOGLETEST",
+}
+USERVER_CONAN_SNAPSHOT = {
+    "grpc",
+    "librdkafka",
+    "libcron",
+    "protobuf",
+    "re2",
+    "userver",
+    "userver-boost",
+    "userver-googletest",
+    "userver-googleapis",
+    "userver-opentelemetry-proto",
+    "yaml-cpp",
 }
 
 
@@ -113,19 +127,12 @@ def manifest_dependencies(path: Path) -> dict[str, dict[str, str]]:
             current = match.group(1)
             dependencies[current] = {}
             continue
-        match = re.fullmatch(r"        (repository|revision):\s+(.+)", raw_line)
+        match = re.fullmatch(
+            r"        (repository|revision|conanVersion):\s+(.+)", raw_line
+        )
         if in_dependencies and current and match:
             dependencies[current][match.group(1)] = match.group(2)
     return dependencies
-
-
-def cmake_cache_value(text: str, variable: str) -> str | None:
-    match = re.search(
-        rf"set\({re.escape(variable)}\s+\"([^\"]+)\"",
-        text,
-        re.MULTILINE,
-    )
-    return match.group(1) if match else None
 
 
 def dependency_snapshot_errors() -> list[str]:
@@ -133,33 +140,41 @@ def dependency_snapshot_errors() -> list[str]:
         ROOT / "servicegen" / "internal" / "codegenerator" / "dependencies.yaml"
     )
     errors: list[str] = []
-    boost_snapshot = (
-        ROOT / "cppboostservicelib" / "cmake" / "DependencyVersions.cmake"
-    ).read_text(encoding="utf-8")
-    for dependency, prefix in CPPBOOST_SNAPSHOT.items():
+    boost_snapshot = runpy.run_path(
+        str(ROOT / "cppboostservicelib" / "conan" / "dependencies_generated.py")
+    )
+    for dependency in CPPBOOST_SNAPSHOT:
         expected = manifest.get(dependency, {})
-        for field, suffix in (("repository", "REPOSITORY"), ("revision", "VERSION")):
-            variable = f"CPPBOOSTSERVICELIB_{prefix}_{suffix}"
-            actual = cmake_cache_value(boost_snapshot, variable)
+        for field, generated_map in (
+            ("conanVersion", "VERSIONS"),
+            ("repository", "REPOSITORIES"),
+            ("revision", "REVISIONS"),
+        ):
+            actual = boost_snapshot[generated_map].get(dependency)
             if actual != expected.get(field):
                 errors.append(
-                    f"{variable}={actual!r} differs from dependencies.yaml "
+                    f"cppboostservicelib {generated_map}[{dependency!r}]={actual!r} "
+                    "differs from dependencies.yaml "
                     f"{dependency}.{field}={expected.get(field)!r}"
                 )
 
-    userver_snapshot = (
-        ROOT / "cppservicelib" / "cmake" / "DependencyVersions.cmake"
-    ).read_text(encoding="utf-8")
-    rdkafka = manifest.get("librdkafka", {})
-    for field, variable in (
-        ("repository", "SERVICELIB_RDKAFKA_REPOSITORY"),
-        ("revision", "SERVICELIB_RDKAFKA_VERSION"),
-    ):
-        actual = cmake_cache_value(userver_snapshot, variable)
-        if actual != rdkafka.get(field):
+    userver_snapshot = runpy.run_path(
+        str(ROOT / "cppservicelib" / "conan" / "dependencies_generated.py")
+    )["VERSIONS"]
+    actual_userver_dependencies = set(userver_snapshot) - {"conan"}
+    if actual_userver_dependencies != USERVER_CONAN_SNAPSHOT:
+        errors.append(
+            "cppservicelib generated Conan dependency set differs: "
+            f"actual={sorted(actual_userver_dependencies)!r}, "
+            f"expected={sorted(USERVER_CONAN_SNAPSHOT)!r}"
+        )
+    for dependency in sorted(USERVER_CONAN_SNAPSHOT):
+        actual = userver_snapshot.get(dependency)
+        expected = manifest.get(dependency, {}).get("conanVersion")
+        if actual != expected:
             errors.append(
-                f"{variable}={actual!r} differs from dependencies.yaml "
-                f"librdkafka.{field}={rdkafka.get(field)!r}"
+                f"cppservicelib VERSIONS[{dependency!r}]={actual!r} differs "
+                f"from dependencies.yaml {dependency}.conanVersion={expected!r}"
             )
 
     for relative in (

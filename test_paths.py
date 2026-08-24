@@ -265,6 +265,11 @@ class DependencyRootTest(unittest.TestCase):
                 args,
             )
 
+    def test_dependency_snapshot_uses_generated_conan_metadata(self) -> None:
+        source = (CONFORMANCE_DIR / "dependencies/run.py").read_text()
+        self.assertGreaterEqual(source.count('"conan" / "dependencies_generated.py"'), 2)
+        self.assertNotIn('"cmake" / "DependencyVersions.cmake"', source)
+
     def test_aggregate_prints_complete_terminal_summary(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "aggregate.py"))
         suites = globals_["SUITES"]
