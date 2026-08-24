@@ -219,6 +219,18 @@ class DependencyRootTest(unittest.TestCase):
             )
             self.assertEqual(result.stdout, str(external))
 
+    def test_go_runners_use_the_generated_go_framework_context_name(self) -> None:
+        for relative in (
+            "config/runtime_go.py",
+            "kafka/run.py",
+            "metrics/run.py",
+            "scenarios/run.py",
+            "tracing/run.py",
+        ):
+            with self.subTest(runner=relative):
+                source = (CONFORMANCE_DIR / relative).read_text()
+                self.assertIn("GOSERVICELIB_SOURCE_CONTEXT", source)
+
     def test_dependency_binary_inspection_uses_versioned_build_volume(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "dependencies/run.py"))
         commands: list[list[str]] = []

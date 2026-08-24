@@ -67,7 +67,7 @@ def compose_command(language: Language, *args: str) -> list[str]:
 def language_env(language: Language) -> dict[str, str]:
     env = os.environ.copy()
     if language.name == "go":
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
+        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     elif language.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
     elif language.name == "cppboost":

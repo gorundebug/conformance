@@ -165,7 +165,7 @@ def language_env(language: Any) -> dict[str, str]:
     env = os.environ.copy()
     env["SERVICELIB_CONFORMANCE_DIR"] = str(CONFORMANCE)
     if language.name == "go":
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
+        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     elif language.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
     elif language.name == "cppboost":

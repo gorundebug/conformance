@@ -114,7 +114,7 @@ def main() -> int:
         if not args.skip_build:
             env = os.environ.copy()
             env["GOCACHE"] = env.get("GOCACHE", "/tmp/servicegen-go-build")
-            env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
+            env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
             run(["make", "docker-build"], example, env)
         run(command + ["up", "-d", "--no-deps", "orderservice"], example)
         started = True
