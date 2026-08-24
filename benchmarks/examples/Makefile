@@ -22,8 +22,11 @@ CAPACITY_LANGUAGE_ARGS = $(foreach language,$(CAPACITY_LANGUAGES),--language $(l
 LOADGEN_CORES ?= 6
 RATE ?= 50000
 MAX_MAP_COUNT ?= 0
+DURABLE_JOBS ?= 1000
+DURABLE_WARMUP_JOBS ?= 50
+DURABLE_TIMEOUT ?= 300
 
-.PHONY: setup-native run quick call-semantics http-transport http-transport-quick http-json-reject http-json-reject-quick typescript-http-only typescript-http-only-quick graph-without-grpc graph-without-grpc-quick typescript-kafka-disabled typescript-kafka-disabled-quick capacity overload overload-quick build clean help
+.PHONY: setup-native run quick call-semantics durable durable-quick http-transport http-transport-quick http-json-reject http-json-reject-quick typescript-http-only typescript-http-only-quick graph-without-grpc graph-without-grpc-quick typescript-kafka-disabled typescript-kafka-disabled-quick capacity overload overload-quick build clean help
 
 setup-native: ## Fetch missing pinned native example projects
 	$(PYTHON) run.py --fetch-native --language go-native --language cpp-native \
@@ -43,6 +46,15 @@ call-semantics: ## Benchmark generated framework examples with TaskPool, Priorit
 	$(PYTHON) call_semantics.py --cores $(CORES) --loadgen-cores $(LOADGEN_CORES) \
 		--vus $(VUS) --duration $(DURATION) --warmup $(WARMUP) --runs $(RUNS) \
 		--max-map-count $(MAX_MAP_COUNT)
+
+durable: ## Benchmark the opt-in Temporal endpoint and DurableCall path
+	$(PYTHON) durable.py --cores $(CORES) --jobs $(DURABLE_JOBS) \
+		--warmup-jobs $(DURABLE_WARMUP_JOBS) --runs $(RUNS) \
+		--timeout $(DURABLE_TIMEOUT)
+
+durable-quick: ## Reuse images for a short Temporal/DurableCall smoke benchmark
+	$(PYTHON) durable.py --skip-build --cores $(CORES) --jobs 10 \
+		--warmup-jobs 1 --runs 1 --timeout $(DURABLE_TIMEOUT)
 
 http-transport: ## Compare only HTTP accept/read/route/write; no serde, graph or gRPC
 	$(PYTHON) run.py --cores $(CORES) --loadgen-cores $(LOADGEN_CORES) --vus $(VUS) \

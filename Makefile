@@ -10,7 +10,8 @@ endif
 	kafka temporal tracing metrics dashboards dashboards-core logging scenarios \
 	call-semantics standalone-components kubernetes \
 	generation profiling profiling-all profiling-tests \
-	benchmarks benchmark benchmarks-quick benchmarks-tests \
+	profiling-durable profiling-durable-quick \
+	benchmarks benchmark benchmarks-quick benchmarks-durable benchmarks-durable-quick benchmarks-tests \
 	fast integration release resume all clean dependency-source-cache-invalidate
 
 .NOTPARALLEL: fast integration release resume all
@@ -119,6 +120,15 @@ profiling-all:
 		--graph-profile "$${CONFORMANCE_EXAMPLE_PROFILE:-function-call}" \
 		$(PROFILING_ARGS)
 
+profiling-durable:
+	PROFILING_DEPENDENCIES_DIR="$(CONFORMANCE_DEPENDENCIES_DIR)" \
+		python3 profiling/examples/durable.py $(PROFILING_ARGS)
+
+profiling-durable-quick:
+	PROFILING_DEPENDENCIES_DIR="$(CONFORMANCE_DEPENDENCIES_DIR)" \
+		python3 profiling/examples/durable.py --skip-build --duration 5 --jobs 100 \
+		$(PROFILING_ARGS)
+
 profiling-tests:
 	python3 -m unittest discover -s profiling/examples -p 'test_*.py' -v
 
@@ -128,6 +138,15 @@ benchmarks benchmark:
 benchmarks-quick:
 	python3 run_suite.py benchmarks python3 benchmarks/run.py \
 		--skip-build --vus 256 --duration 5s --warmup 2s --runs 1
+
+benchmarks-durable:
+	BENCHMARK_DEPENDENCIES_DIR="$(CONFORMANCE_DEPENDENCIES_DIR)" \
+		python3 benchmarks/examples/durable.py $(BENCHMARK_ARGS)
+
+benchmarks-durable-quick:
+	BENCHMARK_DEPENDENCIES_DIR="$(CONFORMANCE_DEPENDENCIES_DIR)" \
+		python3 benchmarks/examples/durable.py --skip-build --jobs 10 \
+		--warmup-jobs 1 --runs 1 $(BENCHMARK_ARGS)
 
 benchmarks-tests:
 	python3 -m unittest discover -s benchmarks/examples -p 'test_*.py' -v

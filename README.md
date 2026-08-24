@@ -449,6 +449,8 @@ scenarios, host preparation switches and all derived flamegraph artifacts:
 make profiling-all
 make profiling-all PROFILING_ARGS="--language rust --duration 20s"
 make profiling-all PROFILING_ARGS="--language typescript --scenario timeout"
+make profiling-durable PROFILING_ARGS="--language go --language python --language typescript"
+make profiling-durable-quick PROFILING_ARGS="--language python"
 make profiling-tests
 ```
 
@@ -469,6 +471,8 @@ bash ./quickstart.sh -- benchmarks
 bash ./quickstart.sh --profile current -- benchmarks
 make benchmarks BENCHMARK_ARGS="--duration 10s --warmup 3s --runs 1"
 make benchmarks-quick
+make benchmarks-durable BENCHMARK_ARGS="--language go --language python --language typescript"
+make benchmarks-durable-quick BENCHMARK_ARGS="--language go"
 make benchmarks-tests
 ```
 
@@ -479,6 +483,14 @@ artifacts remain under `benchmarks/examples/.artifacts/`. Benchmarks are an
 explicit target rather than part of `make all`: throughput is host-dependent
 and running it after the semantic and profiling suites would add a second long
 load matrix without increasing semantic coverage.
+
+Normal benchmark and profiling targets keep local cron, Temporal and the
+Automation Service disabled. The `*-durable` targets are the explicit opt-in
+path for supported Go, Python and TypeScript implementations. They start real
+Temporal/PostgreSQL infrastructure and measure or profile Schedule admission →
+endpoint Activity → ordinary graph node → `DurableCall` Activity → result.
+Their artifacts are isolated below `benchmarks/examples/.artifacts/durable/`
+and `profiling/examples/.artifacts/durable/`.
 
 ## C++ structural conformance
 
