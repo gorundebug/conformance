@@ -45,11 +45,11 @@ LANGUAGES = {
         ),
         Language(
             "python", ROOT / "pyexample", ROOT / "pyservicelib",
-            "/workspace/automationservice/config/docker_overrides.yaml",
+            "/workspace/config/docker_overrides.yaml",
         ),
         Language(
             "typescript", ROOT / "tsexample", ROOT / "tsservicelib",
-            "/workspace/automationservice/config/docker_overrides.yaml",
+            "/app/config/docker_overrides.yaml",
         ),
     )
 }
