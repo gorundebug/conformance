@@ -11,6 +11,7 @@ import secrets
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -25,6 +26,9 @@ ROOT = Path(
 ARTIFACTS = CONFORMANCE / ".artifacts" / "temporal"
 SCHEDULE_ID = "example-automation-schedule"
 JAEGER_URL = "http://localhost:16686"
+PROMETHEUS_URL = "http://localhost:9090"
+TEMPORAL_SERVER_METRICS_URL = "http://localhost:18000/metrics"
+TEMPORAL_SDK_METRICS_URL = "http://localhost:19464/metrics"
 CALLS_RE = re.compile(r"(?:^|\n)calls:\s*(\d+)")
 PROM_LABEL_RE = re.compile(r'(\w+)="((?:\\.|[^"\\])*)"')
 
@@ -130,10 +134,15 @@ def prepare_files(language: Language) -> tuple[Path, Path]:
         "    environment:\n"
         f"      OTEL_EXPORTER_OTLP_ENDPOINT: {otlp_endpoint}\n"
         "      OTEL_EXPORTER_OTLP_INSECURE: \"true\"\n"
+        "    ports:\n"
+        "      - \"19464:9464\"\n"
         "    depends_on:\n"
         "      - otel-collector\n"
         "    volumes:\n"
         f"      - {overrides}:{language.override_target}:ro\n"
+        "  temporal:\n"
+        "    ports:\n"
+        "      - \"18000:8000\"\n"
         "  jaeger:\n"
         "    image: jaegertracing/all-in-one:1.62.0\n"
         "    environment:\n"
@@ -277,6 +286,59 @@ def verify_metrics(jobs: int) -> dict[str, float]:
             )
         result[name] = value
     return result
+
+
+def prometheus_query(expression: str) -> list[dict[str, object]]:
+    encoded = urllib.parse.urlencode({"query": expression})
+    payload = json.loads(fetch_text(f"{PROMETHEUS_URL}/api/v1/query?{encoded}"))
+    if payload.get("status") != "success":
+        raise RuntimeError(f"Prometheus query failed: {payload!r}")
+    result = payload.get("data", {}).get("result", [])
+    if not isinstance(result, list):
+        raise RuntimeError(f"Prometheus query returned invalid data: {payload!r}")
+    return result
+
+
+def verify_temporal_metric_sources(timeout: float = 45) -> dict[str, object]:
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            server = fetch_text(TEMPORAL_SERVER_METRICS_URL)
+            sdk = fetch_text(TEMPORAL_SDK_METRICS_URL)
+            required_sdk = (
+                "temporal_worker_task_slots_available",
+                "temporal_activity_execution_latency_bucket",
+                "temporal_activity_schedule_to_start_latency_bucket",
+            )
+            if "service_requests" not in server:
+                raise RuntimeError("official Temporal Server metrics are absent")
+            missing = [metric for metric in required_sdk if metric not in sdk]
+            if missing:
+                raise RuntimeError(f"official Temporal SDK metrics are absent: {missing}")
+            if re.search(r"servicelib_.*durable.*latency", sdk):
+                raise RuntimeError("Temporal latency was duplicated as a ServiceLib metric")
+            server_up = prometheus_query(
+                'up{telemetry_source="temporal-server"} == 1'
+            )
+            sdk_up = prometheus_query(
+                'up{telemetry_source="temporal-sdk"} == 1'
+            )
+            if not server_up or not sdk_up:
+                raise RuntimeError(
+                    "Prometheus has not scraped both Temporal metric owners yet"
+                )
+            return {
+                "serverSeriesPresent": True,
+                "sdkSeriesPresent": True,
+                "serverTargetsUp": len(server_up),
+                "sdkTargetsUp": len(sdk_up),
+                "duplicateServiceLibLatency": False,
+            }
+        except (OSError, urllib.error.URLError, json.JSONDecodeError, RuntimeError) as error:
+            last_error = error
+            time.sleep(1)
+    raise RuntimeError(f"Temporal metric sources did not become ready: {last_error}")
 
 
 def edge_calls(status: dict[str, object], source: str, target: str) -> int:
@@ -1060,7 +1122,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
                 language, overlay, "up", "--detach",
                 "temporal-postgresql", "temporal-schema", "temporal",
                 "temporal-create-namespace", "temporal-ui", "jaeger",
-                "otel-collector", "automationservice",
+                "otel-collector", "prometheus", "automationservice",
             ),
             cwd=language.example, env=env,
         )
@@ -1094,6 +1156,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             language, overlay, env, workflows
         )
         metrics = verify_metrics(jobs)
+        temporal_metrics = verify_temporal_metric_sources()
         trace_summary, traced_workflow, trace = verify_tracing(
             language, overlay, env, overrides, workflows
         )
@@ -1111,6 +1174,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
                 status, "Consume Durable Job", "Process Durable Job"
             ),
             "metrics": metrics,
+            "temporalMetrics": temporal_metrics,
             "scheduleReuse": True,
             "queuedCancellation": True,
             "durableRetryAttempts": retry_attempts,
