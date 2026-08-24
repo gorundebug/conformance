@@ -240,6 +240,16 @@ def validate_example(language: str, example: Path) -> None:
 
 def runtime_probe(example: Path) -> None:
     print("[kubernetes] START go local k3s runtime", flush=True)
+    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    local_go_work = ARTIFACTS / "go.work"
+    go_modules = sorted(path.parent for path in example.rglob("go.mod"))
+    local_go_work.write_text(
+        "go 1.25.4\n\nuse (\n"
+        + "".join(f"\t{module}\n" for module in go_modules)
+        + ")\n\nreplace github.com/gorundebug/servicelib => "
+        + str(ROOT / "servicelib")
+        + "\n"
+    )
     environment = dict(os.environ)
     environment.update(
         {
@@ -256,7 +266,8 @@ def runtime_probe(example: Path) -> None:
             "KUBERNETES_KAFKA_PASSWORD": (
                 f"servicegen-conformance-{os.getpid()}-{int(time.time())}"
             ),
-            "SERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),
+            "GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),
+            "GOWORK": str(local_go_work),
         }
     )
     script = ["bash", "scripts/kubernetes.generated.sh"]
