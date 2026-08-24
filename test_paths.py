@@ -901,6 +901,21 @@ class DependencyRootTest(unittest.TestCase):
             wrapper,
         )
 
+    def test_direct_make_enables_the_dependency_proxy(self) -> None:
+        makefile = (CONFORMANCE_DIR / "Makefile").read_text()
+        self.assertIn("SERVICEGEN_DEPENDENCY_PROXY_DIR", makefile)
+        self.assertIn(
+            "export SERVICEGEN_GITHUB_RAW_URL := "
+            "$(SERVICEGEN_DEPENDENCY_PROXY_BASE)/github-raw",
+            makefile,
+        )
+        self.assertIn(
+            "scripts/dependency-proxy-bin:$(PATH)",
+            makefile,
+        )
+        launcher = CONFORMANCE_DIR / "scripts/dependency-proxy-bin/docker"
+        self.assertTrue(os.access(launcher, os.X_OK))
+
     def test_source_cache_invalidation_preserves_unrelated_volumes(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))
         with tempfile.TemporaryDirectory() as directory:
