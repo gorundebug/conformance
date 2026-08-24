@@ -186,6 +186,32 @@ def dependency_snapshot_errors() -> list[str]:
     return errors
 
 
+def native_jemalloc_contract_errors() -> list[str]:
+    root = ROOT / "cppboostnativeexample"
+    conanfile = (root / "conanfile.py").read_text(encoding="utf-8")
+    cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+    errors: list[str] = []
+    for marker in (
+        'self.options["jemalloc"].shared = False',
+        'self.requires(f"jemalloc/{VERSIONS[\'jemalloc\']}")',
+    ):
+        if marker not in conanfile:
+            errors.append(f"cppboostnativeexample/conanfile.py misses {marker}")
+    for target in ("${service}", "inventoryservice_cq"):
+        if not re.search(
+            rf"target_link_libraries\({re.escape(target)}\s+PRIVATE\s+"
+            r"jemalloc::jemalloc\b",
+            cmake,
+        ):
+            errors.append(
+                f"cppboostnativeexample does not statically link jemalloc into {target}"
+            )
+    for lockfile in sorted((root / "conan" / "locks").glob("*.lock")):
+        if '"jemalloc/' not in lockfile.read_text(encoding="utf-8"):
+            errors.append(f"{lockfile.relative_to(ROOT)} does not lock jemalloc")
+    return errors
+
+
 def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
     example = ROOT / "cppboostexample"
     native_example = ROOT / "cppboostnativeexample"
@@ -257,6 +283,7 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
             "libraries": libraries,
             "userver_libraries": userver,
             "jemalloc_libraries": [line for line in libraries if "jemalloc" in line.casefold()],
+            "jemalloc_linkage": "static-conan",
         }
     return results
 
@@ -279,9 +306,11 @@ def main() -> int:
         service: details["binary"]
         for service, details in runtime.items()
         if not details["jemalloc_libraries"]
+        and details.get("jemalloc_linkage") != "static-conan"
     }
     errors: list[str] = []
     snapshot_errors = dependency_snapshot_errors()
+    native_contract_errors = native_jemalloc_contract_errors()
     if findings:
         errors.append(f"{len(findings)} forbidden userver build declaration(s)")
     if linked_userver:
@@ -289,12 +318,14 @@ def main() -> int:
     if missing_jemalloc:
         errors.append(f"jemalloc missing from: {', '.join(sorted(missing_jemalloc))}")
     errors.extend(snapshot_errors)
+    errors.extend(native_contract_errors)
 
     summary = {
         "status": "pass" if not errors else "fail",
         "static_files_scanned_roots": [str(path.relative_to(ROOT)) for path in SOURCE_ROOTS],
         "static_findings": findings,
         "dependency_snapshot_errors": snapshot_errors,
+        "native_jemalloc_contract_errors": native_contract_errors,
         "runtime_checked": not args.static_only,
         "binaries": runtime,
         "errors": errors,
