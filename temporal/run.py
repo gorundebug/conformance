@@ -371,6 +371,106 @@ def verify_schedule_ownership_collision(
     return output
 
 
+def running_scheduled_workflow_id(
+    language: Language, overlay: Path, env: dict[str, str],
+) -> str:
+    result = temporal_cli(
+        language, overlay, env,
+        "workflow", "list",
+        "--query",
+        'WorkflowType="servicegen.temporal-endpoint.v1" AND '
+        'ExecutionStatus="Running"',
+        "--output", "json",
+        capture=True,
+    )
+    try:
+        value = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Temporal workflow list returned invalid JSON") from error
+
+    candidates: list[str] = []
+
+    def visit(item: object) -> None:
+        if isinstance(item, dict):
+            for child in item.values():
+                visit(child)
+        elif isinstance(item, list):
+            for child in item:
+                visit(child)
+        elif isinstance(item, str) and item.startswith("servicegen/schedule/"):
+            candidates.append(item)
+
+    visit(value)
+    unique = list(dict.fromkeys(candidates))
+    if len(unique) != 1:
+        raise RuntimeError(
+            "expected exactly one queued scheduled Workflow, found "
+            + repr(unique)
+        )
+    return unique[0]
+
+
+def wait_workflow_canceled(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    workflow_id: str,
+    timeout: float = 30,
+) -> str:
+    deadline = time.monotonic() + timeout
+    last = ""
+    while time.monotonic() < deadline:
+        result = temporal_cli(
+            language, overlay, env,
+            "workflow", "describe", "--workflow-id", workflow_id,
+            "--output", "json", capture=True,
+        )
+        last = result.stdout
+        if "CANCELED" in last.upper() or "CANCELLED" in last.upper():
+            return last
+        time.sleep(0.5)
+    raise RuntimeError(f"Workflow {workflow_id} was not canceled\n{last}")
+
+
+def verify_queued_cancellation(
+    language: Language, overlay: Path, env: dict[str, str],
+) -> str:
+    trigger_schedule(language, overlay, env, 1)
+    workflow_id = running_scheduled_workflow_id(language, overlay, env)
+    temporal_cli(
+        language, overlay, env,
+        "workflow", "cancel", "--workflow-id", workflow_id,
+    )
+    temporal_cli(
+        language, overlay, env,
+        "schedule", "toggle", "--schedule-id", SCHEDULE_ID, "--pause",
+    )
+    run(
+        compose_command(
+            language, overlay, "up", "--detach", "--no-deps",
+            "automationservice",
+        ),
+        cwd=language.example, env=env,
+    )
+    canceled = wait_workflow_canceled(
+        language, overlay, env, workflow_id
+    )
+    status = wait_status(language, overlay, env)
+    time.sleep(2)
+    status = wait_status(language, overlay, env)
+    if edge_calls(status, "Temporal Schedule", "Make Temporal Job") != 0:
+        raise RuntimeError("canceled Workflow activated the Temporal input graph")
+    run(
+        compose_command(language, overlay, "stop", "automationservice"),
+        cwd=language.example, env=env,
+    )
+    temporal_cli(
+        language, overlay, env,
+        "schedule", "toggle", "--schedule-id", SCHEDULE_ID, "--unpause",
+    )
+    return canceled
+
+
 def workflow_list(
     language: Language, overlay: Path, env: dict[str, str],
 ) -> str:
@@ -452,6 +552,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             compose_command(language, overlay, "stop", "automationservice"),
             cwd=language.example, env=env,
         )
+        canceled = verify_queued_cancellation(language, overlay, env)
         trigger_schedule(language, overlay, env, jobs)
         run(
             compose_command(
@@ -484,6 +585,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             ),
             "metrics": metrics,
             "scheduleReuse": True,
+            "queuedCancellation": True,
         }
         (ARTIFACTS / language.name / "workflows.txt").write_text(workflows)
         (ARTIFACTS / language.name / "status.json").write_text(
@@ -491,6 +593,9 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         )
         (ARTIFACTS / language.name / "schedule.json").write_text(
             schedule_description
+        )
+        (ARTIFACTS / language.name / "canceled-workflow.json").write_text(
+            canceled
         )
         collision = verify_schedule_ownership_collision(
             language, overlay, env
