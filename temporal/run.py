@@ -299,7 +299,17 @@ def prometheus_query(expression: str) -> list[dict[str, object]]:
     return result
 
 
-def verify_temporal_metric_sources(timeout: float = 45) -> dict[str, object]:
+def exported_metric_names(text: str) -> list[str]:
+    return sorted({
+        line.split("{", 1)[0].split(" ", 1)[0]
+        for line in text.splitlines()
+        if line and not line.startswith("#")
+    })
+
+
+def verify_temporal_metric_sources(
+    output: Path, timeout: float = 45,
+) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last_error: Exception | None = None
     while time.monotonic() < deadline:
@@ -328,12 +338,17 @@ def verify_temporal_metric_sources(timeout: float = 45) -> dict[str, object]:
                 raise RuntimeError(
                     "Prometheus has not scraped both Temporal metric owners yet"
                 )
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "temporal-server.metrics.txt").write_text(server)
+            (output / "temporal-sdk.metrics.txt").write_text(sdk)
             return {
                 "serverSeriesPresent": True,
                 "sdkSeriesPresent": True,
                 "serverTargetsUp": len(server_up),
                 "sdkTargetsUp": len(sdk_up),
                 "duplicateServiceLibLatency": False,
+                "serverMetricNames": exported_metric_names(server),
+                "sdkMetricNames": exported_metric_names(sdk),
             }
         except (OSError, urllib.error.URLError, json.JSONDecodeError, RuntimeError) as error:
             last_error = error
@@ -1156,7 +1171,9 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             language, overlay, env, workflows
         )
         metrics = verify_metrics(jobs)
-        temporal_metrics = verify_temporal_metric_sources()
+        temporal_metrics = verify_temporal_metric_sources(
+            ARTIFACTS / language.name
+        )
         trace_summary, traced_workflow, trace = verify_tracing(
             language, overlay, env, overrides, workflows
         )
