@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -25,6 +26,15 @@ ROOT = Path(
 ).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "temporal"
 SCHEDULE_ID = "example-automation-schedule"
+AUTOMATION_SERVICE_NAME = "Automation Service"
+TEMPORAL_CONNECTOR_NAME = "Temporal"
+TEMPORAL_SCHEDULE_ENDPOINT_NAME = "Temporal Schedule"
+DURABLE_SOURCE_NAME = "Consume%20Durable%20Job"
+DURABLE_TARGET_NAME = "Process%20Durable%20Job"
+DURABLE_SOURCE_ID = 1
+DURABLE_TARGET_ID = 4
+DURABLE_WORKFLOW_TYPE = "servicelib.durable-link.v1"
+ENDPOINT_WORKFLOW_TYPE = "servicelib.temporal-endpoint.v1"
 JAEGER_URL = "http://localhost:16686"
 PROMETHEUS_URL = "http://localhost:9090"
 TEMPORAL_SERVER_METRICS_URL = "http://localhost:18000/metrics"
@@ -438,12 +448,12 @@ def verify_schedule_reuse(
         "--output", "json", capture=True,
     )
     description = result.stdout
-    if "servicegen.temporal-endpoint.v1" not in description:
+    if ENDPOINT_WORKFLOW_TYPE not in description:
         raise RuntimeError("Temporal Schedule does not reference the endpoint Workflow")
     if (
-        "servicegen.managedBy" not in description
-        or "servicegen.owner" not in description
-        or "servicegen.callId" not in description
+        "servicelib.managedBy" not in description
+        or "servicelib.owner" not in description
+        or "servicelib.callId" not in description
     ):
         raise RuntimeError("Temporal Schedule ownership memo is absent")
     return description
@@ -466,13 +476,13 @@ def verify_schedule_ownership_collision(
         "--schedule-id", SCHEDULE_ID,
         "--cron", "0 0 1 1 *",
         "--time-zone", "UTC",
-        "--workflow-id", "servicegen/conformance/foreign-schedule",
-        "--type", "servicegen.temporal-endpoint.v1",
+        "--workflow-id", "conformance/foreign-schedule",
+        "--type", ENDPOINT_WORKFLOW_TYPE,
         "--task-queue", "automation-schedules",
         "--paused",
-        "--schedule-memo", 'servicegen.managedBy="foreign"',
-        "--schedule-memo", 'servicegen.owner="foreign"',
-        "--schedule-memo", f'servicegen.callId="{SCHEDULE_ID}"',
+        "--schedule-memo", 'servicelib.managedBy="foreign"',
+        "--schedule-memo", 'servicelib.owner="foreign"',
+        "--schedule-memo", f'servicelib.callId="{SCHEDULE_ID}"',
     )
     try:
         result = run(
@@ -503,7 +513,7 @@ def running_scheduled_workflow_id(
         language, overlay, env,
         "workflow", "list",
         "--query",
-        'WorkflowType="servicegen.temporal-endpoint.v1" AND '
+        f'WorkflowType="{ENDPOINT_WORKFLOW_TYPE}" AND '
         'ExecutionStatus="Running"',
         "--output", "json",
         capture=True,
@@ -522,7 +532,9 @@ def running_scheduled_workflow_id(
         elif isinstance(item, list):
             for child in item:
                 visit(child)
-        elif isinstance(item, str) and item.startswith("servicegen/schedule/"):
+        elif isinstance(item, str) and item.startswith(
+            f"{TEMPORAL_CONNECTOR_NAME}/schedule/{TEMPORAL_SCHEDULE_ENDPOINT_NAME}-"
+        ):
             candidates.append(item)
 
     visit(value)
@@ -614,11 +626,11 @@ def workflow_list(
     return result.stdout
 
 
-def durable_link_identity(workflows: str) -> tuple[int, int, int]:
+def durable_link_identity(workflows: str) -> tuple[str, str, str]:
     matches = {
-        (int(service), int(source), int(target))
+        (service, source, target)
         for service, source, target in re.findall(
-            r"servicegen/durable/(\d+)/(\d+)/(\d+)/", workflows
+            r"([^\n/]+)/durable/([^/\s]+)/([^/\s]+)/", workflows
         )
     }
     if len(matches) != 1:
@@ -626,13 +638,24 @@ def durable_link_identity(workflows: str) -> tuple[int, int, int]:
             "expected exactly one DurableCall link identity, found "
             + repr(sorted(matches))
         )
-    return next(iter(matches))
+    identity = next(iter(matches))
+    expected = (
+        AUTOMATION_SERVICE_NAME.replace(" ", "%20"),
+        DURABLE_SOURCE_NAME,
+        DURABLE_TARGET_NAME,
+    )
+    if identity != expected:
+        raise RuntimeError(
+            f"DurableCall identity {identity!r} differs from stable node names "
+            f"{expected!r}"
+        )
+    return identity
 
 
 def invalid_durable_request(
-    language: Language, service: int, source: int, target: int,
+    language: Language, service: str, source_name: str, target_name: str,
 ) -> dict[str, object]:
-    activity_type = f"servicegen.durable.{service}.{source}.{target}.v1"
+    activity_type = f"{service}.durable.{source_name}.{target_name}.v1"
     if language.name == "python":
         return {
             "activity_type": activity_type,
@@ -642,8 +665,8 @@ def invalid_durable_request(
             "priority": 3,
             "envelope": {
                 "version": 0,
-                "from_id": source,
-                "to_id": target,
+                "from_id": DURABLE_SOURCE_ID,
+                "to_id": DURABLE_TARGET_ID,
                 "call_id": "conformance-retry",
                 "stream_id": "conformance-retry",
                 "priority": 0,
@@ -661,8 +684,8 @@ def invalid_durable_request(
         "priority": 3,
         "envelope": {
             "version": 0,
-            "from": source,
-            "to": target,
+            "from": DURABLE_SOURCE_ID,
+            "to": DURABLE_TARGET_ID,
             "callId": "conformance-retry",
             "streamId": "conformance-retry",
             "priority": 0,
@@ -728,16 +751,16 @@ def verify_durable_retry(
     env: dict[str, str],
     workflows: str,
 ) -> tuple[int, str]:
-    service, source, target = durable_link_identity(workflows)
-    workflow_id = (
-        f"servicegen/conformance/retry/{language.name}/{time.time_ns()}"
+    service, source_name, target_name = durable_link_identity(workflows)
+    workflow_id = f"conformance/retry/{language.name}/{time.time_ns()}"
+    request = invalid_durable_request(
+        language, service, source_name, target_name,
     )
-    request = invalid_durable_request(language, service, source, target)
     temporal_cli(
         language, overlay, env,
         "workflow", "start",
         "--workflow-id", workflow_id,
-        "--type", "servicegen.durable-link.v1",
+        "--type", DURABLE_WORKFLOW_TYPE,
         "--task-queue", "automation-durable-calls",
         "--execution-timeout", "20s",
         "--input", json.dumps(request, separators=(",", ":")),
@@ -764,7 +787,6 @@ def traced_schedule_request(
     language: Language,
     trace_id: str,
     execution_id: str,
-    service_id: int,
     endpoint_id: int,
 ) -> dict[str, object]:
     trace_carrier = {
@@ -772,7 +794,10 @@ def traced_schedule_request(
     }
     if language.name == "python":
         return {
-            "activity_type": f"servicegen.endpoint.{service_id}.{endpoint_id}.v1",
+            "activity_type": (
+                f"{TEMPORAL_CONNECTOR_NAME}.endpoint."
+                f"{TEMPORAL_SCHEDULE_ENDPOINT_NAME}.v1"
+            ),
             "activity_start_to_close_millis": 30_000,
             "activity_heartbeat_millis": 5_000,
             "maximum_attempts": 3,
@@ -805,7 +830,10 @@ def traced_schedule_request(
         "firedAtUnixNano" if language.name == "go" else "firedAtUnixMillis"
     )
     request: dict[str, object] = {
-        "activityType": f"servicegen.endpoint.{service_id}.{endpoint_id}.v1",
+        "activityType": (
+            f"{TEMPORAL_CONNECTOR_NAME}.endpoint."
+            f"{TEMPORAL_SCHEDULE_ENDPOINT_NAME}.v1"
+        ),
         "maximumAttempts": 3,
         "priority": 3,
         "envelope": {
@@ -890,19 +918,40 @@ def workflow_execution_status(description: str) -> str:
     return statuses[0] if statuses else ""
 
 
-def schedule_endpoint_identity(workflows: str) -> tuple[int, int]:
-    identities = {
-        (int(service), int(endpoint))
-        for service, endpoint in re.findall(
-            r"servicegen/schedule/(\d+)/(\d+)", workflows
-        )
-    }
-    if len(identities) != 1:
+def schedule_endpoint_id(schedule_description: str) -> int:
+    try:
+        value = json.loads(schedule_description)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Temporal schedule description returned invalid JSON") from error
+    endpoint_ids: set[int] = set()
+
+    def visit(item: object) -> None:
+        if isinstance(item, dict):
+            metadata = item.get("metadata")
+            data = item.get("data")
+            if isinstance(metadata, dict) and isinstance(data, str):
+                encoding = metadata.get("encoding")
+                if isinstance(encoding, str):
+                    try:
+                        if base64.b64decode(encoding).decode() == "json/plain":
+                            visit(json.loads(base64.b64decode(data)))
+                    except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+                        pass
+            for key, child in item.items():
+                if key in ("endpointId", "endpoint_id") and isinstance(child, int):
+                    endpoint_ids.add(child)
+                visit(child)
+        elif isinstance(item, list):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    if len(endpoint_ids) != 1:
         raise RuntimeError(
-            "expected exactly one Temporal Schedule endpoint identity, found "
-            + repr(sorted(identities))
+            "expected exactly one Temporal Schedule endpoint id, found "
+            + repr(sorted(endpoint_ids))
         )
-    return next(iter(identities))
+    return next(iter(endpoint_ids))
 
 
 def fetch_trace(trace_id: str, timeout: float = 30) -> dict[str, Any]:
@@ -1048,7 +1097,7 @@ def verify_tracing(
     overlay: Path,
     env: dict[str, str],
     overrides: Path,
-    workflows: str,
+    schedule_description: str,
 ) -> tuple[dict[str, object], str, dict[str, Any]]:
     temporal_cli(
         language, overlay, env,
@@ -1069,16 +1118,16 @@ def verify_tracing(
     wait_status(language, overlay, env)
     trace_id = secrets.token_hex(16)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    workflow_id = f"servicegen/conformance/trace/{language.name}-{timestamp}"
-    service_id, endpoint_id = schedule_endpoint_identity(workflows)
+    workflow_id = f"conformance/trace/{language.name}-{timestamp}"
+    endpoint_id = schedule_endpoint_id(schedule_description)
     request = traced_schedule_request(
-        language, trace_id, workflow_id, service_id, endpoint_id
+        language, trace_id, workflow_id, endpoint_id
     )
     temporal_cli(
         language, overlay, env,
         "workflow", "start",
         "--workflow-id", workflow_id,
-        "--type", "servicegen.temporal-endpoint.v1",
+        "--type", ENDPOINT_WORKFLOW_TYPE,
         "--task-queue", "automation-schedules",
         "--execution-timeout", "60s",
         "--input", json.dumps(request, separators=(",", ":")),
@@ -1173,9 +1222,9 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         status = wait_local_cron(language, overlay, env)
         schedule_description = verify_schedule_reuse(language, overlay, env)
         workflows = workflow_list(language, overlay, env)
-        if workflows.count("servicegen.temporal-endpoint.v1") < jobs * 2:
+        if workflows.count(ENDPOINT_WORKFLOW_TYPE) < jobs * 2:
             raise RuntimeError("Temporal endpoint Workflow executions are missing")
-        if workflows.count("servicegen.durable-link.v1") < jobs:
+        if workflows.count(DURABLE_WORKFLOW_TYPE) < jobs:
             raise RuntimeError("DurableCall Workflow executions are missing")
         retry_attempts, retry_history = verify_durable_retry(
             language, overlay, env, workflows
@@ -1185,7 +1234,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             ARTIFACTS / language.name
         )
         trace_summary, traced_workflow, trace = verify_tracing(
-            language, overlay, env, overrides, workflows
+            language, overlay, env, overrides, schedule_description
         )
         result = {
             "status": "pass",
