@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Temporal Schedule, queued endpoint and DurableCall conformance."""
+"""Cron and Temporal symmetric endpoint conformance."""
 
 from __future__ import annotations
 
@@ -19,23 +19,29 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 CONFORMANCE = Path(__file__).resolve().parents[1]
-ROOT = Path(
-    os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)
-).expanduser().resolve()
+ROOT = (
+    Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent))
+    .expanduser()
+    .resolve()
+)
 ARTIFACTS = CONFORMANCE / ".artifacts" / "temporal"
-SCHEDULE_ID = "example-automation-schedule"
-AUTOMATION_SERVICE_NAME = "Automation Service"
-AUTOMATION_SERVICE_IDENTITY = "automation_service"
-TEMPORAL_CONNECTOR_NAME = "Temporal"
-TEMPORAL_SCHEDULE_ENDPOINT_NAME = "Temporal Schedule"
-DURABLE_SOURCE_NAME = "consume_durable_job"
-DURABLE_TARGET_NAME = "durable_pause"
-DURABLE_SOURCE_ID = 1
-DURABLE_TARGET_ID = 4
-DURABLE_WORKFLOW_TYPE = "servicelib.durable-link.v1"
+ACTIVITY_SCHEDULE_ID = "example-automation-activity-schedule"
+WORKFLOW_SCHEDULE_ID = "example-automation-workflow-schedule"
+ACTIVITY_SCHEDULE_ENDPOINT_NAME = "Temporal Activity Schedule"
+WORKFLOW_SCHEDULE_ENDPOINT_NAME = "Temporal Workflow Schedule"
+ACTIVITY_JOB_ENDPOINT_NAME = "Activity Job"
+WORKFLOW_JOB_ENDPOINT_NAME = "Workflow Job"
+FANOUT_WORKFLOW_JOB_ENDPOINT_NAME = "Fan-Out Workflow Job"
+SEQUENTIAL_ACTIVITY_A_ENDPOINT_NAME = "Sequential Activity A"
+SEQUENTIAL_ACTIVITY_B_ENDPOINT_NAME = "Sequential Activity B"
+FANOUT_ACTIVITY_A_ENDPOINT_NAME = "Fan-Out Activity A"
+FANOUT_ACTIVITY_B_ENDPOINT_NAME = "Fan-Out Activity B"
+FANOUT_ACTIVITY_C_ENDPOINT_NAME = "Fan-Out Activity C"
 ENDPOINT_WORKFLOW_TYPE = "servicelib.temporal-endpoint.v1"
+WORKFLOW_JOB_WORKFLOW_TYPE = "temporal.endpoint.workflow_job.workflow.v1"
+FANOUT_WORKFLOW_JOB_WORKFLOW_TYPE = "temporal.endpoint.fan_out_workflow_job.workflow.v1"
+SCHEDULED_WORKFLOW_TYPE = "temporal.endpoint.temporal_workflow_schedule.workflow.v1"
 JAEGER_URL = "http://localhost:16686"
 PROMETHEUS_URL = "http://localhost:9090"
 TEMPORAL_SERVER_METRICS_URL = "http://localhost:18000/metrics"
@@ -60,15 +66,21 @@ LANGUAGES = {
     language.name: language
     for language in (
         Language(
-            "go", ROOT / "goexample", ROOT / "servicelib",
+            "go",
+            ROOT / "goexample",
+            ROOT / "servicelib",
             "/app/config/overrides.yaml",
         ),
         Language(
-            "python", ROOT / "pyexample", ROOT / "pyservicelib",
+            "python",
+            ROOT / "pyexample",
+            ROOT / "pyservicelib",
             "/workspace/config/docker_overrides.yaml",
         ),
         Language(
-            "typescript", ROOT / "tsexample", ROOT / "tsservicelib",
+            "typescript",
+            ROOT / "tsexample",
+            ROOT / "tsservicelib",
             "/app/config/docker_overrides.yaml",
         ),
     )
@@ -88,15 +100,25 @@ def environment(language: Language) -> dict[str, str]:
 
 
 def run(
-    command: list[str], *, cwd: Path, env: dict[str, str],
-    capture: bool = False, check: bool = True, announce: bool = True,
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    capture: bool = False,
+    check: bool = True,
+    announce: bool = True,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if announce:
         print("-", " ".join(command), flush=True)
     return subprocess.run(
-        command, cwd=cwd, env=env, check=check, text=True,
-        capture_output=capture, timeout=timeout,
+        command,
+        cwd=cwd,
+        env=env,
+        check=check,
+        text=True,
+        capture_output=capture,
+        timeout=timeout,
     )
 
 
@@ -107,15 +129,35 @@ def write_overrides(path: Path, *, production: bool) -> None:
   temporal:
     address: temporal:7233
 endpoints:
-  durableJob:
+  activityJob:
+    enabled: true
+  fanOutActivityA:
+    enabled: true
+  fanOutActivityB:
+    enabled: true
+  fanOutActivityC:
+    enabled: true
+  fanOutWorkflowJob:
     enabled: true
   localSchedule:
     enabled: true
     schedule: "* * * * *"
-  temporalSchedule:
+  sequentialActivityA:
+    enabled: true
+  sequentialActivityB:
+    enabled: true
+  temporalActivitySchedule:
     enabled: true
     schedule: "* * * * *"
     overlapPolicy: Allow
+    tracingEnabled: true
+  temporalWorkflowSchedule:
+    enabled: true
+    schedule: "* * * * *"
+    overlapPolicy: Allow
+    tracingEnabled: true
+  workflowJob:
+    enabled: true
 services:
   automationService:
     defaultGrpcTimeout: 0
@@ -125,7 +167,13 @@ services:
     httpHost: 0.0.0.0
     httpPort: 9094
 streams:
-  durablePause:
+  activityPause:
+    duration: 250
+  scheduledActivityPause:
+    duration: 250
+  scheduledWorkflowPause:
+    duration: 250
+  workflowPause:
     duration: 250
 """
     )
@@ -147,22 +195,22 @@ def prepare_files(language: Language) -> tuple[Path, Path]:
         "  automationservice:\n"
         "    environment:\n"
         f"      OTEL_EXPORTER_OTLP_ENDPOINT: {otlp_endpoint}\n"
-        "      OTEL_EXPORTER_OTLP_INSECURE: \"true\"\n"
+        '      OTEL_EXPORTER_OTLP_INSECURE: "true"\n'
         "    ports:\n"
-        "      - \"19464:9464\"\n"
+        '      - "19464:9464"\n'
         "    depends_on:\n"
         "      - otel-collector\n"
         "    volumes:\n"
         f"      - {overrides}:{language.override_target}:ro\n"
         "  temporal:\n"
         "    ports:\n"
-        "      - \"18000:8000\"\n"
+        '      - "18000:8000"\n'
         "  jaeger:\n"
         "    image: jaegertracing/all-in-one:1.62.0\n"
         "    environment:\n"
-        "      COLLECTOR_OTLP_ENABLED: \"true\"\n"
+        '      COLLECTOR_OTLP_ENABLED: "true"\n'
         "    ports:\n"
-        "      - \"16686:16686\"\n"
+        '      - "16686:16686"\n'
         "    networks:\n"
         "      - app_net\n"
         "  otel-collector:\n"
@@ -181,9 +229,14 @@ def prepare_files(language: Language) -> tuple[Path, Path]:
 
 def compose_command(language: Language, overlay: Path, *args: str) -> list[str]:
     command = [
-        "docker", "compose", "--project-name", language.project,
-        "--project-directory", str(language.example),
-        "--file", str(language.example / "docker-compose.yml"),
+        "docker",
+        "compose",
+        "--project-name",
+        language.project,
+        "--project-directory",
+        str(language.example),
+        "--file",
+        str(language.example / "docker-compose.yml"),
     ]
     for runtime_overlay in sorted(
         language.example.glob("docker-compose.*-runtime.generated.yml")
@@ -197,32 +250,96 @@ def build(language: Language, overlay: Path, env: dict[str, str]) -> None:
     if language.name == "go":
         run(
             [
-                "make", "-C", "automationservice", "docker-build",
+                "make",
+                "-C",
+                "automationservice",
+                "docker-build",
                 f"PROJECT_DIR={language.example}",
             ],
-            cwd=language.example, env=env,
+            cwd=language.example,
+            env=env,
         )
         return
     run(
         compose_command(language, overlay, "build", "automationservice"),
-        cwd=language.example, env=env,
+        cwd=language.example,
+        env=env,
     )
+
+
+def verify_go_workflowcheck(language: Language, env: dict[str, str]) -> bool:
+    if language.name != "go":
+        return False
+    tool = ARTIFACTS / "tools" / "workflowcheck-v0.5.0"
+    if not tool.exists():
+        tool.parent.mkdir(parents=True, exist_ok=True)
+        install_env = env.copy()
+        install_env["GOBIN"] = str(tool.parent)
+        run(
+            [
+                "go",
+                "install",
+                "go.temporal.io/sdk/contrib/tools/workflowcheck@v0.5.0",
+            ],
+            cwd=language.example,
+            env=install_env,
+        )
+        installed = tool.parent / "workflowcheck"
+        if not installed.exists():
+            raise RuntimeError("workflowcheck v0.5.0 was not installed")
+        installed.rename(tool)
+    workspace = ARTIFACTS / "go-workflowcheck.work"
+    go_version = "1.25.4"
+    match = re.search(
+        r"^go\s+(\S+)$",
+        (language.example / "go.work").read_text(),
+        flags=re.MULTILINE,
+    )
+    if match:
+        go_version = match.group(1)
+    workspace.write_text(
+        f"go {go_version}\n\nuse (\n"
+        f"\t{language.example / 'automationservice'}\n"
+        f"\t{language.runtime}\n"
+        ")\n"
+    )
+    check_env = env.copy()
+    check_env["GOWORK"] = str(workspace)
+    check_env["GOCACHE"] = str(ARTIFACTS / "go-build-cache")
+    run(
+        [str(tool), "./..."],
+        cwd=language.example / "automationservice",
+        env=check_env,
+    )
+    return True
 
 
 def diagnostics(language: Language, overlay: Path, env: dict[str, str]) -> str:
     result = run(
         compose_command(
-            language, overlay, "logs", "--no-color", "--tail", "160",
-            "automationservice", "temporal",
+            language,
+            overlay,
+            "logs",
+            "--no-color",
+            "--tail",
+            "160",
+            "automationservice",
+            "temporal",
         ),
-        cwd=language.example, env=env, capture=True, check=False,
+        cwd=language.example,
+        env=env,
+        capture=True,
+        check=False,
         announce=False,
     )
     return (result.stdout + result.stderr).strip() or "logs unavailable"
 
 
 def wait_status(
-    language: Language, overlay: Path, env: dict[str, str], timeout: float = 90,
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    timeout: float = 90,
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last_error: Exception | None = None
@@ -267,37 +384,95 @@ def metric_value(text: str, metric: str, labels: dict[str, str]) -> float:
     raise RuntimeError(f"metric {metric}{labels} is absent")
 
 
-def verify_metrics(jobs: int) -> dict[str, float]:
-    text = fetch_text("http://localhost:9094/metrics")
+def verify_metrics(text: str, jobs: int) -> dict[str, float]:
     expected = {
         "localCronMessages": (
             "datasource_endpoint_messages_total",
             {"connector": "Local Cron", "endpoint": "Local Schedule"},
             1,
         ),
-        "temporalScheduleMessages": (
+        "temporalActivityScheduleMessages": (
             "datasource_endpoint_messages_total",
-            {"connector": "Temporal", "endpoint": "Temporal Schedule"},
+            {
+                "connector": "Temporal",
+                "endpoint": ACTIVITY_SCHEDULE_ENDPOINT_NAME,
+            },
             jobs,
         ),
-        "temporalJobInputs": (
+        "activityJobInputs": (
             "datasource_endpoint_messages_total",
-            {"connector": "Temporal", "endpoint": "Durable Job"},
-            jobs,
+            {"connector": "Temporal", "endpoint": ACTIVITY_JOB_ENDPOINT_NAME},
+            1,
         ),
-        "temporalJobSubmissions": (
+        "activityJobSubmissions": (
             "datasink_endpoint_messages_total",
-            {"connector": "Temporal", "endpoint": "Durable Job"},
-            jobs,
+            {"connector": "Temporal", "endpoint": ACTIVITY_JOB_ENDPOINT_NAME},
+            1,
+        ),
+        "workflowJobSubmissions": (
+            "datasink_endpoint_messages_total",
+            {"connector": "Temporal", "endpoint": WORKFLOW_JOB_ENDPOINT_NAME},
+            1,
+        ),
+        "fanOutWorkflowJobSubmissions": (
+            "datasink_endpoint_messages_total",
+            {
+                "connector": "Temporal",
+                "endpoint": FANOUT_WORKFLOW_JOB_ENDPOINT_NAME,
+            },
+            1,
+        ),
+        "sequentialActivityAInputs": (
+            "datasource_endpoint_messages_total",
+            {
+                "connector": "Temporal",
+                "endpoint": SEQUENTIAL_ACTIVITY_A_ENDPOINT_NAME,
+            },
+            1,
+        ),
+        "sequentialActivityBInputs": (
+            "datasource_endpoint_messages_total",
+            {
+                "connector": "Temporal",
+                "endpoint": SEQUENTIAL_ACTIVITY_B_ENDPOINT_NAME,
+            },
+            1,
+        ),
+        "fanOutActivityAInputs": (
+            "datasource_endpoint_messages_total",
+            {
+                "connector": "Temporal",
+                "endpoint": FANOUT_ACTIVITY_A_ENDPOINT_NAME,
+            },
+            1,
+        ),
+        "fanOutActivityBInputs": (
+            "datasource_endpoint_messages_total",
+            {
+                "connector": "Temporal",
+                "endpoint": FANOUT_ACTIVITY_B_ENDPOINT_NAME,
+            },
+            1,
+        ),
+        "fanOutActivityCInputs": (
+            "datasource_endpoint_messages_total",
+            {
+                "connector": "Temporal",
+                "endpoint": FANOUT_ACTIVITY_C_ENDPOINT_NAME,
+            },
+            1,
+        ),
+        "activityHeartbeats": (
+            "temporal_activity_events_total",
+            {"connector": "Temporal", "boundary": "endpoint", "event": "heartbeat"},
+            1,
         ),
     }
     result: dict[str, float] = {}
     for name, (metric, labels, minimum) in expected.items():
         value = metric_value(text, metric, labels)
         if value < minimum:
-            raise RuntimeError(
-                f"{metric}{labels}={value}, expected at least {minimum}"
-            )
+            raise RuntimeError(f"{metric}{labels}={value}, expected at least {minimum}")
         result[name] = value
     return result
 
@@ -309,20 +484,23 @@ def prometheus_query(expression: str) -> list[dict[str, object]]:
         raise RuntimeError(f"Prometheus query failed: {payload!r}")
     result = payload.get("data", {}).get("result", [])
     if not isinstance(result, list):
-        raise RuntimeError(f"Prometheus query returned invalid data: {payload!r}")
+        raise TypeError(f"Prometheus query returned invalid data: {payload!r}")
     return result
 
 
 def exported_metric_names(text: str) -> list[str]:
-    return sorted({
-        line.split("{", 1)[0].split(" ", 1)[0]
-        for line in text.splitlines()
-        if line and not line.startswith("#")
-    })
+    return sorted(
+        {
+            line.split("{", 1)[0].split(" ", 1)[0]
+            for line in text.splitlines()
+            if line and not line.startswith("#")
+        }
+    )
 
 
 def verify_temporal_metric_sources(
-    output: Path, timeout: float = 45,
+    output: Path,
+    timeout: float = 45,
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last_error: Exception | None = None
@@ -352,15 +530,15 @@ def verify_temporal_metric_sources(
                 if not any(metric in sdk for metric in alternatives)
             ]
             if missing:
-                raise RuntimeError(f"official Temporal SDK metrics are absent: {missing}")
+                raise RuntimeError(
+                    f"official Temporal SDK metrics are absent: {missing}"
+                )
             if re.search(r"servicelib_.*durable.*latency", sdk):
-                raise RuntimeError("Temporal latency was duplicated as a ServiceLib metric")
-            server_up = prometheus_query(
-                'up{telemetry_source="temporal-server"} == 1'
-            )
-            sdk_up = prometheus_query(
-                'up{telemetry_source="temporal-sdk"} == 1'
-            )
+                raise RuntimeError(
+                    "Temporal latency was duplicated as a ServiceLib metric"
+                )
+            server_up = prometheus_query('up{telemetry_source="temporal-server"} == 1')
+            sdk_up = prometheus_query('up{telemetry_source="temporal-sdk"} == 1')
             if not server_up or not sdk_up:
                 raise RuntimeError(
                     "Prometheus has not scraped both Temporal metric owners yet"
@@ -374,7 +552,12 @@ def verify_temporal_metric_sources(
                 "serverMetricNames": exported_metric_names(server),
                 "sdkMetricNames": exported_metric_names(sdk),
             }
-        except (OSError, urllib.error.URLError, json.JSONDecodeError, RuntimeError) as error:
+        except (
+            OSError,
+            urllib.error.URLError,
+            json.JSONDecodeError,
+            RuntimeError,
+        ) as error:
             last_error = error
             time.sleep(1)
     raise RuntimeError(f"Temporal metric sources did not become ready: {last_error}")
@@ -384,7 +567,7 @@ def edge_calls(status: dict[str, object], source: str, target: str) -> int:
     nodes = status.get("nodes")
     edges = status.get("edges")
     if not isinstance(nodes, list) or not isinstance(edges, list):
-        raise RuntimeError("/status/data has no nodes/edges arrays")
+        raise TypeError("/status/data has no nodes/edges arrays")
     ids: dict[str, object] = {}
     for node in nodes:
         if not isinstance(node, dict):
@@ -433,18 +616,36 @@ def wait_edge_calls(
 
 
 def trigger_schedule(
-    language: Language, overlay: Path, env: dict[str, str], count: int,
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    schedule_id: str,
+    count: int,
 ) -> None:
     for index in range(count):
         run(
             compose_command(
-                language, overlay, "run", "--rm", "--no-deps",
-                "--entrypoint", "temporal", "temporal-create-namespace",
-                "schedule", "trigger", "--address", "temporal:7233",
-                "--namespace", "default", "--schedule-id", SCHEDULE_ID,
-                "--overlap-policy", "AllowAll",
+                language,
+                overlay,
+                "run",
+                "--rm",
+                "--no-deps",
+                "--entrypoint",
+                "temporal",
+                "temporal-create-namespace",
+                "schedule",
+                "trigger",
+                "--address",
+                "temporal:7233",
+                "--namespace",
+                "default",
+                "--schedule-id",
+                schedule_id,
+                "--overlap-policy",
+                "AllowAll",
             ),
-            cwd=language.example, env=env,
+            cwd=language.example,
+            env=env,
         )
         # Temporal Schedule derives the started Workflow ID suffix from the
         # scheduled second. Keep distinct manual firings in distinct seconds;
@@ -463,66 +664,127 @@ def temporal_cli(
 ) -> subprocess.CompletedProcess[str]:
     return run(
         compose_command(
-            language, overlay, "run", "--rm", "--no-deps",
-            "--entrypoint", "temporal", "temporal-create-namespace",
-            *arguments, "--address", "temporal:7233", "--namespace", "default",
+            language,
+            overlay,
+            "run",
+            "--rm",
+            "--no-deps",
+            "--entrypoint",
+            "temporal",
+            "temporal-create-namespace",
+            *arguments,
+            "--address",
+            "temporal:7233",
+            "--namespace",
+            "default",
         ),
-        cwd=language.example, env=env, capture=capture, check=check,
+        cwd=language.example,
+        env=env,
+        capture=capture,
+        check=check,
     )
 
 
 def verify_schedule_reuse(
-    language: Language, overlay: Path, env: dict[str, str],
-) -> str:
-    result = temporal_cli(
-        language, overlay, env,
-        "schedule", "describe", "--schedule-id", SCHEDULE_ID,
-        "--output", "json", capture=True,
-    )
-    description = result.stdout
-    if ENDPOINT_WORKFLOW_TYPE not in description:
-        raise RuntimeError("Temporal Schedule does not reference the endpoint Workflow")
-    if (
-        "servicelib.managedBy" not in description
-        or "servicelib.owner" not in description
-        or "servicelib.callId" not in description
-    ):
-        raise RuntimeError("Temporal Schedule ownership memo is absent")
-    return description
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+) -> dict[str, str]:
+    schedules = {
+        ACTIVITY_SCHEDULE_ID: ENDPOINT_WORKFLOW_TYPE,
+        WORKFLOW_SCHEDULE_ID: SCHEDULED_WORKFLOW_TYPE,
+    }
+    descriptions: dict[str, str] = {}
+    for schedule_id, workflow_type in schedules.items():
+        result = temporal_cli(
+            language,
+            overlay,
+            env,
+            "schedule",
+            "describe",
+            "--schedule-id",
+            schedule_id,
+            "--output",
+            "json",
+            capture=True,
+        )
+        description = result.stdout
+        if workflow_type not in description:
+            raise RuntimeError(
+                f"Temporal Schedule {schedule_id!r} does not reference "
+                f"Workflow type {workflow_type!r}"
+            )
+        if (
+            "servicelib.managedBy" not in description
+            or "servicelib.owner" not in description
+            or "servicelib.callId" not in description
+        ):
+            raise RuntimeError(
+                f"Temporal Schedule {schedule_id!r} ownership memo is absent"
+            )
+        descriptions[schedule_id] = description
+    return descriptions
 
 
 def verify_schedule_ownership_collision(
-    language: Language, overlay: Path, env: dict[str, str],
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
 ) -> str:
     run(
         compose_command(language, overlay, "stop", "automationservice"),
-        cwd=language.example, env=env,
+        cwd=language.example,
+        env=env,
     )
     temporal_cli(
-        language, overlay, env,
-        "schedule", "delete", "--schedule-id", SCHEDULE_ID,
+        language,
+        overlay,
+        env,
+        "schedule",
+        "delete",
+        "--schedule-id",
+        ACTIVITY_SCHEDULE_ID,
     )
     temporal_cli(
-        language, overlay, env,
-        "schedule", "create",
-        "--schedule-id", SCHEDULE_ID,
-        "--cron", "0 0 1 1 *",
-        "--time-zone", "UTC",
-        "--workflow-id", "conformance/foreign-schedule",
-        "--type", ENDPOINT_WORKFLOW_TYPE,
-        "--task-queue", "automation-schedules",
+        language,
+        overlay,
+        env,
+        "schedule",
+        "create",
+        "--schedule-id",
+        ACTIVITY_SCHEDULE_ID,
+        "--cron",
+        "0 0 1 1 *",
+        "--time-zone",
+        "UTC",
+        "--workflow-id",
+        "conformance/foreign-schedule",
+        "--type",
+        ENDPOINT_WORKFLOW_TYPE,
+        "--task-queue",
+        "automation-activity-schedules",
         "--paused",
-        "--schedule-memo", 'servicelib.managedBy="foreign"',
-        "--schedule-memo", 'servicelib.owner="foreign"',
-        "--schedule-memo", f'servicelib.callId="{SCHEDULE_ID}"',
+        "--schedule-memo",
+        'servicelib.managedBy="foreign"',
+        "--schedule-memo",
+        'servicelib.owner="foreign"',
+        "--schedule-memo",
+        f'servicelib.callId="{ACTIVITY_SCHEDULE_ID}"',
     )
     try:
         result = run(
             compose_command(
-                language, overlay, "run", "--rm", "--no-deps",
+                language,
+                overlay,
+                "run",
+                "--rm",
+                "--no-deps",
                 "automationservice",
             ),
-            cwd=language.example, env=env, capture=True, check=False,
+            cwd=language.example,
+            env=env,
+            capture=True,
+            check=False,
             timeout=30,
         )
     except subprocess.TimeoutExpired as error:
@@ -539,15 +801,21 @@ def verify_schedule_ownership_collision(
 
 
 def running_scheduled_workflow_id(
-    language: Language, overlay: Path, env: dict[str, str],
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    endpoint_name: str,
 ) -> str:
     result = temporal_cli(
-        language, overlay, env,
-        "workflow", "list",
+        language,
+        overlay,
+        env,
+        "workflow",
+        "list",
         "--query",
-        f'WorkflowType="{ENDPOINT_WORKFLOW_TYPE}" AND '
-        'ExecutionStatus="Running"',
-        "--output", "json",
+        f'WorkflowType="{ENDPOINT_WORKFLOW_TYPE}" AND ExecutionStatus="Running"',
+        "--output",
+        "json",
         capture=True,
     )
     try:
@@ -565,7 +833,9 @@ def running_scheduled_workflow_id(
             for child in item:
                 visit(child)
         elif isinstance(item, str) and item.startswith(
-            f"{TEMPORAL_CONNECTOR_NAME}/schedule/{TEMPORAL_SCHEDULE_ENDPOINT_NAME}-"
+            "temporal/schedule/"
+            + re.sub(r"[^a-z0-9]+", "_", endpoint_name.lower()).strip("_")
+            + "-"
         ):
             candidates.append(item)
 
@@ -573,8 +843,7 @@ def running_scheduled_workflow_id(
     unique = list(dict.fromkeys(candidates))
     if len(unique) != 1:
         raise RuntimeError(
-            "expected exactly one queued scheduled Workflow, found "
-            + repr(unique)
+            "expected exactly one queued scheduled Workflow, found " + repr(unique)
         )
     return unique[0]
 
@@ -590,9 +859,16 @@ def wait_workflow_canceled(
     last = ""
     while time.monotonic() < deadline:
         result = temporal_cli(
-            language, overlay, env,
-            "workflow", "describe", "--workflow-id", workflow_id,
-            "--output", "json", capture=True,
+            language,
+            overlay,
+            env,
+            "workflow",
+            "describe",
+            "--workflow-id",
+            workflow_id,
+            "--output",
+            "json",
+            capture=True,
         )
         last = result.stdout
         if "CANCELED" in last.upper() or "CANCELLED" in last.upper():
@@ -602,292 +878,322 @@ def wait_workflow_canceled(
 
 
 def verify_queued_cancellation(
-    language: Language, overlay: Path, env: dict[str, str],
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
 ) -> str:
     # Pause regular admission before the manual firing. Otherwise a test that
     # crosses a minute boundary can observe an unrelated scheduled Workflow
     # and incorrectly attribute its graph activation to the canceled firing.
     temporal_cli(
-        language, overlay, env,
-        "schedule", "toggle", "--schedule-id", SCHEDULE_ID, "--pause",
-    )
-    trigger_schedule(language, overlay, env, 1)
-    workflow_id = running_scheduled_workflow_id(language, overlay, env)
-    temporal_cli(
-        language, overlay, env,
-        "workflow", "cancel", "--workflow-id", workflow_id,
-    )
-    run(
-        compose_command(
-            language, overlay, "up", "--detach", "--no-deps",
-            "automationservice",
-        ),
-        cwd=language.example, env=env,
-    )
-    canceled = wait_workflow_canceled(
-        language, overlay, env, workflow_id
-    )
-    if wait_edge_calls(
         language,
         overlay,
         env,
-        "Temporal Schedule",
-        "Merge Job Submissions",
-    ) != 0:
+        "schedule",
+        "toggle",
+        "--schedule-id",
+        ACTIVITY_SCHEDULE_ID,
+        "--pause",
+    )
+    trigger_schedule(language, overlay, env, ACTIVITY_SCHEDULE_ID, 1)
+    workflow_id = running_scheduled_workflow_id(
+        language, overlay, env, ACTIVITY_SCHEDULE_ENDPOINT_NAME
+    )
+    temporal_cli(
+        language,
+        overlay,
+        env,
+        "workflow",
+        "cancel",
+        "--workflow-id",
+        workflow_id,
+    )
+    run(
+        compose_command(
+            language,
+            overlay,
+            "up",
+            "--detach",
+            "--no-deps",
+            "automationservice",
+        ),
+        cwd=language.example,
+        env=env,
+    )
+    canceled = wait_workflow_canceled(language, overlay, env, workflow_id)
+    if (
+        wait_edge_calls(
+            language,
+            overlay,
+            env,
+            ACTIVITY_SCHEDULE_ENDPOINT_NAME,
+            "Scheduled Activity Pause",
+        )
+        != 0
+    ):
         raise RuntimeError("canceled Workflow activated the Temporal input graph")
     run(
         compose_command(language, overlay, "stop", "automationservice"),
-        cwd=language.example, env=env,
+        cwd=language.example,
+        env=env,
     )
     temporal_cli(
-        language, overlay, env,
-        "schedule", "toggle", "--schedule-id", SCHEDULE_ID, "--unpause",
+        language,
+        overlay,
+        env,
+        "schedule",
+        "toggle",
+        "--schedule-id",
+        ACTIVITY_SCHEDULE_ID,
+        "--unpause",
     )
     return canceled
 
 
 def workflow_list(
-    language: Language, overlay: Path, env: dict[str, str],
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
 ) -> str:
     result = run(
         compose_command(
-            language, overlay, "run", "--rm", "--no-deps",
-            "--entrypoint", "temporal", "temporal-create-namespace",
-            "workflow", "list", "--address", "temporal:7233",
-            "--namespace", "default",
+            language,
+            overlay,
+            "run",
+            "--rm",
+            "--no-deps",
+            "--entrypoint",
+            "temporal",
+            "temporal-create-namespace",
+            "workflow",
+            "list",
+            "--address",
+            "temporal:7233",
+            "--namespace",
+            "default",
         ),
-        cwd=language.example, env=env, capture=True,
+        cwd=language.example,
+        env=env,
+        capture=True,
     )
     return result.stdout
 
 
-def durable_link_identity(workflows: str) -> tuple[str, str, str]:
-    matches = {
-        (service, source, target)
-        for service, source, target in re.findall(
-            r"(?:^|\s)([a-z0-9_]+)/durable/([^/\s]+)/([^/\s]+)/",
-            workflows,
-            flags=re.MULTILINE,
-        )
-    }
-    if len(matches) != 1:
-        raise RuntimeError(
-            "expected exactly one DurableCall link identity, found "
-            + repr(sorted(matches))
-        )
-    identity = next(iter(matches))
-    expected = (
-        AUTOMATION_SERVICE_IDENTITY,
-        DURABLE_SOURCE_NAME,
-        DURABLE_TARGET_NAME,
+def verify_continue_as_new(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+) -> str:
+    for workflow_id in endpoint_workflow_ids(
+        language,
+        overlay,
+        env,
+        WORKFLOW_JOB_WORKFLOW_TYPE,
+        "workflow_job",
+    ):
+        history = workflow_history(language, overlay, env, workflow_id)
+        if "CONTINUE_AS_NEW_INITIATOR_WORKFLOW" in history:
+            return history
+    raise RuntimeError("Workflow Job did not execute Continue-As-New")
+
+
+def endpoint_workflow_ids(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    workflow_type: str,
+    endpoint_identity: str,
+) -> list[str]:
+    result = temporal_cli(
+        language,
+        overlay,
+        env,
+        "workflow",
+        "list",
+        "--query",
+        f'WorkflowType="{workflow_type}"',
+        "--output",
+        "json",
+        capture=True,
     )
-    if identity != expected:
-        raise RuntimeError(
-            f"DurableCall identity {identity!r} differs from stable node names "
-            f"{expected!r}"
-        )
-    return identity
+    try:
+        value = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Temporal workflow list returned invalid JSON") from error
+    prefix = f"temporal/endpoint/{endpoint_identity}/"
+    workflow_ids: list[str] = []
+
+    def visit(item: object) -> None:
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if (
+                    key in {"workflowId", "workflow_id"}
+                    and isinstance(child, str)
+                    and child.startswith(prefix)
+                ):
+                    workflow_ids.append(child)
+                visit(child)
+        elif isinstance(item, list):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    return list(dict.fromkeys(workflow_ids))
 
 
-def invalid_durable_request(
-    language: Language, service: str, source_name: str, target_name: str,
-) -> dict[str, object]:
-    activity_type = f"{service}.durable.{source_name}.{target_name}.v1"
-    if language.name == "python":
-        return {
-            "activity_type": activity_type,
-            "activity_start_to_close_millis": 2_000,
-            "activity_heartbeat_millis": 0,
-            "maximum_attempts": 3,
-            "priority": 3,
-            "envelope": {
-                "version": 0,
-                "from_id": DURABLE_SOURCE_ID,
-                "to_id": DURABLE_TARGET_ID,
-                "call_id": "conformance-retry",
-                "stream_id": "conformance-retry",
-                "priority": 0,
-                "deadline_unix_nano": 0,
-                "sampling_enabled": False,
-                "payload": [],
-            },
-        }
-    deadline_name = (
-        "deadlineUnixNano" if language.name == "go" else "deadlineUnixMillis"
-    )
-    request: dict[str, object] = {
-        "activityType": activity_type,
-        "maximumAttempts": 3,
-        "priority": 3,
-        "envelope": {
-            "version": 0,
-            "from": DURABLE_SOURCE_ID,
-            "to": DURABLE_TARGET_ID,
-            "callId": "conformance-retry",
-            "streamId": "conformance-retry",
-            "priority": 0,
-            deadline_name: 0,
-            "samplingEnabled": False,
-            "payload": "" if language.name == "go" else [],
-        },
-    }
-    if language.name == "go":
-        request["activityStartToCloseMillis"] = 2_000
-        request["activityHeartbeatMillis"] = 0
-    else:
-        request["activityStartToCloseTimeout"] = 2_000
-        request["activityHeartbeatTimeout"] = 0
-    return request
-
-
-def wait_workflow_failed(
+def workflow_history(
     language: Language,
     overlay: Path,
     env: dict[str, str],
     workflow_id: str,
-    timeout: float = 30,
 ) -> str:
-    deadline = time.monotonic() + timeout
-    last = ""
-    while time.monotonic() < deadline:
-        result = temporal_cli(
-            language, overlay, env,
-            "workflow", "describe", "--workflow-id", workflow_id,
-            "--output", "json", capture=True,
-        )
-        last = result.stdout
-        if "FAILED" in last.upper():
-            return last
-        time.sleep(0.5)
-    raise RuntimeError(f"Workflow {workflow_id} did not fail after retries\n{last}")
+    return temporal_cli(
+        language,
+        overlay,
+        env,
+        "workflow",
+        "show",
+        "--workflow-id",
+        workflow_id,
+        "--output",
+        "json",
+        capture=True,
+    ).stdout
 
 
-def maximum_activity_attempt(history: object) -> int:
-    attempts: list[int] = []
+def decoded_history_text(history: str) -> str:
+    """Expose nested Temporal Payload data without depending on one SDK codec."""
+    try:
+        root: object = json.loads(history)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Temporal workflow history returned invalid JSON") from error
+    fragments: list[str] = []
+    visited_payloads: set[bytes] = set()
+
+    def visit_bytes(value: bytes) -> None:
+        if not value or value in visited_payloads:
+            return
+        visited_payloads.add(value)
+        decoded = value.decode("utf-8", errors="ignore")
+        if decoded:
+            fragments.append(decoded)
+            try:
+                visit(json.loads(decoded))
+            except json.JSONDecodeError:
+                pass
 
     def visit(value: object) -> None:
         if isinstance(value, dict):
-            for key, child in value.items():
-                if key == "attempt":
-                    try:
-                        attempts.append(int(child))
-                    except (TypeError, ValueError):
-                        pass
+            for child in value.values():
                 visit(child)
         elif isinstance(value, list):
+            if value and all(
+                isinstance(child, int) and 0 <= child <= 255 for child in value
+            ):
+                visit_bytes(bytes(value))
             for child in value:
                 visit(child)
+        elif isinstance(value, str):
+            fragments.append(value)
+            try:
+                visit_bytes(base64.b64decode(value, validate=True))
+            except (ValueError, TypeError):
+                pass
 
-    visit(history)
-    return max(attempts, default=0)
+    visit(root)
+    return "\n".join(fragments)
 
 
-def verify_durable_retry(
+def wait_composed_workflow(
     language: Language,
     overlay: Path,
     env: dict[str, str],
-    workflows: str,
-) -> tuple[int, str]:
-    service, source_name, target_name = durable_link_identity(workflows)
-    workflow_id = f"conformance/retry/{language.name}/{time.time_ns()}"
-    request = invalid_durable_request(
-        language, service, source_name, target_name,
+    workflow_type: str,
+    endpoint_identity: str,
+    required_fragments: tuple[str, ...],
+    timeout: float = 90,
+) -> tuple[str, str]:
+    deadline = time.monotonic() + timeout
+    last_error = "workflow was not created"
+    while time.monotonic() < deadline:
+        for workflow_id in endpoint_workflow_ids(
+            language, overlay, env, workflow_type, endpoint_identity
+        ):
+            description = temporal_cli(
+                language,
+                overlay,
+                env,
+                "workflow",
+                "describe",
+                "--workflow-id",
+                workflow_id,
+                "--output",
+                "json",
+                capture=True,
+            ).stdout
+            if workflow_execution_status(description) != (
+                "WORKFLOW_EXECUTION_STATUS_COMPLETED"
+            ):
+                last_error = f"{workflow_id} is not completed"
+                continue
+            history = workflow_history(language, overlay, env, workflow_id)
+            decoded = decoded_history_text(history)
+            missing = [
+                fragment for fragment in required_fragments if fragment not in decoded
+            ]
+            if not missing:
+                return workflow_id, history
+            last_error = f"{workflow_id} is missing payload markers {missing!r}"
+        time.sleep(0.5)
+    raise RuntimeError(
+        f"Temporal composition {workflow_type!r} was not observed: {last_error}"
     )
-    temporal_cli(
-        language, overlay, env,
-        "workflow", "start",
-        "--workflow-id", workflow_id,
-        "--type", DURABLE_WORKFLOW_TYPE,
-        "--task-queue", "automation-durable-calls",
-        "--execution-timeout", "20s",
-        "--input", json.dumps(request, separators=(",", ":")),
-    )
-    wait_workflow_failed(language, overlay, env, workflow_id)
-    history_result = temporal_cli(
-        language, overlay, env,
-        "workflow", "show", "--workflow-id", workflow_id,
-        "--output", "json", capture=True,
-    )
-    try:
-        history = json.loads(history_result.stdout)
-    except json.JSONDecodeError as error:
-        raise RuntimeError("Temporal retry history returned invalid JSON") from error
-    attempts = maximum_activity_attempt(history)
-    if attempts != 3:
-        raise RuntimeError(
-            f"DurableCall retry used {attempts} attempts, expected exactly 3"
-        )
-    return attempts, history_result.stdout
 
 
-def traced_schedule_request(
+def verify_workflow_composition(
     language: Language,
-    execution_id: str,
-    endpoint_id: int,
+    overlay: Path,
+    env: dict[str, str],
 ) -> dict[str, object]:
-    if language.name == "python":
-        return {
-            "activity_type": (
-                f"{TEMPORAL_CONNECTOR_NAME}.endpoint."
-                f"{TEMPORAL_SCHEDULE_ENDPOINT_NAME}.v1"
-            ),
-            "activity_start_to_close_millis": 30_000,
-            "activity_heartbeat_millis": 5_000,
-            "maximum_attempts": 3,
-            "priority": 3,
-            "envelope": {
-                "version": 1,
-                "endpoint_id": endpoint_id,
-                "execution_id": execution_id,
-                "stream_id": execution_id,
-                "priority": 0,
-                "deadline_unix_nano": 0,
-                "scheduled": True,
-                "schedule_id": SCHEDULE_ID,
-                "scheduled_at_unix_nano": 0,
-                "fired_at_unix_nano": 0,
-                "payload": [],
-            },
-        }
-    deadline_name = (
-        "deadlineUnixNano" if language.name == "go" else "deadlineUnixMillis"
-    )
-    scheduled_name = (
-        "scheduledAtUnixNano"
-        if language.name == "go"
-        else "scheduledAtUnixMillis"
-    )
-    fired_name = (
-        "firedAtUnixNano" if language.name == "go" else "firedAtUnixMillis"
-    )
-    request: dict[str, object] = {
-        "activityType": (
-            f"{TEMPORAL_CONNECTOR_NAME}.endpoint."
-            f"{TEMPORAL_SCHEDULE_ENDPOINT_NAME}.v1"
+    sequential_id, sequential_history = wait_composed_workflow(
+        language,
+        overlay,
+        env,
+        WORKFLOW_JOB_WORKFLOW_TYPE,
+        "workflow_job",
+        (
+            "temporal.endpoint.sequential_activity_a.v1",
+            "temporal.endpoint.sequential_activity_b.v1",
+            "sequential:a:local:",
+            "sequential:b:sequential:a:local:",
+            "workflow:processed:sequential:b:sequential:a:",
         ),
-        "maximumAttempts": 3,
-        "priority": 3,
-        "envelope": {
-            "version": 1,
-            "endpointId": endpoint_id,
-            "executionId": execution_id,
-            "streamId": execution_id,
-            "priority": 0,
-            deadline_name: 0,
-            "scheduled": True,
-            "scheduleId": SCHEDULE_ID,
-            scheduled_name: 0,
-            fired_name: 0,
-            "payload": "" if language.name == "go" else [],
-        },
+    )
+    fanout_id, fanout_history = wait_composed_workflow(
+        language,
+        overlay,
+        env,
+        FANOUT_WORKFLOW_JOB_WORKFLOW_TYPE,
+        "fan_out_workflow_job",
+        (
+            "temporal.endpoint.fan_out_activity_a.v1",
+            "temporal.endpoint.fan_out_activity_b.v1",
+            "temporal.endpoint.fan_out_activity_c.v1",
+            "fanout:a:local:",
+            "fanout:b:fanout:a:local:",
+            "fanout:c:fanout:a:local:",
+        ),
+    )
+    output = ARTIFACTS / language.name
+    (output / "sequential-workflow.json").write_text(sequential_history)
+    (output / "fanout-workflow.json").write_text(fanout_history)
+    return {
+        "sequentialWorkflowId": sequential_id,
+        "sequentialActivities": 2,
+        "fanOutWorkflowId": fanout_id,
+        "fanOutActivities": 3,
+        "typedPayloadsVerified": True,
     }
-    if language.name == "go":
-        request["activityStartToCloseMillis"] = 30_000
-        request["activityHeartbeatMillis"] = 5_000
-    else:
-        request["activityStartToCloseTimeout"] = 30_000
-        request["activityHeartbeatTimeout"] = 5_000
-    return request
 
 
 def wait_workflow_completed(
@@ -901,9 +1207,16 @@ def wait_workflow_completed(
     last = ""
     while time.monotonic() < deadline:
         result = temporal_cli(
-            language, overlay, env,
-            "workflow", "describe", "--workflow-id", workflow_id,
-            "--output", "json", capture=True,
+            language,
+            overlay,
+            env,
+            "workflow",
+            "describe",
+            "--workflow-id",
+            workflow_id,
+            "--output",
+            "json",
+            capture=True,
         )
         last = result.stdout
         status = workflow_execution_status(last)
@@ -951,7 +1264,9 @@ def schedule_endpoint_id(schedule_description: str) -> int:
     try:
         value = json.loads(schedule_description)
     except json.JSONDecodeError as error:
-        raise RuntimeError("Temporal schedule description returned invalid JSON") from error
+        raise RuntimeError(
+            "Temporal schedule description returned invalid JSON"
+        ) from error
     endpoint_ids: set[int] = set()
 
     def visit(item: object) -> None:
@@ -981,6 +1296,48 @@ def schedule_endpoint_id(schedule_description: str) -> int:
             + repr(sorted(endpoint_ids))
         )
     return next(iter(endpoint_ids))
+
+
+def schedule_workflow_request(schedule_description: str) -> dict[str, object]:
+    """Extract the SDK-specific action argument without duplicating its wire ABI."""
+    try:
+        value = json.loads(schedule_description)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            "Temporal schedule description returned invalid JSON"
+        ) from error
+    requests: list[dict[str, object]] = []
+
+    def visit(item: object) -> None:
+        if isinstance(item, dict):
+            if (
+                "activityType" in item or "activity_type" in item
+            ) and "envelope" in item:
+                requests.append(item)
+            metadata = item.get("metadata")
+            data = item.get("data")
+            if isinstance(metadata, dict) and isinstance(data, str):
+                encoding = metadata.get("encoding")
+                if isinstance(encoding, str):
+                    try:
+                        if base64.b64decode(encoding).decode() == "json/plain":
+                            visit(json.loads(base64.b64decode(data)))
+                    except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+                        pass
+            for child in item.values():
+                visit(child)
+        elif isinstance(item, list):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    unique = {json.dumps(request, sort_keys=True): request for request in requests}
+    if len(unique) != 1:
+        raise RuntimeError(
+            "expected exactly one Temporal Schedule action request, found "
+            f"{len(unique)}"
+        )
+    return next(iter(unique.values()))
 
 
 def fetch_trace(trace_id: str, timeout: float = 30) -> dict[str, Any]:
@@ -1038,8 +1395,25 @@ def span_parent(span: dict[str, Any]) -> str | None:
     return None
 
 
+def span_events(span: dict[str, Any]) -> list[str]:
+    events: list[str] = []
+    for log in span.get("logs", []):
+        if not isinstance(log, dict):
+            continue
+        for field in log.get("fields", []):
+            if (
+                isinstance(field, dict)
+                and field.get("key") == "event"
+                and isinstance(field.get("value"), str)
+            ):
+                events.append(str(field["value"]))
+    return events
+
+
 def is_descendant(
-    child: dict[str, Any], ancestor: dict[str, Any], spans: dict[str, dict[str, Any]],
+    child: dict[str, Any],
+    ancestor: dict[str, Any],
+    spans: dict[str, dict[str, Any]],
 ) -> bool:
     ancestor_id = str(ancestor.get("spanID", ""))
     parent = span_parent(child)
@@ -1066,84 +1440,53 @@ def verify_temporal_trace(trace: dict[str, Any]) -> dict[str, object]:
 
     def matching(operation: str, stream_or_endpoint: str) -> list[dict[str, Any]]:
         return [
-            span for span in spans
+            span
+            for span in spans
             if str(span.get("operationName", "")).lower() == operation
-            and stream_or_endpoint in {
+            and stream_or_endpoint
+            in {
                 span_tags(span).get("stream"),
                 span_tags(span).get("endpoint"),
             }
         ]
 
-    schedule_inputs = matching("temporal.input", "Temporal Schedule")
-    durable_inputs = matching("temporal.input", "Durable Job")
-    durable_outputs = matching("temporal.output", "Durable Job")
-    process_maps = matching("stream.map", "Process Durable Job")
-    delay_spans = matching("stream.delay", "Durable Pause")
-    durable_calls = [
-        span for span in spans
-        if str(span.get("operationName", "")).lower() == "stream.call"
-        and span_tags(span).get("from") == "Consume Durable Job"
-        and span_tags(span).get("to") == "Durable Pause"
-        and span_tags(span).get("type") == "durable"
-    ]
-    continuation_activities = [
-        span for span in spans
-        if str(span.get("operationName", "")).lower() == "temporal.activity"
-        and span_tags(span).get("boundary") == "durable_delay"
-        and span_tags(span).get("from") == "Durable Pause"
-        and span_tags(span).get("to") == "Process Durable Job"
-    ]
+    schedule_inputs = matching("temporal.input", ACTIVITY_SCHEDULE_ENDPOINT_NAME)
+    process_maps = matching("stream.map", "Process Scheduled Activity")
+    delay_spans = matching("stream.delay", "Scheduled Activity Pause")
     if not schedule_inputs:
         raise RuntimeError("Temporal trace has no scheduled endpoint input span")
-    if not durable_inputs or not durable_outputs:
-        raise RuntimeError("Temporal trace does not cross the symmetric endpoint boundary")
-    if not durable_calls or not delay_spans:
-        raise RuntimeError("Temporal trace does not cross the DurableCall-to-Delay boundary")
-    if not continuation_activities or not process_maps:
-        raise RuntimeError("Temporal trace does not resume after durable Delay")
-    if not any(
-        is_descendant(child, parent, by_id)
-        for parent in durable_outputs for child in durable_inputs
-    ):
+    heartbeat_inputs = [
+        span
+        for span in schedule_inputs
+        if "temporal.activity.heartbeat" in span_events(span)
+    ]
+    if not heartbeat_inputs:
         raise RuntimeError(
-            "Durable Job temporal.input is not a descendant of temporal.output"
+            "Temporal heartbeat is not attached to its scheduled endpoint input span"
+        )
+    if not delay_spans or not process_maps:
+        raise RuntimeError(
+            "Temporal trace does not execute the scheduled Activity graph"
         )
     if not any(
         is_descendant(child, parent, by_id)
-        for parent in durable_calls for child in delay_spans
+        for parent in schedule_inputs
+        for child in delay_spans
     ):
-        raise RuntimeError(
-            "Durable Pause is not a descendant of its DurableCall link"
-        )
+        raise RuntimeError("scheduled Delay did not preserve the trace parent")
     if not any(
         is_descendant(child, parent, by_id)
-        for parent in delay_spans for child in continuation_activities
+        for parent in delay_spans
+        for child in process_maps
     ):
-        raise RuntimeError(
-            "durable Delay continuation Activity did not preserve the trace parent"
-        )
-    if not any(
-        is_descendant(child, parent, by_id)
-        for parent in continuation_activities for child in process_maps
-    ):
-        raise RuntimeError(
-            "Process Durable Job is not a descendant of the continuation Activity"
-        )
-    if not any(
-        is_descendant(child, parent, by_id)
-        for parent in schedule_inputs for child in durable_outputs
-    ):
-        raise RuntimeError(
-            "Temporal output is not a descendant of the scheduled input"
-        )
+        raise RuntimeError("scheduled Map is not a descendant of Delay")
     return {
         "spanCount": len(spans),
         "scheduleInputSpans": len(schedule_inputs),
-        "durableEndpointInputSpans": len(durable_inputs),
-        "durableEndpointOutputSpans": len(durable_outputs),
-        "durableDelaySpans": len(delay_spans),
-        "continuationActivitySpans": len(continuation_activities),
-        "durableTargetSpans": len(process_maps),
+        "heartbeatInputSpans": len(heartbeat_inputs),
+        "endpointActivitySpans": len(schedule_inputs),
+        "scheduledDelaySpans": len(delay_spans),
+        "scheduledMapSpans": len(process_maps),
     }
 
 
@@ -1152,45 +1495,67 @@ def verify_tracing(
     overlay: Path,
     env: dict[str, str],
     overrides: Path,
-    schedule_description: str,
+    schedule_descriptions: dict[str, str],
 ) -> tuple[dict[str, object], str, dict[str, Any]]:
     temporal_cli(
-        language, overlay, env,
-        "schedule", "toggle", "--schedule-id", SCHEDULE_ID, "--pause",
+        language,
+        overlay,
+        env,
+        "schedule",
+        "toggle",
+        "--schedule-id",
+        ACTIVITY_SCHEDULE_ID,
+        "--pause",
     )
     run(
         compose_command(language, overlay, "stop", "automationservice"),
-        cwd=language.example, env=env,
+        cwd=language.example,
+        env=env,
     )
     write_overrides(overrides, production=True)
     run(
         compose_command(
-            language, overlay, "up", "--detach", "--no-deps",
-            "--force-recreate", "automationservice",
+            language,
+            overlay,
+            "up",
+            "--detach",
+            "--no-deps",
+            "--force-recreate",
+            "automationservice",
         ),
-        cwd=language.example, env=env,
+        cwd=language.example,
+        env=env,
     )
     wait_status(language, overlay, env)
     trace_id = secrets.token_hex(16)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     workflow_id = f"conformance/trace/{language.name}-{timestamp}"
-    endpoint_id = schedule_endpoint_id(schedule_description)
-    request = traced_schedule_request(language, workflow_id, endpoint_id)
+    schedule_description = schedule_descriptions[ACTIVITY_SCHEDULE_ID]
+    request = schedule_workflow_request(schedule_description)
     temporal_cli(
-        language, overlay, env,
-        "workflow", "start",
-        "--workflow-id", workflow_id,
-        "--type", ENDPOINT_WORKFLOW_TYPE,
-        "--task-queue", "automation-schedules",
-        "--execution-timeout", "60s",
-        "--input", json.dumps(request, separators=(",", ":")),
-        "--headers", f'traceparent="00-{trace_id}-0123456789abcdef-01"',
-        "--headers", 'x-trace="1"',
-        "--headers", f'x-stream-id="{workflow_id}"',
+        language,
+        overlay,
+        env,
+        "workflow",
+        "start",
+        "--workflow-id",
+        workflow_id,
+        "--type",
+        ENDPOINT_WORKFLOW_TYPE,
+        "--task-queue",
+        "automation-activity-schedules",
+        "--execution-timeout",
+        "60s",
+        "--input",
+        json.dumps(request, separators=(",", ":")),
+        "--headers",
+        f'traceparent="00-{trace_id}-0123456789abcdef-01"',
+        "--headers",
+        'x-trace="1"',
+        "--headers",
+        f'x-stream-id="{workflow_id}"',
     )
-    description = wait_workflow_completed(
-        language, overlay, env, workflow_id
-    )
+    description = wait_workflow_completed(language, overlay, env, workflow_id)
     trace = fetch_trace(trace_id)
     (ARTIFACTS / language.name / "trace.raw.json").write_text(
         json.dumps(trace, indent=2, sort_keys=True) + "\n"
@@ -1199,7 +1564,10 @@ def verify_tracing(
 
 
 def wait_graph(
-    language: Language, overlay: Path, env: dict[str, str], jobs: int,
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    jobs: int,
     timeout: float = 120,
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout
@@ -1207,12 +1575,15 @@ def wait_graph(
     while time.monotonic() < deadline:
         last = wait_status(language, overlay, env, timeout=5)
         if (
-            edge_calls(last, "Temporal Schedule", "Merge Job Submissions") >= jobs
-            and edge_calls(last, "Consume Durable Job", "Durable Pause")
+            edge_calls(
+                last,
+                ACTIVITY_SCHEDULE_ENDPOINT_NAME,
+                "Scheduled Activity Pause",
+            )
             >= jobs
-            and edge_calls(last, "Durable Pause", "Process Durable Job")
-            >= jobs
-            and edge_calls(last, "Process Durable Job", "Consume Durable Job")
+            and edge_calls(
+                last, "Scheduled Activity Pause", "Process Scheduled Activity"
+            )
             >= jobs
         ):
             return last
@@ -1224,13 +1595,45 @@ def wait_graph(
 
 
 def wait_local_cron(
-    language: Language, overlay: Path, env: dict[str, str], timeout: float = 75,
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    timeout: float = 75,
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last: dict[str, object] = {}
     while time.monotonic() < deadline:
         last = wait_status(language, overlay, env, timeout=5)
-        if edge_calls(last, "Local Schedule", "Merge Job Submissions") >= 1:
+        if (
+            edge_calls(last, "Local Schedule", "Split On-Demand Jobs") >= 1
+            and edge_calls(last, "Split On-Demand Jobs", "Submit Activity Job") >= 1
+            and edge_calls(last, "Split On-Demand Jobs", "Submit Fan-Out Workflow Job")
+            >= 1
+            and edge_calls(last, "Split On-Demand Jobs", "Submit Workflow Job") >= 1
+            and edge_calls(last, "Consume Activity Job", "Activity Pause") >= 1
+            and edge_calls(last, "Activity Pause", "Process Activity Job") >= 1
+            and edge_calls(last, "Submit Activity Job", "Observe Activity Result") >= 1
+            and edge_calls(
+                last, "Consume Sequential Activity A", "Process Sequential Activity A"
+            )
+            >= 1
+            and edge_calls(
+                last, "Consume Sequential Activity B", "Process Sequential Activity B"
+            )
+            >= 1
+            and edge_calls(
+                last, "Consume Fan-Out Activity A", "Process Fan-Out Activity A"
+            )
+            >= 1
+            and edge_calls(
+                last, "Consume Fan-Out Activity B", "Process Fan-Out Activity B"
+            )
+            >= 1
+            and edge_calls(
+                last, "Consume Fan-Out Activity C", "Process Fan-Out Activity C"
+            )
+            >= 1
+        ):
             return last
         time.sleep(0.5)
     raise RuntimeError(
@@ -1242,21 +1645,36 @@ def wait_local_cron(
 def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, object]:
     overrides, overlay = prepare_files(language)
     env = environment(language)
+    workflowcheck = verify_go_workflowcheck(language, env)
     if not skip_build:
         build(language, overlay, env)
     down = compose_command(
-        language, overlay, "down", "--volumes", "--remove-orphans",
+        language,
+        overlay,
+        "down",
+        "--volumes",
+        "--remove-orphans",
     )
     run(down, cwd=language.example, env=env, check=False)
     try:
         run(
             compose_command(
-                language, overlay, "up", "--detach",
-                "temporal-postgresql", "temporal-schema", "temporal",
-                "temporal-create-namespace", "temporal-ui", "jaeger",
-                "otel-collector", "prometheus", "automationservice",
+                language,
+                overlay,
+                "up",
+                "--detach",
+                "temporal-postgresql",
+                "temporal-schema",
+                "temporal",
+                "temporal-create-namespace",
+                "temporal-ui",
+                "jaeger",
+                "otel-collector",
+                "prometheus",
+                "automationservice",
             ),
-            cwd=language.example, env=env,
+            cwd=language.example,
+            env=env,
         )
         wait_status(language, overlay, env)
 
@@ -1265,32 +1683,40 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         # then prove the same graph consumes the durable backlog after restart.
         run(
             compose_command(language, overlay, "stop", "automationservice"),
-            cwd=language.example, env=env,
+            cwd=language.example,
+            env=env,
         )
         canceled = verify_queued_cancellation(language, overlay, env)
-        trigger_schedule(language, overlay, env, jobs)
+        trigger_schedule(language, overlay, env, ACTIVITY_SCHEDULE_ID, jobs)
+        trigger_schedule(language, overlay, env, WORKFLOW_SCHEDULE_ID, jobs)
         run(
             compose_command(
-                language, overlay, "up", "--detach", "--no-deps",
+                language,
+                overlay,
+                "up",
+                "--detach",
+                "--no-deps",
                 "automationservice",
             ),
-            cwd=language.example, env=env,
+            cwd=language.example,
+            env=env,
         )
         status = wait_graph(language, overlay, env, jobs)
         status = wait_local_cron(language, overlay, env)
+        workflow_composition = verify_workflow_composition(language, overlay, env)
+        continue_as_new = verify_continue_as_new(language, overlay, env)
         schedule_description = verify_schedule_reuse(language, overlay, env)
         workflows = workflow_list(language, overlay, env)
-        if workflows.count(ENDPOINT_WORKFLOW_TYPE) < jobs * 2:
-            raise RuntimeError("Temporal endpoint Workflow executions are missing")
-        if workflows.count(DURABLE_WORKFLOW_TYPE) < jobs:
-            raise RuntimeError("DurableCall Workflow executions are missing")
-        retry_attempts, retry_history = verify_durable_retry(
-            language, overlay, env, workflows
+        if workflows.count(ENDPOINT_WORKFLOW_TYPE) < jobs:
+            raise RuntimeError("scheduled Activity Workflow executions are missing")
+        if workflows.count(SCHEDULED_WORKFLOW_TYPE) < jobs:
+            raise RuntimeError("scheduled direct Workflow executions are missing")
+        metrics_text = fetch_text("http://localhost:9094/metrics")
+        (ARTIFACTS / language.name / "automationservice.metrics.txt").write_text(
+            metrics_text
         )
-        metrics = verify_metrics(jobs)
-        temporal_metrics = verify_temporal_metric_sources(
-            ARTIFACTS / language.name
-        )
+        metrics = verify_metrics(metrics_text, jobs)
+        temporal_metrics = verify_temporal_metric_sources(ARTIFACTS / language.name)
         trace_summary, traced_workflow, trace = verify_tracing(
             language, overlay, env, overrides, schedule_description
         )
@@ -1299,22 +1725,20 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             "queuedJobs": jobs,
             "activitySlots": 2,
             "localCronCalls": edge_calls(
-                status, "Local Schedule", "Merge Job Submissions"
+                status, "Local Schedule", "Split On-Demand Jobs"
             ),
             "temporalScheduleCalls": edge_calls(
-                status, "Temporal Schedule", "Merge Job Submissions"
+                status,
+                ACTIVITY_SCHEDULE_ENDPOINT_NAME,
+                "Scheduled Activity Pause",
             ),
-            "durableCallActivations": edge_calls(
-                status, "Consume Durable Job", "Durable Pause"
-            ),
-            "durableDelayContinuations": edge_calls(
-                status, "Durable Pause", "Process Durable Job"
-            ),
+            "workflowComposition": workflow_composition,
+            "continueAsNew": True,
+            "workflowcheck": workflowcheck,
             "metrics": metrics,
             "temporalMetrics": temporal_metrics,
             "scheduleReuse": True,
             "queuedCancellation": True,
-            "durableRetryAttempts": retry_attempts,
             "traceContinuity": trace_summary,
         }
         (ARTIFACTS / language.name / "workflows.txt").write_text(workflows)
@@ -1322,23 +1746,17 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             json.dumps(status, indent=2, sort_keys=True) + "\n"
         )
         (ARTIFACTS / language.name / "schedule.json").write_text(
-            schedule_description
+            json.dumps(schedule_description, indent=2, sort_keys=True) + "\n"
         )
-        (ARTIFACTS / language.name / "canceled-workflow.json").write_text(
-            canceled
+        (ARTIFACTS / language.name / "canceled-workflow.json").write_text(canceled)
+        (ARTIFACTS / language.name / "continue-as-new-history.json").write_text(
+            continue_as_new
         )
-        (ARTIFACTS / language.name / "retry-history.json").write_text(
-            retry_history
-        )
-        (ARTIFACTS / language.name / "traced-workflow.json").write_text(
-            traced_workflow
-        )
+        (ARTIFACTS / language.name / "traced-workflow.json").write_text(traced_workflow)
         (ARTIFACTS / language.name / "trace.json").write_text(
             json.dumps(trace, indent=2, sort_keys=True) + "\n"
         )
-        collision = verify_schedule_ownership_collision(
-            language, overlay, env
-        )
+        collision = verify_schedule_ownership_collision(language, overlay, env)
         (ARTIFACTS / language.name / "ownership-collision.log").write_text(
             collision + "\n"
         )
@@ -1362,9 +1780,11 @@ def main() -> int:
         print(f"\n=== Temporal: {name} ===", flush=True)
         try:
             implementations[name] = exercise(
-                LANGUAGES[name], skip_build=args.skip_build, jobs=args.jobs,
+                LANGUAGES[name],
+                skip_build=args.skip_build,
+                jobs=args.jobs,
             )
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - aggregate language failures
             failures[name] = str(error)
             print(f"ERROR: {name}: {error}", flush=True)
     summary = {
