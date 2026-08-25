@@ -170,6 +170,7 @@ def main() -> int:
         boost_source_mount = []
 
     python_build_run: dict[str, object] | None = None
+    rust_build_run: dict[str, object] | None = None
     if not args.skip_build:
         python_build_command, python_build_env = python_image_build()
         python_build_run = execute(
@@ -177,6 +178,14 @@ def main() -> int:
             python_build_command,
             PYTHON_EXAMPLE,
             python_build_env,
+        )
+        rust_build_run = execute(
+            "rust-structured-logging-toolchain",
+            [
+                "docker", "build", "--target", "toolchain", "--tag",
+                "rustservicelib-toolchain:latest", ".",
+            ],
+            RUST,
         )
 
     typescript_build_run: dict[str, object] | None = None
@@ -232,7 +241,7 @@ def main() -> int:
              "-v", "servicelib-conformance-rust-cargo-registry:/usr/local/cargo/registry",
              "-v", "servicelib-conformance-rust-logging-target:/workspace/target",
              "-w",
-             "/workspace", "rustservicelib-test:latest", "cargo", "test",
+             "/workspace", "rustservicelib-toolchain:latest", "cargo", "test",
              "--test", "telemetry",
              "structured_log_level_and_typed_field_contract", "--", "--nocapture"],
             RUST,
@@ -259,6 +268,8 @@ def main() -> int:
     }
     if python_build_run is not None:
         summary["runs"].insert(3, python_build_run)
+    if rust_build_run is not None:
+        summary["runs"].insert(-1, rust_build_run)
     if typescript_build_run is not None:
         summary["runs"].insert(-1, typescript_build_run)
     ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
