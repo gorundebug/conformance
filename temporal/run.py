@@ -632,7 +632,7 @@ def verify_queued_cancellation(
         overlay,
         env,
         "Temporal Schedule",
-        "Make Temporal Job",
+        "Merge Job Submissions",
     ) != 0:
         raise RuntimeError("canceled Workflow activated the Temporal input graph")
     run(
@@ -1205,7 +1205,7 @@ def wait_graph(
     while time.monotonic() < deadline:
         last = wait_status(language, overlay, env, timeout=5)
         if (
-            edge_calls(last, "Temporal Schedule", "Make Temporal Job") >= jobs
+            edge_calls(last, "Temporal Schedule", "Merge Job Submissions") >= jobs
             and edge_calls(last, "Consume Durable Job", "Durable Pause")
             >= jobs
             and edge_calls(last, "Durable Pause", "Process Durable Job")
@@ -1228,7 +1228,7 @@ def wait_local_cron(
     last: dict[str, object] = {}
     while time.monotonic() < deadline:
         last = wait_status(language, overlay, env, timeout=5)
-        if edge_calls(last, "Local Schedule", "Make Local Job") >= 1:
+        if edge_calls(last, "Local Schedule", "Merge Job Submissions") >= 1:
             return last
         time.sleep(0.5)
     raise RuntimeError(
@@ -1297,10 +1297,10 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             "queuedJobs": jobs,
             "activitySlots": 2,
             "localCronCalls": edge_calls(
-                status, "Local Schedule", "Make Local Job"
+                status, "Local Schedule", "Merge Job Submissions"
             ),
             "temporalScheduleCalls": edge_calls(
-                status, "Temporal Schedule", "Make Temporal Job"
+                status, "Temporal Schedule", "Merge Job Submissions"
             ),
             "durableCallActivations": edge_calls(
                 status, "Consume Durable Job", "Durable Pause"

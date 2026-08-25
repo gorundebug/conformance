@@ -332,7 +332,7 @@ def runtime_probe(example: Path) -> None:
             example, environment,
         ))
         initial_temporal_calls = edge_calls(
-            initial_automation_status, "Temporal Schedule", "Make Temporal Job",
+            initial_automation_status, "Temporal Schedule", "Merge Job Submissions",
         )
         run(
             [
@@ -352,7 +352,7 @@ def runtime_probe(example: Path) -> None:
                 example, environment, verbose=False,
             ))
             temporal_calls = edge_calls(
-                automation_status, "Temporal Schedule", "Make Temporal Job",
+                automation_status, "Temporal Schedule", "Merge Job Submissions",
             )
             durable_calls = edge_calls(
                 automation_status, "Consume Durable Job", "Process Durable Job",
