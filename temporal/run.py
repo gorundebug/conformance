@@ -27,10 +27,11 @@ ROOT = Path(
 ARTIFACTS = CONFORMANCE / ".artifacts" / "temporal"
 SCHEDULE_ID = "example-automation-schedule"
 AUTOMATION_SERVICE_NAME = "Automation Service"
+AUTOMATION_SERVICE_IDENTITY = "automation_service"
 TEMPORAL_CONNECTOR_NAME = "Temporal"
 TEMPORAL_SCHEDULE_ENDPOINT_NAME = "Temporal Schedule"
-DURABLE_SOURCE_NAME = "Consume%20Durable%20Job"
-DURABLE_TARGET_NAME = "Process%20Durable%20Job"
+DURABLE_SOURCE_NAME = "consume_durable_job"
+DURABLE_TARGET_NAME = "process_durable_job"
 DURABLE_SOURCE_ID = 1
 DURABLE_TARGET_ID = 4
 DURABLE_WORKFLOW_TYPE = "servicelib.durable-link.v1"
@@ -640,7 +641,7 @@ def durable_link_identity(workflows: str) -> tuple[str, str, str]:
         )
     identity = next(iter(matches))
     expected = (
-        AUTOMATION_SERVICE_NAME.replace(" ", "%20"),
+        AUTOMATION_SERVICE_IDENTITY,
         DURABLE_SOURCE_NAME,
         DURABLE_TARGET_NAME,
     )
