@@ -340,7 +340,11 @@ def build_cppboost(implementation: Implementation, override: Path) -> None:
         "-e", "SERVICEGEN_CPP_CMAKE_PRESET=docker-release",
         "cpp-build", "/bin/bash", "-lc",
         "source scripts/configure-git-auth.generated.sh && "
-        "cmake --preset docker-release "
+        "./scripts/conan-install.generated.sh Release "
+        "/workspace/build/conan-release && "
+        "conan_toolchain=$(cat /workspace/build/conan-release/toolchain.path) && "
+        "cmake --fresh --preset docker-release "
+        "-DCMAKE_TOOLCHAIN_FILE=\"$conan_toolchain\" "
         "-C /workspace/conformance/conformance-source-cache.generated.cmake "
         "-DSERVICEGEN_FETCH_CPP_DEPENDENCIES=OFF && "
         "cmake --build --preset docker-release --parallel",

@@ -16,6 +16,7 @@ from pathlib import Path
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE_DIR))
 import cpp_source_cache
+import cpp_userver
 import typescript_toolchain
 
 ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
@@ -485,7 +486,7 @@ def main() -> int:
     canonical_script = (
         "./build/servicelib_operators_test"
         if args.skip_build
-        else "cmake --preset docker && "
+        else cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_operators_test && ./build/servicelib_operators_test"
     )

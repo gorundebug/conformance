@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
+import cpp_userver
 import typescript_toolchain
 
 
@@ -252,7 +253,7 @@ def main() -> int:
     )
 
     canonical_script = (
-        "cmake --preset docker && "
+        cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_taskpool_test servicelib_other_pools_test && "
         "./build/servicelib_taskpool_test && "

@@ -813,6 +813,23 @@ class DependencyRootTest(unittest.TestCase):
             self.assertIn("cmake --fresh --preset docker", script)
             self.assertIn("CMAKE_TOOLCHAIN_FILE", script)
 
+    def test_all_canonical_cpp_runners_use_conan_configuration(self) -> None:
+        for relative in (
+            "logging/run.py",
+            "operators/run.py",
+            "pools/run.py",
+            "serde/run.py",
+            "transports/run.py",
+        ):
+            source = (CONFORMANCE_DIR / relative).read_text()
+            self.assertIn("import cpp_userver", source, relative)
+            self.assertNotIn('"cmake --preset docker && "', source, relative)
+        scenarios = (CONFORMANCE_DIR / "scenarios/run.py").read_text()
+        self.assertIn(
+            "./scripts/conan-install.generated.sh Release", scenarios
+        )
+        self.assertIn("cmake --fresh --preset docker-release", scenarios)
+
     def test_generation_uses_the_transport_versioned_source_cache(self) -> None:
         transports = runpy.run_path(
             str(CONFORMANCE_DIR / "transports/run.py")

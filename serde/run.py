@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
+import cpp_userver
 import go_toolchain
 import typescript_toolchain
 
@@ -374,7 +375,7 @@ def main() -> int:
     canonical_script = (
         "./build/servicelib_serde_test"
         if args.skip_build
-        else "cmake --preset docker && "
+        else cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_serde_test && ./build/servicelib_serde_test"
     )
@@ -527,9 +528,12 @@ def main() -> int:
         "test",
         "/bin/bash",
         "-lc",
-        "trap 'cmake --preset docker -U CMAKE_PROJECT_INCLUDE >/dev/null' EXIT; "
-        "cmake --preset docker "
-        "-DCMAKE_PROJECT_INCLUDE=/repo/conformance/serde/canonical_probe.cmake && "
+        cpp_userver.configure_script(
+            extra_args=(
+                "-DCMAKE_PROJECT_INCLUDE="
+                "/repo/conformance/serde/canonical_probe.cmake"
+            )
+        ) + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_custom_serde_probe && ./build/servicelib_custom_serde_probe",
     ]

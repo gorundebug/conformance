@@ -18,6 +18,7 @@ import typescript_toolchain
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE_DIR))
 import cpp_source_cache
+import cpp_userver
 
 ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "logging" / "summary.json"
@@ -155,7 +156,8 @@ def main() -> int:
         ]
         cpp_source_cache.ensure(BOOST)
         canonical_script = (
-            "cmake --preset docker && cmake --build --preset docker --parallel "
+            cpp_userver.configure_script() +
+            " && cmake --build --preset docker --parallel "
             "--target servicelib_telemetry_test && " + canonical_script
         )
         boost_script = (
