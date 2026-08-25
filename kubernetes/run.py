@@ -40,6 +40,26 @@ EXAMPLES = {
 }
 
 
+def kubernetes_port_names(document: str) -> list[str]:
+    """Return literal names declared below Kubernetes ``ports`` blocks."""
+    result: list[str] = []
+    ports_indent: int | None = None
+    for line in document.splitlines():
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if stripped == "ports:":
+            ports_indent = indent
+            continue
+        if ports_indent is None:
+            continue
+        if stripped and indent <= ports_indent:
+            ports_indent = None
+            continue
+        if stripped.startswith("- name: "):
+            result.append(stripped.removeprefix("- name: ").strip('"'))
+    return result
+
+
 def run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
     print("- " + " ".join(command), flush=True)
     result = subprocess.run(command, cwd=cwd, env=env, check=False)
@@ -198,24 +218,29 @@ def validate_example(language: str, example: Path) -> None:
         workload = (
             example / service / "helm" / "templates" / "workload.generated.yaml"
         ).read_text()
+        service_template = (
+            example / service / "helm" / "templates" /
+            "service.generated.yaml"
+        ).read_text()
         for token in ("startupProbe:", "readinessProbe:", "livenessProbe:", "envFrom:"):
             if token not in workload:
                 raise RuntimeError(
                     f"{language} {service} workload is missing {token.rstrip(':')}"
                 )
         if service == "automationservice":
-            service_template = (
-                example / service / "helm" / "templates" /
-                "service.generated.yaml"
-            ).read_text()
-            if "temporal-metrics" not in service_template:
+            if "temporal-sdk" not in service_template:
                 raise RuntimeError(
                     f"{language} automationservice lacks the Temporal SDK metrics port"
                 )
-            if "temporal-sdk-metrics" in service_template:
+        for chart_file in (service_template, workload):
+            invalid_port_names = [
+                name for name in kubernetes_port_names(chart_file)
+                if len(name) > 15
+            ]
+            if invalid_port_names:
                 raise RuntimeError(
-                    f"{language} automationservice uses a Kubernetes port name "
-                    "longer than 15 characters"
+                    f"{language} {service} uses Kubernetes port names longer "
+                    f"than 15 characters: {invalid_port_names}"
                 )
     if language == "cpp":
         static_config = (example / "analyticsservice" / "static_config.yaml").read_text()
