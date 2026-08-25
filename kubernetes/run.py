@@ -203,6 +203,20 @@ def validate_example(language: str, example: Path) -> None:
                 raise RuntimeError(
                     f"{language} {service} workload is missing {token.rstrip(':')}"
                 )
+        if service == "automationservice":
+            service_template = (
+                example / service / "helm" / "templates" /
+                "service.generated.yaml"
+            ).read_text()
+            if "temporal-metrics" not in service_template:
+                raise RuntimeError(
+                    f"{language} automationservice lacks the Temporal SDK metrics port"
+                )
+            if "temporal-sdk-metrics" in service_template:
+                raise RuntimeError(
+                    f"{language} automationservice uses a Kubernetes port name "
+                    "longer than 15 characters"
+                )
     if language == "cpp":
         static_config = (example / "analyticsservice" / "static_config.yaml").read_text()
         for token in (
