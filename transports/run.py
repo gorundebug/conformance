@@ -514,7 +514,13 @@ def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[st
             cpp_source_cache.build_volume_name(BOOST)
         )
     environment["GOCACHE"] = "/tmp/servicegen-go-build"
-    environment["GOWORK"] = "off"
+    go_work = ARTIFACT.parent / "go.work"
+    go_work.parent.mkdir(parents=True, exist_ok=True)
+    go_work.write_text(go_toolchain.render_workspace(
+        go_toolchain.workspace_version(SERVICEGEN / "go.mod"),
+        (SERVICEGEN, GO),
+    ))
+    environment["GOWORK"] = str(go_work)
     return environment
 
 

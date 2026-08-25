@@ -776,6 +776,13 @@ class DependencyRootTest(unittest.TestCase):
             generator_environment["SERVICEGEN_CPPBOOST_SOURCE_CACHE_DIR"],
             str(globals_["cpp_source_cache"].source_dir(globals_["BOOST"])),
         )
+        self.assertEqual(
+            Path(generator_environment["GOWORK"]),
+            CONFORMANCE_DIR / ".artifacts" / "transports" / "go.work",
+        )
+        generator_workspace = Path(generator_environment["GOWORK"]).read_text()
+        self.assertIn(str(globals_["SERVICEGEN"].resolve()), generator_workspace)
+        self.assertIn(str(globals_["GO"].resolve()), generator_workspace)
         self.assertIn(
             globals_["cpp_source_cache"].source_mount(globals_["BOOST"]),
             globals_["boost_command"]("build/grpc-test", False, False),
