@@ -435,11 +435,22 @@ def previous_successful_run(name: str) -> dict[str, object]:
     )
 
 
+def canonical_configure_script() -> str:
+    return (
+        "./scripts/conan-install.sh Debug /workspace/build-conan/debug && "
+        "conan_toolchain=$(find /workspace/build-conan/debug -type f "
+        "-name conan_toolchain.cmake -print -quit) && "
+        "test -n \"$conan_toolchain\" && "
+        "cmake --fresh --preset docker "
+        "-DCMAKE_TOOLCHAIN_FILE=\"$conan_toolchain\""
+    )
+
+
 def canonical_command(skip_build: bool) -> list[str]:
     script = (
         "./build/servicelib_grpc_endpoints_test"
         if skip_build
-        else "cmake --preset docker && "
+        else canonical_configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_grpc_endpoints_test && "
         "./build/servicelib_grpc_endpoints_test"
@@ -457,7 +468,7 @@ def canonical_kafka_command(skip_build: bool) -> list[str]:
     script = (
         "./build/servicelib_custom_kafka_endpoints_test"
         if skip_build
-        else "cmake --preset docker && "
+        else canonical_configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_custom_kafka_endpoints_test && "
         "./build/servicelib_custom_kafka_endpoints_test"
@@ -475,7 +486,7 @@ def canonical_http_command(skip_build: bool) -> list[str]:
     script = (
         "./build/servicelib_http_endpoints_test"
         if skip_build
-        else "cmake --preset docker && "
+        else canonical_configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_http_endpoints_test && "
         "./build/servicelib_http_endpoints_test"

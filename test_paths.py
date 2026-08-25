@@ -798,6 +798,21 @@ class DependencyRootTest(unittest.TestCase):
             globals_["boost_command"]("build/grpc-test", False, False),
         )
 
+    def test_transport_runner_recreates_canonical_conan_toolchain(self) -> None:
+        transports = runpy.run_path(
+            str(CONFORMANCE_DIR / "transports/run.py")
+        )
+        for name in (
+            "canonical_command",
+            "canonical_kafka_command",
+            "canonical_http_command",
+        ):
+            command = transports[name](False)
+            script = command[-1]
+            self.assertIn("./scripts/conan-install.sh Debug", script)
+            self.assertIn("cmake --fresh --preset docker", script)
+            self.assertIn("CMAKE_TOOLCHAIN_FILE", script)
+
     def test_generation_uses_the_transport_versioned_source_cache(self) -> None:
         transports = runpy.run_path(
             str(CONFORMANCE_DIR / "transports/run.py")
