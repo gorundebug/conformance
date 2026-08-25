@@ -514,6 +514,9 @@ def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[st
             cpp_source_cache.build_volume_name(BOOST)
         )
     environment["GOCACHE"] = "/tmp/servicegen-go-build"
+    conan_home = CONFORMANCE_DIR / ".artifacts" / "conan2"
+    conan_home.mkdir(parents=True, exist_ok=True)
+    environment["SERVICEGEN_CONAN_HOME"] = str(conan_home)
     go_work = ARTIFACT.parent / "go.work"
     go_work.parent.mkdir(parents=True, exist_ok=True)
     go_work.write_text(go_toolchain.render_workspace(
