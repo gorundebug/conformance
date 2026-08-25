@@ -665,7 +665,9 @@ def durable_link_identity(workflows: str) -> tuple[str, str, str]:
     matches = {
         (service, source, target)
         for service, source, target in re.findall(
-            r"([^\n/]+)/durable/([^/\s]+)/([^/\s]+)/", workflows
+            r"(?:^|\s)([a-z0-9_]+)/durable/([^/\s]+)/([^/\s]+)/",
+            workflows,
+            flags=re.MULTILINE,
         )
     }
     if len(matches) != 1:
