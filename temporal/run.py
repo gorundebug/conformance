@@ -416,8 +416,10 @@ def wait_edge_calls(
     """Wait until the restarted service has published its generated graph."""
     deadline = time.monotonic() + timeout
     last_error: RuntimeError | None = None
+    last_status: dict[str, object] = {}
     while time.monotonic() < deadline:
         status = wait_status(language, overlay, env, timeout=5)
+        last_status = status
         try:
             return edge_calls(status, source, target)
         except RuntimeError as error:
@@ -425,7 +427,8 @@ def wait_edge_calls(
         time.sleep(0.25)
     raise RuntimeError(
         f"status graph did not become ready for {source!r}->{target!r}: "
-        f"{last_error}\n{diagnostics(language, overlay, env)}"
+        f"{last_error}; last status={json.dumps(last_status, sort_keys=True)}\n"
+        f"{diagnostics(language, overlay, env)}"
     )
 
 
