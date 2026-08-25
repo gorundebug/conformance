@@ -8,7 +8,11 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import go_toolchain
 
 
 CONFORMANCE = Path(__file__).resolve().parent
@@ -96,15 +100,28 @@ def copy_framework(source: Path, destination: Path) -> None:
 
 def generate_archives(source_root: Path, archive_dir: Path, profile: str) -> str:
     servicegen = source_root / "servicegen"
+    servicelib = source_root / "servicelib"
     if not servicegen.is_dir():
         raise RuntimeError(f"missing servicegen source: {servicegen}")
+    if not servicelib.is_dir():
+        raise RuntimeError(f"missing servicelib source: {servicelib}")
+    local_go_work = archive_dir / "go.work"
+    local_go_work.write_text(
+        go_toolchain.render_workspace(
+            go_toolchain.example_version(source_root),
+            (servicegen, servicelib),
+        )
+    )
     env = os.environ.copy()
     env.update(
         {
             "SERVICEGEN_EXAMPLE_ARCHIVE_DIR": str(archive_dir),
             "SERVICEGEN_EXAMPLE_PROFILE": profile,
             "GOCACHE": os.environ.get("GOCACHE", "/tmp/servicegen-go-build"),
-            "GOWORK": "off",
+            # The selected profile is generated from the local source matrix.
+            # Depending on the last published servicelib tag here makes a
+            # clean checkout unable to exercise new API types atomically.
+            "GOWORK": str(local_go_work),
         }
     )
     return run(

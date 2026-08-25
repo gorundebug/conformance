@@ -32,6 +32,12 @@ class DependencyRootTest(unittest.TestCase):
             ],
         )
 
+    def test_profile_workspace_generates_against_local_service_modules(self) -> None:
+        profile = (CONFORMANCE_DIR / "profile_workspace.py").read_text()
+        self.assertIn('(servicegen, servicelib)', profile)
+        self.assertIn('"GOWORK": str(local_go_work)', profile)
+        self.assertNotIn('"GOWORK": "off"', profile)
+
     def test_generation_workspace_resolves_modules_and_inherits_profile(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "generation/run.py"))
         with tempfile.TemporaryDirectory() as directory:
