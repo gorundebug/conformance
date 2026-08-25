@@ -12,6 +12,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -70,8 +71,12 @@ def language_env(language: Language) -> dict[str, str]:
         env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     elif language.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
+        # Temporal is not supported by the C++ runtime yet, so the generated
+        # mixed-language example contains a Go automation service.
+        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     elif language.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
         cpp_source_cache.configure_environment(
             env, ROOT / "cppboostservicelib"
         )
@@ -305,8 +310,11 @@ def assert_service_handlers(
 
 def wait_consumed(
     language: Language, env: dict[str, str], *, expected_messages: int,
+    timeout: float = 30,
+    retry_publish: Callable[[], None] | None = None,
 ) -> str:
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + timeout
+    next_publish = 0.0
     latest = ""
     while time.monotonic() < deadline:
         result = rpk(
@@ -328,6 +336,10 @@ def wait_consumed(
             and sum(offset for offset, _ in committed.values()) >= expected_messages
         ):
             return result.stdout
+        now = time.monotonic()
+        if retry_publish is not None and now >= next_publish:
+            retry_publish()
+            next_publish = now + 5.0
         time.sleep(0.5)
     raise RuntimeError(
         f"{GROUP!r} did not commit the produced {TOPIC!r} event:\n{latest}"
@@ -493,11 +505,19 @@ def run_language(
             "http://localhost:9093/status/data", env,
         )
         recovery_count = 4
-        for sequence in range(message_count + 1, message_count + 1 + recovery_count):
-            send_order(sequence)
+        recovery_sequence = message_count + 1
+
+        def publish_recovery_probe() -> None:
+            nonlocal recovery_sequence
+            for _ in range(recovery_count):
+                send_order(recovery_sequence)
+                recovery_sequence += 1
+
         recovered_group = wait_consumed(
             language, env,
             expected_messages=message_count + recovery_count,
+            timeout=90,
+            retry_publish=publish_recovery_probe,
         )
         (ARTIFACTS / f"{language.name}.consumer-group.recovered.txt").write_text(
             recovered_group
