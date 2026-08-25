@@ -404,6 +404,31 @@ def edge_calls(status: dict[str, object], source: str, target: str) -> int:
     raise RuntimeError(f"status graph has no {source!r}->{target!r} edge")
 
 
+def wait_edge_calls(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    source: str,
+    target: str,
+    *,
+    timeout: float = 30,
+) -> int:
+    """Wait until the restarted service has published its generated graph."""
+    deadline = time.monotonic() + timeout
+    last_error: RuntimeError | None = None
+    while time.monotonic() < deadline:
+        status = wait_status(language, overlay, env, timeout=5)
+        try:
+            return edge_calls(status, source, target)
+        except RuntimeError as error:
+            last_error = error
+        time.sleep(0.25)
+    raise RuntimeError(
+        f"status graph did not become ready for {source!r}->{target!r}: "
+        f"{last_error}\n{diagnostics(language, overlay, env)}"
+    )
+
+
 def trigger_schedule(
     language: Language, overlay: Path, env: dict[str, str], count: int,
 ) -> None:
@@ -599,10 +624,13 @@ def verify_queued_cancellation(
     canceled = wait_workflow_canceled(
         language, overlay, env, workflow_id
     )
-    status = wait_status(language, overlay, env)
-    time.sleep(2)
-    status = wait_status(language, overlay, env)
-    if edge_calls(status, "Temporal Schedule", "Make Temporal Job") != 0:
+    if wait_edge_calls(
+        language,
+        overlay,
+        env,
+        "Temporal Schedule",
+        "Make Temporal Job",
+    ) != 0:
         raise RuntimeError("canceled Workflow activated the Temporal input graph")
     run(
         compose_command(language, overlay, "stop", "automationservice"),
