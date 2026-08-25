@@ -31,7 +31,7 @@ AUTOMATION_SERVICE_IDENTITY = "automation_service"
 TEMPORAL_CONNECTOR_NAME = "Temporal"
 TEMPORAL_SCHEDULE_ENDPOINT_NAME = "Temporal Schedule"
 DURABLE_SOURCE_NAME = "consume_durable_job"
-DURABLE_TARGET_NAME = "process_durable_job"
+DURABLE_TARGET_NAME = "durable_pause"
 DURABLE_SOURCE_ID = 1
 DURABLE_TARGET_ID = 4
 DURABLE_WORKFLOW_TYPE = "servicelib.durable-link.v1"
@@ -786,13 +786,9 @@ def verify_durable_retry(
 
 def traced_schedule_request(
     language: Language,
-    trace_id: str,
     execution_id: str,
     endpoint_id: int,
 ) -> dict[str, object]:
-    trace_carrier = {
-        "traceparent": f"00-{trace_id}-0123456789abcdef-01",
-    }
     if language.name == "python":
         return {
             "activity_type": (
@@ -810,8 +806,6 @@ def traced_schedule_request(
                 "stream_id": execution_id,
                 "priority": 0,
                 "deadline_unix_nano": 0,
-                "sampling_enabled": True,
-                "trace_carrier": trace_carrier,
                 "scheduled": True,
                 "schedule_id": SCHEDULE_ID,
                 "scheduled_at_unix_nano": 0,
@@ -844,8 +838,6 @@ def traced_schedule_request(
             "streamId": execution_id,
             "priority": 0,
             deadline_name: 0,
-            "samplingEnabled": True,
-            "traceCarrier": trace_carrier,
             "scheduled": True,
             "scheduleId": SCHEDULE_ID,
             scheduled_name: 0,
@@ -1050,19 +1042,29 @@ def verify_temporal_trace(trace: dict[str, Any]) -> dict[str, object]:
     durable_inputs = matching("temporal.input", "Durable Job")
     durable_outputs = matching("temporal.output", "Durable Job")
     process_maps = matching("stream.map", "Process Durable Job")
+    delay_spans = matching("stream.delay", "Durable Pause")
     durable_calls = [
         span for span in spans
         if str(span.get("operationName", "")).lower() == "stream.call"
         and span_tags(span).get("from") == "Consume Durable Job"
-        and span_tags(span).get("to") == "Process Durable Job"
+        and span_tags(span).get("to") == "Durable Pause"
         and span_tags(span).get("type") == "durable"
+    ]
+    continuation_activities = [
+        span for span in spans
+        if str(span.get("operationName", "")).lower() == "temporal.activity"
+        and span_tags(span).get("boundary") == "durable_delay"
+        and span_tags(span).get("from") == "Durable Pause"
+        and span_tags(span).get("to") == "Process Durable Job"
     ]
     if not schedule_inputs:
         raise RuntimeError("Temporal trace has no scheduled endpoint input span")
     if not durable_inputs or not durable_outputs:
         raise RuntimeError("Temporal trace does not cross the symmetric endpoint boundary")
-    if not process_maps or not durable_calls:
-        raise RuntimeError("Temporal trace does not cross the DurableCall link boundary")
+    if not durable_calls or not delay_spans:
+        raise RuntimeError("Temporal trace does not cross the DurableCall-to-Delay boundary")
+    if not continuation_activities or not process_maps:
+        raise RuntimeError("Temporal trace does not resume after durable Delay")
     if not any(
         is_descendant(child, parent, by_id)
         for parent in durable_outputs for child in durable_inputs
@@ -1072,10 +1074,24 @@ def verify_temporal_trace(trace: dict[str, Any]) -> dict[str, object]:
         )
     if not any(
         is_descendant(child, parent, by_id)
-        for parent in durable_calls for child in process_maps
+        for parent in durable_calls for child in delay_spans
     ):
         raise RuntimeError(
-            "Process Durable Job is not a descendant of its DurableCall link"
+            "Durable Pause is not a descendant of its DurableCall link"
+        )
+    if not any(
+        is_descendant(child, parent, by_id)
+        for parent in delay_spans for child in continuation_activities
+    ):
+        raise RuntimeError(
+            "durable Delay continuation Activity did not preserve the trace parent"
+        )
+    if not any(
+        is_descendant(child, parent, by_id)
+        for parent in continuation_activities for child in process_maps
+    ):
+        raise RuntimeError(
+            "Process Durable Job is not a descendant of the continuation Activity"
         )
     if not any(
         is_descendant(child, parent, by_id)
@@ -1089,6 +1105,8 @@ def verify_temporal_trace(trace: dict[str, Any]) -> dict[str, object]:
         "scheduleInputSpans": len(schedule_inputs),
         "durableEndpointInputSpans": len(durable_inputs),
         "durableEndpointOutputSpans": len(durable_outputs),
+        "durableDelaySpans": len(delay_spans),
+        "continuationActivitySpans": len(continuation_activities),
         "durableTargetSpans": len(process_maps),
     }
 
@@ -1121,9 +1139,7 @@ def verify_tracing(
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     workflow_id = f"conformance/trace/{language.name}-{timestamp}"
     endpoint_id = schedule_endpoint_id(schedule_description)
-    request = traced_schedule_request(
-        language, trace_id, workflow_id, endpoint_id
-    )
+    request = traced_schedule_request(language, workflow_id, endpoint_id)
     temporal_cli(
         language, overlay, env,
         "workflow", "start",
@@ -1132,6 +1148,9 @@ def verify_tracing(
         "--task-queue", "automation-schedules",
         "--execution-timeout", "60s",
         "--input", json.dumps(request, separators=(",", ":")),
+        "--headers", f'traceparent="00-{trace_id}-0123456789abcdef-01"',
+        "--headers", 'x-trace="1"',
+        "--headers", f'x-stream-id="{workflow_id}"',
     )
     description = wait_workflow_completed(
         language, overlay, env, workflow_id
@@ -1153,7 +1172,9 @@ def wait_graph(
         last = wait_status(language, overlay, env, timeout=5)
         if (
             edge_calls(last, "Temporal Schedule", "Make Temporal Job") >= jobs
-            and edge_calls(last, "Consume Durable Job", "Process Durable Job")
+            and edge_calls(last, "Consume Durable Job", "Durable Pause")
+            >= jobs
+            and edge_calls(last, "Durable Pause", "Process Durable Job")
             >= jobs
             and edge_calls(last, "Process Durable Job", "Consume Durable Job")
             >= jobs
@@ -1248,7 +1269,10 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
                 status, "Temporal Schedule", "Make Temporal Job"
             ),
             "durableCallActivations": edge_calls(
-                status, "Consume Durable Job", "Process Durable Job"
+                status, "Consume Durable Job", "Durable Pause"
+            ),
+            "durableDelayContinuations": edge_calls(
+                status, "Durable Pause", "Process Durable Job"
             ),
             "metrics": metrics,
             "temporalMetrics": temporal_metrics,
