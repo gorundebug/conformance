@@ -68,6 +68,7 @@
       "operators/delay.inl",
       "operators/join.inl",
       "operators/multijoin.inl",
+      "runtime/base.hpp",
       "runtime/caller.hpp",
       "runtime/config/config.hpp",
       "runtime/config/config_parse_common.hpp",
@@ -88,6 +89,7 @@
       "runtime/pool/taskpool.hpp",
       "runtime/serviceapp.hpp",
       "runtime/status/status.hpp",
+      "runtime/status/web.generated.hpp",
       "runtime/store/hashmap.hpp",
       "runtime/store/rotatingmap.hpp",
       "runtime/stream.hpp",
@@ -173,8 +175,7 @@
       "order_service_api/include/handlers/order_service_api/processorder/requests.hpp",
       "order_service_api/include/handlers/order_service_api/processorder/responses.hpp",
       "scripts/quickstart.generated.sh",
-      "scripts/sanitizer-integration.generated.sh",
-      "scripts/sanitizer-test.generated.sh"
+      "scripts/sanitizer-integration.generated.sh"
     ],
     "changed_interface_boundaries": [
       "analyticsservice/internal/functions/order_processed_endpoint.hpp",
