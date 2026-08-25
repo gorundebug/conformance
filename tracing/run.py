@@ -745,9 +745,11 @@ def prepare_python_configs() -> None:
 def language_env(language: Language) -> dict[str, str]:
     env = os.environ.copy()
     env["SERVICELIB_CONFORMANCE_DIR"] = str(CONFORMANCE)
-    if language.name == "go":
-        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
-    elif language.name == "cpp":
+    # C++ examples contain the Go automation service while Temporal has no
+    # supported C++ SDK. Keep that generated fallback on the same local
+    # runtime revision as the rest of the mixed-language project.
+    env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
+    if language.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
         env["SERVICEGEN_ENABLE_OTLP_TRACING"] = "ON"
     elif language.name == "cppboost":

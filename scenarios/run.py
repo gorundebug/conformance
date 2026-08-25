@@ -128,9 +128,9 @@ def environment(implementation: Implementation) -> dict[str, str]:
     env["SERVICELIB_CONFORMANCE_DIR"] = str(CONFORMANCE_DIR)
     env["SERVICELIB_SCENARIO_ARTIFACTS_DIR"] = str(ARTIFACTS)
     env["SERVICEGEN_GO_TOOLCHAIN_IMAGE"] = go_toolchain.docker_image(ROOT)
-    if implementation.name == "go":
-        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
-    elif implementation.name == "cpp":
+    # The C++ framework examples include the Go Temporal fallback service.
+    env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
+    if implementation.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
         env["USERVER_LTO"] = "ON"
     elif implementation.name == "cpp-native":

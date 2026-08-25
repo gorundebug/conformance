@@ -164,9 +164,10 @@ def build(language: Any, env: dict[str, str]) -> None:
 def language_env(language: Any) -> dict[str, str]:
     env = os.environ.copy()
     env["SERVICELIB_CONFORMANCE_DIR"] = str(CONFORMANCE)
-    if language.name == "go":
-        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
-    elif language.name == "cpp":
+    # C++ examples use the generated Go automation service as their Temporal
+    # fallback, so a local mixed-language build needs both runtime contexts.
+    env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
+    if language.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
     elif language.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")

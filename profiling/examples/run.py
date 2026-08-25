@@ -417,6 +417,9 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
         SCENARIOS[getattr(args, "scenario", "normal")],
         getattr(args, "rate", 100_000),
     )
+    # Framework C++ examples contain a Go automation service until a supported
+    # Temporal C++ SDK exists. Keep its runtime local in mixed-language builds.
+    env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     if language.name == "cpp":
         env["COMPOSE_PROJECT_NAME"] = "cppexample"
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
