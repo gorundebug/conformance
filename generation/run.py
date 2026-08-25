@@ -210,6 +210,20 @@ def isolate_compose_volumes(project: Path) -> None:
         )
 
 
+def clean_generated_build_volumes(project_name: str) -> None:
+    """Remove disposable build state without deleting the shared Conan cache."""
+    subprocess.run(
+        [
+            "docker", "volume", "rm", "--force",
+            f"{project_name}_cpp-cmake-build",
+            f"{project_name}_cpp-ccache",
+        ],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def boost_source_cache_build_dir() -> str:
     return cpp_source_cache.build_dir(FRAMEWORK)
 
@@ -794,9 +808,10 @@ def main() -> int:
                 "SERVICEGEN_FETCH_CPP_DEPENDENCIES": "OFF",
             })
             down = ["docker", "compose", "-f",
-                    "docker-compose.cmake.generated.yml", "down", "--volumes",
+                    "docker-compose.cmake.generated.yml", "down",
                     "--remove-orphans"]
             run(down, cwd=merged, env=docker_env)
+            clean_generated_build_volumes(project)
             docker_started = True
             unit_output = run(
                 ["bash", "scripts/test.generated.sh", "docker-release"],
@@ -820,6 +835,7 @@ def main() -> int:
                 )
             build_results.append({"suite": "integration", "preset": "docker-release"})
             run(down, cwd=merged, env=docker_env)
+            clean_generated_build_volumes(project)
             docker_started = False
 
         typescript_result = verify_typescript_generation(
@@ -857,6 +873,7 @@ def main() -> int:
         if docker_started and down is not None and docker_env is not None:
             try:
                 run(down, cwd=merged, env=docker_env)
+                clean_generated_build_volumes(project)
             except Exception as cleanup_error:
                 print(f"warning: generated Docker cleanup failed: {cleanup_error}")
         if not args.keep_workspace:
