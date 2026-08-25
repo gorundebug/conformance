@@ -124,6 +124,9 @@ services:
     grpcPort: 9204
     httpHost: 0.0.0.0
     httpPort: 9094
+streams:
+  durablePause:
+    duration: 250
 """
     )
 
