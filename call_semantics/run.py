@@ -14,6 +14,10 @@ import time
 from pathlib import Path
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import go_toolchain
+
+
 HERE = Path(__file__).resolve().parent
 CONFORMANCE_DIR = HERE.parent
 ROOT = Path(
@@ -99,13 +103,20 @@ def copy_example(source: Path, destination: Path) -> None:
 
 
 def generate_archives(archive_dir: Path) -> str:
+    local_go_work = archive_dir / "go.work"
+    local_go_work.write_text(
+        go_toolchain.render_workspace(
+            go_toolchain.example_version(ROOT),
+            (SERVICEGEN, ROOT / "servicelib"),
+        )
+    )
     env = os.environ.copy()
     env.update(
         {
             "SERVICEGEN_EXAMPLE_ARCHIVE_DIR": str(archive_dir),
             "SERVICEGEN_EXAMPLE_PROFILE": "current",
             "GOCACHE": os.environ.get("GOCACHE", "/tmp/servicegen-go-build"),
-            "GOWORK": "off",
+            "GOWORK": str(local_go_work),
         }
     )
     completed = run(
