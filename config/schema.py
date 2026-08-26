@@ -146,7 +146,6 @@ def typescript_structs() -> tuple[dict[str, set[str]], set[str]]:
         "taskPool",
         "priorityTaskPool",
         "parallelCall",
-        "durableCall",
     }
 
     public_configs = {
