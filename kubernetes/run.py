@@ -124,11 +124,43 @@ def edge_calls(value: dict[str, object], source: str, target: str) -> int:
     raise RuntimeError(f"status graph has no {source!r}->{target!r} edge")
 
 
-def write_status_artifact(name: str, value: dict[str, object]) -> None:
+def write_json_artifact(name: str, value: object) -> None:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     (ARTIFACTS / name).write_text(
         json.dumps(value, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
+    )
+
+
+def write_status_artifact(name: str, value: dict[str, object]) -> None:
+    write_json_artifact(name, value)
+
+
+def temporal_workflow_executions(
+    kubectl: list[str], example: Path, environment: dict[str, str], *,
+    verbose: bool = True,
+) -> list[dict[str, object]]:
+    output = capture(
+        [
+            *kubectl, "--namespace", "servicelib-conformance", "exec",
+            "deployment/temporal-admintools", "--", "temporal", "workflow", "list",
+            "--address", "temporal-frontend:7233", "--namespace", "default",
+            "--query",
+            'WorkflowType="temporal.endpoint.temporal_workflow_schedule.workflow.v1"',
+            "--output", "json",
+        ],
+        example, environment, verbose=verbose,
+    )
+    value = json.loads(output)
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise RuntimeError("Temporal Workflow list did not return a JSON array")
+    return value
+
+
+def completed_workflow_count(executions: list[dict[str, object]]) -> int:
+    return sum(
+        item.get("status") == "WORKFLOW_EXECUTION_STATUS_COMPLETED"
+        for item in executions
     )
 
 
@@ -340,19 +372,16 @@ def runtime_probe(example: Path) -> None:
             example, environment,
         ))
         write_status_artifact("automation-status-initial.json", initial_automation_status)
-        schedule_edges = {
-            "example-automation-activity-schedule": (
-                "Temporal Activity Schedule", "Scheduled Activity Pause",
-            ),
-            "example-automation-workflow-schedule": (
-                "Temporal Workflow Schedule", "Scheduled Workflow Pause",
-            ),
-        }
-        initial_temporal_calls = {
-            schedule_id: edge_calls(initial_automation_status, *edge)
-            for schedule_id, edge in schedule_edges.items()
-        }
-        for schedule_id in schedule_edges:
+        activity_schedule_id = "example-automation-activity-schedule"
+        workflow_schedule_id = "example-automation-workflow-schedule"
+        activity_edge = "Temporal Activity Schedule", "Scheduled Activity Pause"
+        initial_activity_calls = edge_calls(initial_automation_status, *activity_edge)
+        initial_workflows = temporal_workflow_executions(
+            kubectl, example, environment,
+        )
+        initial_completed_workflows = completed_workflow_count(initial_workflows)
+        write_json_artifact("temporal-workflows-initial.json", initial_workflows)
+        for schedule_id in (activity_schedule_id, workflow_schedule_id):
             run(
                 [
                     *kubectl, "--namespace", "servicelib-conformance", "exec",
@@ -363,26 +392,33 @@ def runtime_probe(example: Path) -> None:
                 example, environment,
             )
         temporal_deadline = time.monotonic() + 90
-        temporal_calls = dict(initial_temporal_calls)
+        activity_calls = initial_activity_calls
+        workflow_executions = initial_workflows
+        completed_workflows = initial_completed_workflows
         automation_status = initial_automation_status
         while time.monotonic() < temporal_deadline:
             automation_status = json.loads(capture(
                 [*kubectl, "get", "--raw", automation_status_path],
                 example, environment, verbose=False,
             ))
-            temporal_calls = {
-                schedule_id: edge_calls(automation_status, *edge)
-                for schedule_id, edge in schedule_edges.items()
-            }
-            if all(
-                temporal_calls[schedule_id] > initial_temporal_calls[schedule_id]
-                for schedule_id in schedule_edges
+            activity_calls = edge_calls(automation_status, *activity_edge)
+            workflow_executions = temporal_workflow_executions(
+                kubectl, example, environment, verbose=False,
+            )
+            completed_workflows = completed_workflow_count(workflow_executions)
+            if (
+                activity_calls > initial_activity_calls
+                and completed_workflows > initial_completed_workflows
             ):
                 write_status_artifact(
                     "automation-status-after-temporal-trigger.json", automation_status,
                 )
+                write_json_artifact(
+                    "temporal-workflows-after-trigger.json", workflow_executions,
+                )
                 print(
-                    "[kubernetes] PASS  Temporal Activity/Workflow schedules -> graph",
+                    "[kubernetes] PASS  Temporal Activity -> service graph; "
+                    "Workflow -> completed Temporal execution",
                     flush=True,
                 )
                 break
@@ -391,10 +427,14 @@ def runtime_probe(example: Path) -> None:
             write_status_artifact(
                 "automation-status-after-temporal-timeout.json", automation_status,
             )
+            write_json_artifact(
+                "temporal-workflows-after-timeout.json", workflow_executions,
+            )
             raise RuntimeError(
-                "Kubernetes Temporal triggers did not traverse the Automation "
-                "Service Activity and Workflow schedule graphs: "
-                f"schedule calls {initial_temporal_calls}->{temporal_calls}"
+                "Kubernetes Temporal triggers did not complete both execution paths: "
+                f"Activity service-graph calls {initial_activity_calls}->{activity_calls}; "
+                "completed Temporal Workflow executions "
+                f"{initial_completed_workflows}->{completed_workflows}"
             )
         request_body = json.dumps({
             "customer_id": "kubernetes-check",
