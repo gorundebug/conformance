@@ -43,6 +43,13 @@ class DependencyRootTest(unittest.TestCase):
                            check=True, capture_output=True)
             subprocess.run(["git", "clone", "--branch", "main", str(origin), str(checkout)],
                            check=True, capture_output=True)
+            # Old managed clones may still track a former default branch. The
+            # updater must not rely on their persisted remote fetch refspec.
+            subprocess.run(
+                ["git", "-C", str(checkout), "config", "remote.origin.fetch",
+                 "+refs/heads/master:refs/remotes/origin/master"],
+                check=True,
+            )
 
             subprocess.run(["git", "-C", str(seed), "checkout", "--orphan", "replacement"],
                            check=True, capture_output=True)
