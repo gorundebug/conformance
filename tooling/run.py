@@ -22,6 +22,8 @@ def main() -> int:
     commands = [
         [sys.executable, "-m", "unittest", "test_paths", "-v"],
         [sys.executable, "-m", "unittest", "discover", "-s",
+         "dependency_manifests", "-p", "test_*.py", "-v"],
+        [sys.executable, "-m", "unittest", "discover", "-s",
          "profiling/examples", "-p", "test_*.py", "-v"],
         [sys.executable, "-m", "unittest", "discover", "-s",
          "benchmarks/examples", "-p", "test_*.py", "-v"],

@@ -212,7 +212,7 @@ The existing fine-grained targets remain available, and three aggregate levels
 cover the common workflows:
 
 ```bash
-make fast         # structure, signatures, config, pools, operators and serde
+make fast         # dependency manifests, structure, signatures, config, pools, operators and serde
 make integration  # runtime, standalone builds, transports, Kafka, telemetry and scenarios
 make release      # fast + integration + mandatory profiling + aggregate report
 make resume       # run only failed or missing leaf suites, then aggregate
@@ -232,11 +232,31 @@ The same targets are available from a clean checkout through quickstart:
 ./quickstart.sh -- resume
 ```
 
-After every suite passes, `make release` writes a single 24-suite result matrix to
+After every suite passes, `make release` writes a single 26-suite result matrix to
 `.artifacts/summary.json`. The aggregate step also rejects a partial
 Go/C++/Python/Rust metrics, tracing or logging run. It prints the complete
 PASS/FAIL suite matrix, the final passed count and the report path to the
 terminal as well.
+
+## Dependency manifest preflight
+
+`dependency-manifests` is the first release gate. It creates isolated local Go
+workspaces for every generated example, native example, generator and framework,
+then resolves every package with `-mod=readonly`. The framework under test is
+used from the local checkout. Consequently, a generated import missing from a
+checked-in `go.mod` or `go.sum` fails in a few seconds and identifies the exact
+module; it cannot remain hidden until a later Kafka, tracing or scenario Docker
+build.
+
+```bash
+make dependency-manifests
+./quickstart.sh -- dependency-manifests
+```
+
+The check never runs `go get` or mutates a manifest. Dependency changes must be
+synchronized by the generator/project generation commands and committed before
+conformance is started. C++ centralized version snapshots and linked runtime
+dependencies remain covered by the separate `dependencies` suite.
 
 ## Standalone component builds
 

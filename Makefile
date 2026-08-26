@@ -33,7 +33,7 @@ CONFORMANCE_DEPENDENCIES_DIR ?= $(LOCAL_DEPENDENCIES_DIR)
 export CONFORMANCE_DEPENDENCIES_DIR
 endif
 
-.PHONY: test-paths tooling structure signatures config config-core config-schema \
+.PHONY: test-paths dependency-manifests tooling structure signatures config config-core config-schema \
 	config-runtime config-runtime-core config-runtime-go \
 	config-runtime-typescript dependencies pools operators serde transports \
 	kafka temporal tracing metrics dashboards dashboards-core logging scenarios \
@@ -51,6 +51,9 @@ test-paths:
 dependency-source-cache-invalidate:
 	python3 cpp_source_cache.py invalidate
 
+dependency-manifests:
+	python3 run_suite.py dependency-manifests python3 dependency_manifests/run.py
+
 tooling:
 	python3 run_suite.py tooling python3 tooling/run.py
 
@@ -59,7 +62,7 @@ all: release
 release: fast integration profiling
 	python3 aggregate.py
 
-fast: tooling structure signatures config pools operators serde
+fast: dependency-manifests tooling structure signatures config pools operators serde
 
 integration: config-runtime dependencies standalone-components transports kafka temporal tracing metrics dashboards logging scenarios call-semantics generation kubernetes
 

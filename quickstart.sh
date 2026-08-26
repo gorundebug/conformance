@@ -101,7 +101,7 @@ export PERFORMANCE_NATIVE_DEPENDENCIES_DIR="$DEPENDENCIES_DIR/performance-native
 
 echo "==> Checking prerequisites"
 missing=0
-for tool in git docker python3; do
+for tool in git docker go python3; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "  missing: $tool" >&2
     missing=1
@@ -115,7 +115,7 @@ if [ "$missing" -ne 0 ]; then
   echo "Install the missing tools above and re-run." >&2
   exit 1
 fi
-echo "  git, docker, docker compose, python3: OK"
+echo "  git, docker, docker compose, go, python3: OK"
 
 echo "==> Preparing repositories in $DEPENDENCIES_DIR"
 for repo in "${REPOS[@]}"; do

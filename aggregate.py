@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent
 ARTIFACTS = ROOT / ".artifacts"
 OUTPUT = ARTIFACTS / "summary.json"
 SUITES = (
-    "tooling", "structure", "signatures", "config", "config-schema",
+    "dependency-manifests", "tooling", "structure", "signatures", "config", "config-schema",
     "config-runtime", "config-runtime-go", "config-runtime-typescript",
     "dependencies", "standalone-components", "pools",
     "operators", "serde", "transports", "kafka", "temporal", "tracing", "metrics",
