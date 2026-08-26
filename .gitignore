@@ -1,4 +1,5 @@
 .artifacts/
 .dependencies/
 .cpp-source-cache/
+.conan2-cache/
 __pycache__/
