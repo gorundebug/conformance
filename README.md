@@ -242,18 +242,20 @@ terminal as well.
 
 `dependency-manifests` is the first release gate. It creates isolated local Go
 workspaces for every generated example, native example, generator and framework,
-then resolves every package with `-mod=readonly`. The framework under test is
-used from the local checkout. Consequently, a generated import missing from a
-checked-in `go.mod` or `go.sum` fails in a few seconds and identifies the exact
-module; it cannot remain hidden until a later Kafka, tracing or scenario Docker
-build.
+then resolves every package with `-mod=readonly`. It also runs Cargo metadata in
+`--locked --offline` mode for the Rust framework, canonical example and native
+example, using the local framework checkout for the canonical project. The
+frameworks under test therefore come from the local dependency workspace. A
+generated import missing from `go.mod`/`go.sum`, or a Rust dependency missing
+from `Cargo.lock`, fails in a few seconds and identifies the exact project; it
+cannot remain hidden until a later Kafka, tracing or scenario Docker build.
 
 ```bash
 make dependency-manifests
 ./quickstart.sh -- dependency-manifests
 ```
 
-The check never runs `go get` or mutates a manifest. Dependency changes must be
+The check never updates a dependency or mutates a manifest. Dependency changes must be
 synchronized by the generator/project generation commands and committed before
 conformance is started. C++ centralized version snapshots and linked runtime
 dependencies remain covered by the separate `dependencies` suite.

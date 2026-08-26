@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail early when checked-in Go manifests cannot resolve generated sources."""
+"""Fail early when checked-in dependency manifests and lockfiles are stale."""
 
 from __future__ import annotations
 
@@ -28,6 +28,18 @@ GO_PROJECT_MODULES = {
     "servicelib": (".",),
     "tsservicelib": ("test/interop",),
 }
+RUST_PROJECTS = {
+    "rustservicelib": (),
+    "rustnativeexample": (),
+    "rustexample": (
+        "--config",
+        'patch."https://github.com/gorundebug/rustservicelib.git".'
+        'servicelib-gorundebug.path="../rustservicelib"',
+    ),
+}
+RUST_TOOLCHAIN_IMAGE = os.environ.get(
+    "SERVICEGEN_RUST_TOOLCHAIN_IMAGE", "rust:1.97-bookworm"
+)
 IGNORED_PARTS = {
     ".artifacts", ".git", ".venv", "build", "dist", "node_modules", "target",
 }
@@ -89,6 +101,25 @@ def check_go_project(
     }
 
 
+def check_rust_project(project: Path, cargo_options: tuple[str, ...]) -> dict[str, str]:
+    for name in ("Cargo.toml", "Cargo.lock"):
+        manifest = project / name
+        if not manifest.is_file():
+            raise RuntimeError(
+                f"required Rust manifest is missing: {manifest.relative_to(ROOT)}"
+            )
+    command = [
+        "docker", "run", "--rm",
+        "-v", f"{ROOT}:/repo:ro",
+        "-w", f"/repo/{project.relative_to(ROOT)}",
+        RUST_TOOLCHAIN_IMAGE,
+        "cargo", *cargo_options,
+        "metadata", "--locked", "--offline", "--no-deps", "--format-version", "1",
+    ]
+    run(command, cwd=CONFORMANCE_ROOT, env=os.environ.copy())
+    return {"project": project.name, "lockfile": "Cargo.lock"}
+
+
 def main() -> int:
     framework = ROOT / "servicelib"
     cache = CONFORMANCE_ROOT / ".artifacts" / "dependency-manifests" / "go-build-cache"
@@ -106,7 +137,20 @@ def main() -> int:
                 f"{len(result['modules'])} modules, {result['packages']} packages",
                 flush=True,
             )
-    summary = {"status": "pass", "checks": {"goReadonlyResolution": checked}}
+    rust_checked: list[dict[str, str]] = []
+    for name, cargo_options in RUST_PROJECTS.items():
+        project = ROOT / name
+        if not project.is_dir():
+            raise RuntimeError(f"required dependency project is missing: {project}")
+        rust_checked.append(check_rust_project(project, cargo_options))
+        print(f"[dependency-manifests] PASS {name}: Cargo.lock is current", flush=True)
+    summary = {
+        "status": "pass",
+        "checks": {
+            "goReadonlyResolution": checked,
+            "rustLockedMetadata": rust_checked,
+        },
+    }
     ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
     ARTIFACT.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     print(json.dumps(summary, indent=2, sort_keys=True))

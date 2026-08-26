@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from run import IGNORED_PARTS, module_directories
+from run import IGNORED_PARTS, RUST_PROJECTS, module_directories
 
 
 class DependencyManifestTests(unittest.TestCase):
@@ -20,6 +20,11 @@ class DependencyManifestTests(unittest.TestCase):
                 path.write_text("module example.invalid/module\n")
             self.assertEqual(module_directories(root), [root / "api", root / "service"])
             self.assertIn("dist", IGNORED_PARTS)
+
+    def test_rust_example_uses_the_local_framework_for_lock_validation(self) -> None:
+        options = RUST_PROJECTS["rustexample"]
+        self.assertIn("--config", options)
+        self.assertTrue(any("../rustservicelib" in option for option in options))
 
 
 if __name__ == "__main__":
