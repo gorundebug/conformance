@@ -528,12 +528,6 @@ def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[st
     return environment
 
 
-def boost_build_volume() -> str:
-    return cpp_source_cache.build_volume_name(
-        BOOST, "cppboostservicelib-transports"
-    )
-
-
 def boost_command(build_dir: str, sanitizer: bool,
                   skip_build: bool) -> list[str]:
     tests = "^cppboostservicelib_grpc_(runtime|endpoints|unary|streaming)_test$"
@@ -570,7 +564,9 @@ def boost_command(build_dir: str, sanitizer: bool,
         "docker", "run", "--rm", "-v",
         cpp_source_cache.source_mount(BOOST),
         "-v", f"{BOOST}:/workspace",
-        "-v", f"{boost_build_volume()}:/workspace/build", "-w",
+        "-v", cpp_source_cache.build_volume_mount(
+            BOOST, "cppboostservicelib-transports"
+        ), "-w",
         "/workspace", "cppboostservicelib-build:latest", "/bin/bash", "-lc",
         run,
     ]
@@ -607,7 +603,9 @@ def boost_kafka_command(build_dir: str, sanitizer: bool,
         "docker", "run", "--rm", "-v",
         cpp_source_cache.source_mount(BOOST),
         "-v", f"{BOOST}:/workspace",
-        "-v", f"{boost_build_volume()}:/workspace/build", "-w",
+        "-v", cpp_source_cache.build_volume_mount(
+            BOOST, "cppboostservicelib-transports"
+        ), "-w",
         "/workspace", "cppboostservicelib-build:latest", "/bin/bash", "-lc",
         run,
     ]
@@ -632,7 +630,9 @@ def boost_http_custom_command(skip_build: bool) -> list[str]:
         "docker", "run", "--rm", "-v",
         cpp_source_cache.source_mount(BOOST),
         "-v", f"{BOOST}:/workspace",
-        "-v", f"{boost_build_volume()}:/workspace/build", "-w",
+        "-v", cpp_source_cache.build_volume_mount(
+            BOOST, "cppboostservicelib-transports"
+        ), "-w",
         "/workspace", "cppboostservicelib-build:latest", "/bin/bash", "-lc",
         run,
     ]

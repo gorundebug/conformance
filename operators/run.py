@@ -546,7 +546,9 @@ def main() -> int:
                 "-v",
                 f"{BOOST}:/workspace",
                 "-v",
-                f"{cpp_source_cache.build_volume_name(BOOST, 'cppboostservicelib-operators')}:/workspace/build",
+                cpp_source_cache.build_volume_mount(
+                    BOOST, "cppboostservicelib-operators"
+                ),
                 "-w",
                 "/workspace",
                 "cppboostservicelib-build:latest",
@@ -566,7 +568,9 @@ def main() -> int:
             [
                 "docker", "run", "--rm", "-v", f"{BOOST}:/workspace",
                 "-v",
-                f"{cpp_source_cache.build_volume_name(BOOST, 'cppboostservicelib-operators')}:/workspace/build",
+                cpp_source_cache.build_volume_mount(
+                    BOOST, "cppboostservicelib-operators"
+                ),
                 "-w", "/workspace", "cppboostservicelib-build:latest",
                 "ctest", "--test-dir", "build/docker", "--output-on-failure",
                 "-R",

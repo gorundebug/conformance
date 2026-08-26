@@ -279,9 +279,6 @@ def main() -> int:
     runs.append(execute("canonical-cpp-pools", canonical_command, CANONICAL))
 
     if not args.skip_build:
-        boost_build_volume = cpp_source_cache.build_volume_name(
-            BOOST, "cppboostservicelib-pools"
-        )
         runs.append(execute(
             "boost-build-image",
             ["docker", "build", "-f", "Dockerfile.cmake", "-t",
@@ -303,7 +300,9 @@ def main() -> int:
                 "-v", "cppboostservicelib-ccache:/ccache",
                 "-v", cpp_source_cache.source_mount(BOOST),
                 "-v", f"{BOOST}:/workspace", "-w", "/workspace",
-                "-v", f"{boost_build_volume}:/workspace/build",
+                "-v", cpp_source_cache.build_volume_mount(
+                    BOOST, "cppboostservicelib-pools"
+                ),
                 "cppboostservicelib-build:latest", "/bin/bash", "-lc",
                 boost_framework_build_script(),
             ],
@@ -321,7 +320,9 @@ def main() -> int:
                 "-v",
                 f"{BOOST}:/workspace",
                 "-v",
-                f"{cpp_source_cache.build_volume_name(BOOST, 'cppboostservicelib-pools')}:/workspace/build",
+                cpp_source_cache.build_volume_mount(
+                    BOOST, "cppboostservicelib-pools"
+                ),
                 "-w",
                 "/workspace",
                 "cppboostservicelib-build:latest",

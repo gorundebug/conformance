@@ -129,6 +129,30 @@ def build_volume_name(framework: Path, project: str = "cppboostexample") -> str:
     return f"{project}_cpp-cmake-build-{cache_name(framework)}"
 
 
+def build_volume_mount(
+    framework: Path,
+    project: str = "cppboostexample",
+    *,
+    readonly: bool = False,
+) -> str:
+    """Return a Docker mount that never imports a host build directory.
+
+    The framework source is bind-mounted at ``/workspace``.  Without
+    ``volume-nocopy``, Docker may initialize a newly-created nested build
+    volume from ``/workspace/build`` and copy host CMake caches into it.  Those
+    caches contain absolute host paths and cannot be reused in the container.
+    """
+    return volume_mount(
+        build_volume_name(framework, project), readonly=readonly
+    )
+
+
+def volume_mount(name: str, *, readonly: bool = False) -> str:
+    """Render a named build-volume mount without Docker's copy-up."""
+    mode = "ro,volume-nocopy" if readonly else "volume-nocopy"
+    return f"{name}:/workspace/build:{mode}"
+
+
 def configure_environment(
     environment: dict[str, str], framework: Path,
     project: str = "cppboostexample",

@@ -401,7 +401,9 @@ def main() -> int:
         "-v",
         f"{BOOST}:/workspace",
         "-v",
-        f"{cpp_source_cache.build_volume_name(BOOST, 'cppboostservicelib-serde')}:/workspace/build",
+        cpp_source_cache.build_volume_mount(
+            BOOST, "cppboostservicelib-serde"
+        ),
         "-w",
         "/workspace",
         "cppboostservicelib-build:latest",
