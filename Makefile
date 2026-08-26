@@ -45,6 +45,15 @@ endif
 
 .NOTPARALLEL: fast integration release resume all
 
+# Every public verification target must reject stale module manifests before
+# starting downloads, Docker builds or runtime scenarios. In one make process
+# this phony prerequisite executes once even when several suites are selected.
+MANIFEST_GATED_TARGETS := tooling structure signatures config-core config-schema \
+	config-runtime-core config-runtime-go config-runtime-typescript dependencies \
+	standalone-components pools operators serde transports kafka temporal tracing \
+	metrics dashboards-core logging scenarios call-semantics generation kubernetes profiling
+$(MANIFEST_GATED_TARGETS): dependency-manifests
+
 test-paths:
 	python3 -m unittest test_paths
 
