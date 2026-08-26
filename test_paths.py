@@ -1134,6 +1134,22 @@ class DependencyRootTest(unittest.TestCase):
             wrapper,
         )
 
+    def test_quickstart_configures_git_mirror_before_managed_fetches(self) -> None:
+        quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
+        mirror = quickstart.index("bootstrap_git_mirror=")
+        managed_fetches = quickstart.index(
+            'echo "==> Preparing repositories in $DEPENDENCIES_DIR"'
+        )
+        full_proxy_environment = quickstart.index(
+            'proxy_script="$DEPENDENCIES_DIR/goexample/scripts/'
+            'dependency-cache.generated.sh"'
+        )
+
+        self.assertLess(mirror, managed_fetches)
+        self.assertLess(managed_fetches, full_proxy_environment)
+        self.assertIn("url.$bootstrap_git_mirror/github.com/.insteadOf", quickstart)
+        self.assertIn("url.$bootstrap_git_mirror/gitlab.com/.insteadOf", quickstart)
+
     def test_direct_make_enables_the_dependency_proxy(self) -> None:
         makefile = (CONFORMANCE_DIR / "Makefile").read_text()
         self.assertIn("SERVICEGEN_DEPENDENCY_PROXY_DIR", makefile)

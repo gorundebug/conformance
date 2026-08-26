@@ -117,6 +117,23 @@ if [ "$missing" -ne 0 ]; then
 fi
 echo "  git, docker, docker compose, go, python3: OK"
 
+# Managed checkouts are the first network operation performed by quickstart.
+# Configure the shared Git mirror before fetch/clone; the complete Nexus
+# environment is loaded below after goexample (which owns the generated proxy
+# launcher) is available. Git keeps printing the original GitHub/GitLab URL,
+# but url.*.insteadOf routes the transport through this mirror.
+if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
+  proxy_host="${SERVICEGEN_DEPENDENCY_PROXY_HOST:-localhost}"
+  git_mirror_port="${SERVICEGEN_GIT_MIRROR_PORT:-18084}"
+  bootstrap_git_mirror="http://$proxy_host:$git_mirror_port/cgi-bin/git"
+  export GIT_CONFIG_COUNT=2
+  export GIT_CONFIG_KEY_0="url.$bootstrap_git_mirror/github.com/.insteadOf"
+  export GIT_CONFIG_VALUE_0=https://github.com/
+  export GIT_CONFIG_KEY_1="url.$bootstrap_git_mirror/gitlab.com/.insteadOf"
+  export GIT_CONFIG_VALUE_1=https://gitlab.com/
+  echo "==> Routing managed Git checkouts through $bootstrap_git_mirror"
+fi
+
 echo "==> Preparing repositories in $DEPENDENCIES_DIR"
 for repo in "${REPOS[@]}"; do
   dir="$DEPENDENCIES_DIR/$repo"
