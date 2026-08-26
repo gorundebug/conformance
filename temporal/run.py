@@ -203,6 +203,7 @@ def prepare_files(language: Language) -> tuple[Path, Path]:
         "    volumes:\n"
         f"      - {overrides}:{language.override_target}:ro\n"
         f"      - {directory}:/conformance:ro\n"
+        "      - ${SERVICELIB_CONFORMANCE_DIR}/temporal:/temporal-conformance:ro\n"
         "  temporal:\n"
         "    ports:\n"
         '      - "18000:8000"\n'
@@ -2081,6 +2082,38 @@ def wait_local_cron(
     )
 
 
+def verify_python_workflow_sandbox(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+) -> bool | None:
+    """Prove Python Workers retain the SDK's default Workflow sandbox."""
+    if language.name != "python":
+        return None
+    result = run(
+        compose_command(
+            language,
+            overlay,
+            "exec",
+            "--no-TTY",
+            "automationservice",
+            "python",
+            "/temporal-conformance/python_sandbox_probe.py",
+        ),
+        cwd=language.example,
+        env=env,
+        capture=True,
+        timeout=30,
+    )
+    if "default sandbox rejected os.getcwd: PASS" not in result.stdout:
+        raise RuntimeError(
+            "Python Temporal sandbox probe did not report the expected rejection:\n"
+            + result.stdout
+            + result.stderr
+        )
+    return True
+
+
 def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, object]:
     overrides, overlay = prepare_files(language)
     env = environment(language)
@@ -2116,6 +2149,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             env=env,
         )
         wait_status(language, overlay, env)
+        python_sandbox = verify_python_workflow_sandbox(language, overlay, env)
         pause_temporal_schedules(language, overlay, env)
 
         # Schedule state belongs to Temporal, not to the Worker process. Stop
@@ -2197,6 +2231,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             "historyReplay": replay,
             "continueAsNew": True,
             "workflowcheck": workflowcheck,
+            "pythonSandbox": python_sandbox,
             "metrics": metrics,
             "temporalMetrics": temporal_metrics,
             "scheduleReuse": True,
