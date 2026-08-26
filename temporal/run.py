@@ -202,6 +202,7 @@ def prepare_files(language: Language) -> tuple[Path, Path]:
         "      - otel-collector\n"
         "    volumes:\n"
         f"      - {overrides}:{language.override_target}:ro\n"
+        f"      - {directory}:/conformance:ro\n"
         "  temporal:\n"
         "    ports:\n"
         '      - "18000:8000"\n'
@@ -307,7 +308,7 @@ def verify_go_workflowcheck(language: Language, env: dict[str, str]) -> bool:
     check_env["GOWORK"] = str(workspace)
     check_env["GOCACHE"] = str(ARTIFACTS / "go-build-cache")
     run(
-        [str(tool), "./..."],
+        [str(tool), "-config", "workflowcheck.generated.yaml", "./..."],
         cwd=language.example / "automationservice",
         env=check_env,
     )
@@ -382,6 +383,25 @@ def metric_value(text: str, metric: str, labels: dict[str, str]) -> float:
         if all(actual.get(key) == value for key, value in labels.items()):
             return float(value_text.strip().split()[0])
     raise RuntimeError(f"metric {metric}{labels} is absent")
+
+
+def metric_sum(text: str, metric: str, labels: dict[str, str]) -> float:
+    total = 0.0
+    found = False
+    for line in text.splitlines():
+        if not line.startswith(metric + "{"):
+            continue
+        label_text, separator, value_text = line.partition("}")
+        if separator == "":
+            continue
+        actual = {
+            key: bytes(value, "utf-8").decode("unicode_escape")
+            for key, value in PROM_LABEL_RE.findall(label_text)
+        }
+        if all(actual.get(key) == value for key, value in labels.items()):
+            total += float(value_text.strip().split()[0])
+            found = True
+    return total if found else 0.0
 
 
 def verify_metrics(text: str, jobs: int) -> dict[str, float]:
@@ -654,6 +674,25 @@ def trigger_schedule(
             time.sleep(1.05)
 
 
+def pause_temporal_schedules(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+) -> None:
+    """Keep the integration workload bounded between explicit triggers."""
+    for schedule_id in (ACTIVITY_SCHEDULE_ID, WORKFLOW_SCHEDULE_ID):
+        temporal_cli(
+            language,
+            overlay,
+            env,
+            "schedule",
+            "toggle",
+            "--schedule-id",
+            schedule_id,
+            "--pause",
+        )
+
+
 def temporal_cli(
     language: Language,
     overlay: Path,
@@ -874,7 +913,14 @@ def wait_workflow_canceled(
         if "CANCELED" in last.upper() or "CANCELLED" in last.upper():
             return last
         time.sleep(0.5)
-    raise RuntimeError(f"Workflow {workflow_id} was not canceled\n{last}")
+    output = ARTIFACTS / language.name
+    history = workflow_history(language, overlay, env, workflow_id)
+    (output / "cancellation-timeout-history.json").write_text(history)
+    logs = diagnostics(language, overlay, env)
+    (output / "cancellation-timeout.log").write_text(logs + "\n")
+    raise RuntimeError(
+        f"Workflow {workflow_id} was not canceled\n{last}\n{logs}"
+    )
 
 
 def verify_queued_cancellation(
@@ -882,19 +928,9 @@ def verify_queued_cancellation(
     overlay: Path,
     env: dict[str, str],
 ) -> str:
-    # Pause regular admission before the manual firing. Otherwise a test that
-    # crosses a minute boundary can observe an unrelated scheduled Workflow
-    # and incorrectly attribute its graph activation to the canceled firing.
-    temporal_cli(
-        language,
-        overlay,
-        env,
-        "schedule",
-        "toggle",
-        "--schedule-id",
-        ACTIVITY_SCHEDULE_ID,
-        "--pause",
-    )
+    # Regular admission is paused by exercise(). Otherwise a test that crosses
+    # a minute boundary can observe an unrelated scheduled Workflow and
+    # incorrectly attribute its graph activation to the canceled firing.
     trigger_schedule(language, overlay, env, ACTIVITY_SCHEDULE_ID, 1)
     workflow_id = running_scheduled_workflow_id(
         language, overlay, env, ACTIVITY_SCHEDULE_ENDPOINT_NAME
@@ -937,16 +973,6 @@ def verify_queued_cancellation(
         cwd=language.example,
         env=env,
     )
-    temporal_cli(
-        language,
-        overlay,
-        env,
-        "schedule",
-        "toggle",
-        "--schedule-id",
-        ACTIVITY_SCHEDULE_ID,
-        "--unpause",
-    )
     return canceled
 
 
@@ -983,7 +1009,7 @@ def verify_continue_as_new(
     language: Language,
     overlay: Path,
     env: dict[str, str],
-) -> str:
+) -> tuple[str, str]:
     for workflow_id in endpoint_workflow_ids(
         language,
         overlay,
@@ -993,7 +1019,7 @@ def verify_continue_as_new(
     ):
         history = workflow_history(language, overlay, env, workflow_id)
         if "CONTINUE_AS_NEW_INITIATOR_WORKFLOW" in history:
-            return history
+            return workflow_id, history
     raise RuntimeError("Workflow Job did not execute Continue-As-New")
 
 
@@ -1196,6 +1222,116 @@ def verify_workflow_composition(
     }
 
 
+def replay_workflow_histories(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    histories: tuple[tuple[str, str], ...],
+) -> dict[str, object]:
+    """Replay real Event Histories with the generated service Workflow code."""
+    output = ARTIFACTS / language.name
+    replay_outputs: list[str] = []
+
+    def replay(command: list[str], *, cwd: Path) -> None:
+        result = run(
+            command,
+            cwd=cwd,
+            env=env,
+            timeout=180,
+            capture=True,
+        )
+        combined = result.stdout + result.stderr
+        replay_outputs.append(combined)
+        if "temporal workflow graph started" in combined:
+            raise RuntimeError(
+                "offline Workflow replay emitted a production Workflow log"
+            )
+
+    if language.name == "go":
+        image = "servicelib-temporal-conformance-go-replayer:latest"
+        build = [
+            "docker",
+            "build",
+            "--target",
+            "temporal-replay",
+            "--tag",
+            image,
+            "--build-context",
+            f"servicelib-source={language.runtime}",
+            "--build-arg",
+            "SERVICE_DIR=automationservice",
+            "--file",
+            "automationservice/Dockerfile",
+            ".",
+        ]
+        run(build, cwd=language.example, env=env, timeout=300)
+        for filename, workflow_id in histories:
+            replay(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--volume",
+                    f"{output}:/conformance:ro",
+                    "--workdir",
+                    "/workspace/automationservice",
+                    image,
+                    "/app/temporal-replay",
+                    f"/conformance/{filename}",
+                ],
+                cwd=language.example,
+            )
+    elif language.name == "python":
+        for filename, workflow_id in histories:
+            replay(
+                compose_command(
+                    language,
+                    overlay,
+                    "run",
+                    "--rm",
+                    "--no-deps",
+                    "--entrypoint",
+                    "python",
+                    "automationservice",
+                    "-m",
+                    "automation_service.temporal_replay_generated",
+                    f"/conformance/{filename}",
+                    "--workflow-id",
+                    workflow_id,
+                ),
+                cwd=language.example,
+            )
+    elif language.name == "typescript":
+        for filename, workflow_id in histories:
+            replay(
+                compose_command(
+                    language,
+                    overlay,
+                    "run",
+                    "--rm",
+                    "--no-deps",
+                    "--entrypoint",
+                    "node",
+                    "automationservice",
+                    "/app/dist/temporal-replay.generated.js",
+                    f"/conformance/{filename}",
+                    workflow_id,
+                ),
+                cwd=language.example,
+            )
+    else:
+        raise RuntimeError(f"Temporal replay is unsupported for {language.name}")
+    return {
+        "histories": len(histories),
+        "workflowIds": [workflow_id for _, workflow_id in histories],
+        "deterministic": True,
+        "telemetryOutputSuppressed": all(
+            "temporal workflow graph started" not in value
+            for value in replay_outputs
+        ),
+    }
+
+
 def wait_workflow_completed(
     language: Language,
     overlay: Path,
@@ -1311,8 +1447,20 @@ def schedule_workflow_request(schedule_description: str) -> dict[str, object]:
     def visit(item: object) -> None:
         if isinstance(item, dict):
             if (
-                "activityType" in item or "activity_type" in item
-            ) and "envelope" in item:
+                "envelope" in item
+                and (
+                    "activityType" in item
+                    or "activity_type" in item
+                    or (
+                        ("runtimeConfig" in item or "runtime_config" in item)
+                        and (
+                            "connectorName" in item
+                            or "connector_name" in item
+                            or "endpoints" in item
+                        )
+                    )
+                )
+            ):
                 requests.append(item)
             metadata = item.get("metadata")
             data = item.get("data")
@@ -1377,6 +1525,17 @@ def fetch_trace(trace_id: str, timeout: float = 30) -> dict[str, Any]:
     raise RuntimeError(f"Temporal trace {trace_id} was not exported to Jaeger")
 
 
+def fetch_recent_traces(service: str, limit: int = 20) -> dict[str, Any]:
+    query = urllib.parse.urlencode(
+        {"service": service, "limit": str(limit), "lookback": "1h"}
+    )
+    with urllib.request.urlopen(f"{JAEGER_URL}/api/traces?{query}", timeout=5) as response:
+        value = json.loads(response.read())
+    if not isinstance(value, dict):
+        raise RuntimeError("Jaeger returned a non-object recent trace response")
+    return value
+
+
 def span_tags(span: dict[str, Any]) -> dict[str, str]:
     result: dict[str, str] = {}
     for tag in span.get("tags", []):
@@ -1429,7 +1588,80 @@ def is_descendant(
     return False
 
 
-def verify_temporal_trace(trace: dict[str, Any]) -> dict[str, object]:
+def matching_spans(
+    trace: dict[str, Any], operation: str, stream_or_endpoint: str
+) -> list[dict[str, Any]]:
+    return [
+        span
+        for span in trace.get("spans", [])
+        if isinstance(span, dict)
+        and str(span.get("operationName", "")).lower() == operation
+        and stream_or_endpoint
+        in {
+            span_tags(span).get("stream"),
+            span_tags(span).get("endpoint"),
+        }
+    ]
+
+
+def normalized_servicelib_trace(trace: dict[str, Any]) -> list[dict[str, object]]:
+    operations = {"stream.input", "stream.call", "stream.delay", "stream.map"}
+    spans = [
+        span
+        for span in trace.get("spans", [])
+        if isinstance(span, dict)
+        and str(span.get("operationName", "")).lower() in operations
+    ]
+    by_id = {
+        str(span.get("spanID")): span
+        for span in trace.get("spans", [])
+        if isinstance(span, dict) and isinstance(span.get("spanID"), str)
+    }
+
+    def identity(span: dict[str, Any]) -> str:
+        operation = str(span.get("operationName", "")).lower()
+        tags = span_tags(span)
+        if operation == "stream.call":
+            return "|".join(
+                (
+                    operation,
+                    tags.get("from", ""),
+                    tags.get("to", ""),
+                    tags.get("type", ""),
+                    tags.get("taskpoolname", ""),
+                )
+            )
+        return "|".join((operation, tags.get("stream", "")))
+
+    def servicelib_parent(span: dict[str, Any]) -> str:
+        parent = span_parent(span)
+        visited: set[str] = set()
+        while parent and parent not in visited:
+            visited.add(parent)
+            candidate = by_id.get(parent)
+            if candidate is None:
+                break
+            if str(candidate.get("operationName", "")).lower() in operations:
+                return identity(candidate)
+            parent = span_parent(candidate)
+        return "external"
+
+    result = [
+        {"id": identity(span), "parent": servicelib_parent(span)}
+        for span in spans
+    ]
+    identities = [str(item["id"]) for item in result]
+    duplicates = sorted(
+        identity for identity in set(identities) if identities.count(identity) > 1
+    )
+    if duplicates:
+        raise RuntimeError(
+            "Workflow replay duplicated ServiceLib spans: " + ", ".join(duplicates)
+        )
+    return sorted(result, key=lambda item: str(item["id"]))
+
+
+def verify_activity_trace(trace: dict[str, Any]) -> dict[str, object]:
     raw_spans = trace.get("spans", [])
     spans = [span for span in raw_spans if isinstance(span, dict)]
     by_id = {
@@ -1438,23 +1670,15 @@ def verify_temporal_trace(trace: dict[str, Any]) -> dict[str, object]:
         if isinstance(span.get("spanID"), str)
     }
 
-    def matching(operation: str, stream_or_endpoint: str) -> list[dict[str, Any]]:
-        return [
-            span
-            for span in spans
-            if str(span.get("operationName", "")).lower() == operation
-            and stream_or_endpoint
-            in {
-                span_tags(span).get("stream"),
-                span_tags(span).get("endpoint"),
-            }
-        ]
-
-    schedule_inputs = matching("temporal.input", ACTIVITY_SCHEDULE_ENDPOINT_NAME)
-    process_maps = matching("stream.map", "Process Scheduled Activity")
-    delay_spans = matching("stream.delay", "Scheduled Activity Pause")
-    if not schedule_inputs:
-        raise RuntimeError("Temporal trace has no scheduled endpoint input span")
+    schedule_inputs = matching_spans(
+        trace, "temporal.input", ACTIVITY_SCHEDULE_ENDPOINT_NAME
+    )
+    process_maps = matching_spans(trace, "stream.map", "Process Scheduled Activity")
+    delay_spans = matching_spans(trace, "stream.delay", "Scheduled Activity Pause")
+    if len(schedule_inputs) != 1:
+        raise RuntimeError(
+            f"Temporal Activity trace has {len(schedule_inputs)} endpoint input spans"
+        )
     heartbeat_inputs = [
         span
         for span in schedule_inputs
@@ -1464,9 +1688,9 @@ def verify_temporal_trace(trace: dict[str, Any]) -> dict[str, object]:
         raise RuntimeError(
             "Temporal heartbeat is not attached to its scheduled endpoint input span"
         )
-    if not delay_spans or not process_maps:
+    if len(delay_spans) != 1 or len(process_maps) != 1:
         raise RuntimeError(
-            "Temporal trace does not execute the scheduled Activity graph"
+            "Temporal Activity trace does not execute each scheduled graph node once"
         )
     if not any(
         is_descendant(child, parent, by_id)
@@ -1490,23 +1714,174 @@ def verify_temporal_trace(trace: dict[str, Any]) -> dict[str, object]:
     }
 
 
+def verify_workflow_trace(trace: dict[str, Any]) -> dict[str, object]:
+    inputs = matching_spans(trace, "stream.input", WORKFLOW_SCHEDULE_ENDPOINT_NAME)
+    delays = matching_spans(trace, "stream.delay", "Scheduled Workflow Pause")
+    maps = matching_spans(trace, "stream.map", "Process Scheduled Workflow")
+    if len(inputs) != 1 or len(delays) != 1 or len(maps) != 1:
+        raise RuntimeError(
+            "direct Workflow trace must contain exactly one input, Delay and Map span: "
+            f"input={len(inputs)}, delay={len(delays)}, map={len(maps)}"
+        )
+    spans = {
+        str(span.get("spanID")): span
+        for span in trace.get("spans", [])
+        if isinstance(span, dict) and isinstance(span.get("spanID"), str)
+    }
+    if not is_descendant(delays[0], inputs[0], spans):
+        raise RuntimeError("direct Workflow Delay did not preserve the input trace parent")
+    if not is_descendant(maps[0], delays[0], spans):
+        raise RuntimeError("direct Workflow Map is not a descendant of Delay")
+    normalized = normalized_servicelib_trace(trace)
+    return {
+        "spanCount": len(trace.get("spans", [])),
+        "inputSpans": 1,
+        "delaySpans": 1,
+        "mapSpans": 1,
+        "normalizedTree": normalized,
+    }
+
+
+def fetch_trace_with_diagnostics(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    trace_id: str,
+    artifact_prefix: str,
+) -> dict[str, Any]:
+    output = ARTIFACTS / language.name
+    try:
+        trace = fetch_trace(trace_id)
+    except RuntimeError:
+        try:
+            recent = fetch_recent_traces("Automation Service")
+            (output / f"{artifact_prefix}-trace-miss.recent.json").write_text(
+                json.dumps(recent, indent=2, sort_keys=True) + "\n"
+            )
+        except (OSError, urllib.error.URLError, json.JSONDecodeError, RuntimeError) as error:
+            (output / f"{artifact_prefix}-trace-miss.jaeger-error.txt").write_text(
+                f"{error}\n"
+            )
+        (output / f"{artifact_prefix}-trace-miss.runtime.log").write_text(
+            diagnostics(language, overlay, env) + "\n"
+        )
+        collector_logs = run(
+            compose_command(
+                language,
+                overlay,
+                "logs",
+                "--no-color",
+                "--tail",
+                "400",
+                "otel-collector",
+                "jaeger",
+            ),
+            cwd=language.example,
+            env=env,
+            capture=True,
+            check=False,
+            announce=False,
+        )
+        (output / f"{artifact_prefix}-trace-miss.collector.log").write_text(
+            collector_logs.stdout + collector_logs.stderr
+        )
+        raise
+    (output / f"{artifact_prefix}-trace.raw.json").write_text(
+        json.dumps(trace, indent=2, sort_keys=True) + "\n"
+    )
+    return trace
+
+
+def start_traced_workflow(
+    language: Language,
+    overlay: Path,
+    env: dict[str, str],
+    *,
+    workflow_type: str,
+    task_queue: str,
+    request: dict[str, object],
+    artifact_prefix: str,
+) -> tuple[str, str, str, dict[str, Any]]:
+    trace_id = secrets.token_hex(16)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    workflow_id = f"conformance/trace/{artifact_prefix}/{language.name}-{timestamp}"
+    temporal_cli(
+        language,
+        overlay,
+        env,
+        "workflow",
+        "start",
+        "--workflow-id",
+        workflow_id,
+        "--type",
+        workflow_type,
+        "--task-queue",
+        task_queue,
+        "--execution-timeout",
+        "60s",
+        "--input",
+        json.dumps(request, separators=(",", ":")),
+        "--headers",
+        f'traceparent="00-{trace_id}-0123456789abcdef-01"',
+        "--headers",
+        'x-trace="1"',
+        "--headers",
+        f'x-stream-id="{workflow_id}"',
+    )
+    description = wait_workflow_completed(language, overlay, env, workflow_id)
+    history = workflow_history(language, overlay, env, workflow_id)
+    (ARTIFACTS / language.name / f"{artifact_prefix}-workflow-history.json").write_text(
+        history
+    )
+    trace = fetch_trace_with_diagnostics(
+        language, overlay, env, trace_id, artifact_prefix
+    )
+    return workflow_id, description, history, trace
+
+
+def workflow_link_metric_total(text: str, language: Language) -> float:
+    normalize = (
+        (lambda value: re.sub(r"[^A-Za-z0-9]", "_", value))
+        if language.name == "go"
+        else (lambda value: value)
+    )
+    return metric_sum(
+        text,
+        "stream_messages_total",
+        {
+            "from": normalize(WORKFLOW_SCHEDULE_ENDPOINT_NAME),
+            "to": normalize("Scheduled Workflow Pause"),
+        },
+    )
+
+
+def automationservice_logs(
+    language: Language, overlay: Path, env: dict[str, str]
+) -> str:
+    result = run(
+        compose_command(
+            language,
+            overlay,
+            "logs",
+            "--no-color",
+            "automationservice",
+            "otel-collector",
+        ),
+        cwd=language.example,
+        env=env,
+        capture=True,
+        announce=False,
+    )
+    return result.stdout + result.stderr
+
+
 def verify_tracing(
     language: Language,
     overlay: Path,
     env: dict[str, str],
     overrides: Path,
     schedule_descriptions: dict[str, str],
-) -> tuple[dict[str, object], str, dict[str, Any]]:
-    temporal_cli(
-        language,
-        overlay,
-        env,
-        "schedule",
-        "toggle",
-        "--schedule-id",
-        ACTIVITY_SCHEDULE_ID,
-        "--pause",
-    )
+) -> tuple[dict[str, object], dict[str, str], dict[str, dict[str, Any]]]:
     run(
         compose_command(language, overlay, "stop", "automationservice"),
         cwd=language.example,
@@ -1527,40 +1902,92 @@ def verify_tracing(
         env=env,
     )
     wait_status(language, overlay, env)
-    trace_id = secrets.token_hex(16)
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    workflow_id = f"conformance/trace/{language.name}-{timestamp}"
-    schedule_description = schedule_descriptions[ACTIVITY_SCHEDULE_ID]
-    request = schedule_workflow_request(schedule_description)
-    temporal_cli(
+
+    activity = start_traced_workflow(
         language,
         overlay,
         env,
-        "workflow",
-        "start",
-        "--workflow-id",
-        workflow_id,
-        "--type",
-        ENDPOINT_WORKFLOW_TYPE,
-        "--task-queue",
-        "automation-activity-schedules",
-        "--execution-timeout",
-        "60s",
-        "--input",
-        json.dumps(request, separators=(",", ":")),
-        "--headers",
-        f'traceparent="00-{trace_id}-0123456789abcdef-01"',
-        "--headers",
-        'x-trace="1"',
-        "--headers",
-        f'x-stream-id="{workflow_id}"',
+        workflow_type=ENDPOINT_WORKFLOW_TYPE,
+        task_queue="automation-activity-schedules",
+        request=schedule_workflow_request(
+            schedule_descriptions[ACTIVITY_SCHEDULE_ID]
+        ),
+        artifact_prefix="activity-trace",
     )
-    description = wait_workflow_completed(language, overlay, env, workflow_id)
-    trace = fetch_trace(trace_id)
-    (ARTIFACTS / language.name / "trace.raw.json").write_text(
-        json.dumps(trace, indent=2, sort_keys=True) + "\n"
+    activity_summary = verify_activity_trace(activity[3])
+
+    sdk_before = fetch_text(TEMPORAL_SDK_METRICS_URL)
+    workflow_metric_before = workflow_link_metric_total(sdk_before, language)
+    logs_before_workflow = automationservice_logs(language, overlay, env)
+    workflow_logs_before = logs_before_workflow.count(
+        "temporal workflow graph started"
     )
-    return verify_temporal_trace(trace), description, trace
+    direct = start_traced_workflow(
+        language,
+        overlay,
+        env,
+        workflow_type=SCHEDULED_WORKFLOW_TYPE,
+        task_queue="automation-workflow-schedules",
+        request=schedule_workflow_request(
+            schedule_descriptions[WORKFLOW_SCHEDULE_ID]
+        ),
+        artifact_prefix="workflow-trace",
+    )
+    workflow_summary = verify_workflow_trace(direct[3])
+    sdk_after = fetch_text(TEMPORAL_SDK_METRICS_URL)
+    workflow_metric_after = workflow_link_metric_total(sdk_after, language)
+    metric_delta = workflow_metric_after - workflow_metric_before
+    if metric_delta != 1:
+        raise RuntimeError(
+            "direct Workflow emitted a non-replay-safe link metric delta: "
+            f"{metric_delta}, expected 1"
+        )
+
+    logs_before_replay = automationservice_logs(language, overlay, env)
+    (ARTIFACTS / language.name / "workflow-trace.runtime.log").write_text(
+        logs_before_replay
+    )
+    workflow_log_count = (
+        logs_before_replay.count("temporal workflow graph started")
+        - workflow_logs_before
+    )
+    if workflow_log_count != 1:
+        raise RuntimeError(
+            "direct Workflow replay-safe activation log count is "
+            f"{workflow_log_count}, expected 1"
+        )
+
+    replay = replay_workflow_histories(
+        language,
+        overlay,
+        env,
+        (("workflow-trace-workflow-history.json", direct[0]),),
+    )
+    replayed_trace = fetch_trace_with_diagnostics(
+        language,
+        overlay,
+        env,
+        str(direct[3].get("traceID", "")),
+        "workflow-trace-after-replay",
+    )
+    replayed_summary = verify_workflow_trace(replayed_trace)
+    if replayed_summary["normalizedTree"] != workflow_summary["normalizedTree"]:
+        raise RuntimeError("offline replay changed the exported Workflow trace tree")
+    sdk_after_replay = fetch_text(TEMPORAL_SDK_METRICS_URL)
+    if workflow_link_metric_total(sdk_after_replay, language) != workflow_metric_after:
+        raise RuntimeError("offline replay duplicated direct Workflow metrics")
+    logs_after_replay = automationservice_logs(language, overlay, env)
+    if logs_after_replay.count(direct[0]) != logs_before_replay.count(direct[0]):
+        raise RuntimeError("offline replay duplicated direct Workflow logs")
+
+    workflow_summary["linkMetricDelta"] = metric_delta
+    workflow_summary["activationLogs"] = workflow_log_count
+    workflow_summary["offlineReplay"] = replay
+    return (
+        {"activity": activity_summary, "workflow": workflow_summary},
+        {"activity": activity[1], "workflow": direct[1]},
+        {"activity": activity[3], "workflow": direct[3]},
+    )
 
 
 def wait_graph(
@@ -1602,43 +2029,55 @@ def wait_local_cron(
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last: dict[str, object] = {}
+    required = (
+        ("Local Schedule", "Split On-Demand Jobs"),
+        ("Split On-Demand Jobs", "Submit Activity Job"),
+        ("Split On-Demand Jobs", "Submit Fan-Out Workflow Job"),
+        ("Split On-Demand Jobs", "Submit Workflow Job"),
+        ("Consume Activity Job", "Activity Pause"),
+        ("Activity Pause", "Process Activity Job"),
+        ("Submit Activity Job", "Observe Activity Result"),
+        ("Consume Sequential Activity A", "Process Sequential Activity A"),
+        ("Consume Sequential Activity B", "Process Sequential Activity B"),
+        ("Consume Fan-Out Activity A", "Process Fan-Out Activity A"),
+        ("Consume Fan-Out Activity B", "Process Fan-Out Activity B"),
+        ("Consume Fan-Out Activity C", "Process Fan-Out Activity C"),
+    )
     while time.monotonic() < deadline:
         last = wait_status(language, overlay, env, timeout=5)
-        if (
-            edge_calls(last, "Local Schedule", "Split On-Demand Jobs") >= 1
-            and edge_calls(last, "Split On-Demand Jobs", "Submit Activity Job") >= 1
-            and edge_calls(last, "Split On-Demand Jobs", "Submit Fan-Out Workflow Job")
-            >= 1
-            and edge_calls(last, "Split On-Demand Jobs", "Submit Workflow Job") >= 1
-            and edge_calls(last, "Consume Activity Job", "Activity Pause") >= 1
-            and edge_calls(last, "Activity Pause", "Process Activity Job") >= 1
-            and edge_calls(last, "Submit Activity Job", "Observe Activity Result") >= 1
-            and edge_calls(
-                last, "Consume Sequential Activity A", "Process Sequential Activity A"
-            )
-            >= 1
-            and edge_calls(
-                last, "Consume Sequential Activity B", "Process Sequential Activity B"
-            )
-            >= 1
-            and edge_calls(
-                last, "Consume Fan-Out Activity A", "Process Fan-Out Activity A"
-            )
-            >= 1
-            and edge_calls(
-                last, "Consume Fan-Out Activity B", "Process Fan-Out Activity B"
-            )
-            >= 1
-            and edge_calls(
-                last, "Consume Fan-Out Activity C", "Process Fan-Out Activity C"
-            )
-            >= 1
-        ):
+        if all(edge_calls(last, source, target) >= 1 for source, target in required):
             return last
         time.sleep(0.5)
+    snapshot = ARTIFACTS / language.name / "local-cron-timeout-status.json"
+    snapshot.write_text(json.dumps(last, indent=2, sort_keys=True) + "\n")
+    logs = diagnostics(language, overlay, env)
+    (ARTIFACTS / language.name / "local-cron-timeout.log").write_text(logs + "\n")
+    for workflow_type, endpoint_identity, prefix in (
+        (WORKFLOW_JOB_WORKFLOW_TYPE, "workflow_job", "sequential"),
+        (FANOUT_WORKFLOW_JOB_WORKFLOW_TYPE, "fan_out_workflow_job", "fanout"),
+    ):
+        for index, workflow_id in enumerate(
+            endpoint_workflow_ids(
+                language,
+                overlay,
+                env,
+                workflow_type,
+                endpoint_identity,
+            )
+        ):
+            history = workflow_history(language, overlay, env, workflow_id)
+            (ARTIFACTS / language.name / f"local-cron-{prefix}-{index}.json").write_text(
+                history
+            )
+    observed = "\n".join(
+        f"- {source} -> {target}: {edge_calls(last, source, target)}/1"
+        for source, target in required
+    )
     raise RuntimeError(
-        "local cron did not activate its configured input within one minute\n"
-        + diagnostics(language, overlay, env)
+        "local cron did not complete its configured graph within 75 seconds\n"
+        + observed
+        + "\n"
+        + logs
     )
 
 
@@ -1677,6 +2116,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             env=env,
         )
         wait_status(language, overlay, env)
+        pause_temporal_schedules(language, overlay, env)
 
         # Schedule state belongs to Temporal, not to the Worker process. Stop
         # admission, enqueue more jobs than the configured two Activity slots,
@@ -1704,7 +2144,28 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         status = wait_graph(language, overlay, env, jobs)
         status = wait_local_cron(language, overlay, env)
         workflow_composition = verify_workflow_composition(language, overlay, env)
-        continue_as_new = verify_continue_as_new(language, overlay, env)
+        continue_as_new_id, continue_as_new = verify_continue_as_new(
+            language, overlay, env
+        )
+        (ARTIFACTS / language.name / "continue-as-new-history.json").write_text(
+            continue_as_new
+        )
+        replay = replay_workflow_histories(
+            language,
+            overlay,
+            env,
+            (
+                (
+                    "sequential-workflow.json",
+                    str(workflow_composition["sequentialWorkflowId"]),
+                ),
+                (
+                    "fanout-workflow.json",
+                    str(workflow_composition["fanOutWorkflowId"]),
+                ),
+                ("continue-as-new-history.json", continue_as_new_id),
+            ),
+        )
         schedule_description = verify_schedule_reuse(language, overlay, env)
         workflows = workflow_list(language, overlay, env)
         if workflows.count(ENDPOINT_WORKFLOW_TYPE) < jobs:
@@ -1717,7 +2178,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         )
         metrics = verify_metrics(metrics_text, jobs)
         temporal_metrics = verify_temporal_metric_sources(ARTIFACTS / language.name)
-        trace_summary, traced_workflow, trace = verify_tracing(
+        trace_summary, traced_workflows, traces = verify_tracing(
             language, overlay, env, overrides, schedule_description
         )
         result = {
@@ -1733,6 +2194,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
                 "Scheduled Activity Pause",
             ),
             "workflowComposition": workflow_composition,
+            "historyReplay": replay,
             "continueAsNew": True,
             "workflowcheck": workflowcheck,
             "metrics": metrics,
@@ -1749,13 +2211,14 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             json.dumps(schedule_description, indent=2, sort_keys=True) + "\n"
         )
         (ARTIFACTS / language.name / "canceled-workflow.json").write_text(canceled)
-        (ARTIFACTS / language.name / "continue-as-new-history.json").write_text(
-            continue_as_new
-        )
-        (ARTIFACTS / language.name / "traced-workflow.json").write_text(traced_workflow)
-        (ARTIFACTS / language.name / "trace.json").write_text(
-            json.dumps(trace, indent=2, sort_keys=True) + "\n"
-        )
+        for kind, description in traced_workflows.items():
+            (ARTIFACTS / language.name / f"traced-{kind}-workflow.json").write_text(
+                description
+            )
+        for kind, trace in traces.items():
+            (ARTIFACTS / language.name / f"{kind}-trace.json").write_text(
+                json.dumps(trace, indent=2, sort_keys=True) + "\n"
+            )
         collision = verify_schedule_ownership_collision(language, overlay, env)
         (ARTIFACTS / language.name / "ownership-collision.log").write_text(
             collision + "\n"
@@ -1787,6 +2250,24 @@ def main() -> int:
         except Exception as error:  # noqa: BLE001 - aggregate language failures
             failures[name] = str(error)
             print(f"ERROR: {name}: {error}", flush=True)
+    workflow_trace_trees = {
+        name: implementation["traceContinuity"]["workflow"]["normalizedTree"]
+        for name, implementation in implementations.items()
+        if isinstance(implementation, dict)
+    }
+    if len(workflow_trace_trees) > 1:
+        reference_name = next(iter(workflow_trace_trees))
+        reference = workflow_trace_trees[reference_name]
+        mismatches = [
+            name
+            for name, tree in workflow_trace_trees.items()
+            if tree != reference
+        ]
+        if mismatches:
+            failures["workflow-trace-equivalence"] = (
+                f"direct Workflow trace tree differs from {reference_name}: "
+                + ", ".join(mismatches)
+            )
     summary = {
         "status": "pass" if not failures else "fail",
         "implementations": implementations,
