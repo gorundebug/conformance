@@ -2036,8 +2036,13 @@ def wait_graph(
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last: dict[str, object] = {}
+    last_error: RuntimeError | None = None
     while time.monotonic() < deadline:
-        last = wait_status(language, overlay, env, timeout=5)
+        try:
+            last = wait_status(language, overlay, env, timeout=5)
+        except RuntimeError as error:
+            last_error = error
+            continue
         if (
             edge_calls(
                 last,
@@ -2053,7 +2058,8 @@ def wait_graph(
             return last
         time.sleep(0.5)
     raise RuntimeError(
-        f"only partial Temporal graph execution after {jobs} queued jobs\n"
+        f"only partial Temporal graph execution after {jobs} queued jobs; "
+        f"last readiness error: {last_error}\n"
         + diagnostics(language, overlay, env)
     )
 
@@ -2080,8 +2086,13 @@ def wait_local_cron(
         ("Consume Fan-Out Activity B", "Process Fan-Out Activity B"),
         ("Consume Fan-Out Activity C", "Process Fan-Out Activity C"),
     )
+    last_error: RuntimeError | None = None
     while time.monotonic() < deadline:
-        last = wait_status(language, overlay, env, timeout=5)
+        try:
+            last = wait_status(language, overlay, env, timeout=5)
+        except RuntimeError as error:
+            last_error = error
+            continue
         if all(edge_calls(last, source, target) >= 1 for source, target in required):
             return last
         time.sleep(0.5)
@@ -2112,6 +2123,7 @@ def wait_local_cron(
     )
     raise RuntimeError(
         "local cron did not complete its configured graph within 75 seconds\n"
+        + f"last readiness error: {last_error}\n"
         + observed
         + "\n"
         + logs
