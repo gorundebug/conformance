@@ -266,8 +266,10 @@ class DependencyRootTest(unittest.TestCase):
         for args in framework_commands:
             self.assertEqual(args[:3], ["docker", "run", "--rm"])
             self.assertNotIn("compose", args)
+            self.assertIn("--mount", args)
             self.assertIn(
-                "expected-build-volume:/workspace/build:ro,volume-nocopy",
+                "type=volume,source=expected-build-volume,"
+                "target=/workspace/build,volume-nocopy,readonly",
                 args,
             )
 

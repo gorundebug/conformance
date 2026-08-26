@@ -545,8 +545,7 @@ def main() -> int:
                 "--rm",
                 "-v",
                 f"{BOOST}:/workspace",
-                "-v",
-                cpp_source_cache.build_volume_mount(
+                *cpp_source_cache.build_volume_mount_args(
                     BOOST, "cppboostservicelib-operators"
                 ),
                 "-w",
@@ -567,8 +566,7 @@ def main() -> int:
             "boost-cpp-link-connector-status",
             [
                 "docker", "run", "--rm", "-v", f"{BOOST}:/workspace",
-                "-v",
-                cpp_source_cache.build_volume_mount(
+                *cpp_source_cache.build_volume_mount_args(
                     BOOST, "cppboostservicelib-operators"
                 ),
                 "-w", "/workspace", "cppboostservicelib-build:latest",

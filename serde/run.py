@@ -400,8 +400,7 @@ def main() -> int:
         *boost_source_mount_args(),
         "-v",
         f"{BOOST}:/workspace",
-        "-v",
-        cpp_source_cache.build_volume_mount(
+        *cpp_source_cache.build_volume_mount_args(
             BOOST, "cppboostservicelib-serde"
         ),
         "-w",

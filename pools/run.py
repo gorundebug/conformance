@@ -300,7 +300,7 @@ def main() -> int:
                 "-v", "cppboostservicelib-ccache:/ccache",
                 "-v", cpp_source_cache.source_mount(BOOST),
                 "-v", f"{BOOST}:/workspace", "-w", "/workspace",
-                "-v", cpp_source_cache.build_volume_mount(
+                *cpp_source_cache.build_volume_mount_args(
                     BOOST, "cppboostservicelib-pools"
                 ),
                 "cppboostservicelib-build:latest", "/bin/bash", "-lc",
@@ -319,8 +319,7 @@ def main() -> int:
                 cpp_source_cache.source_mount(BOOST),
                 "-v",
                 f"{BOOST}:/workspace",
-                "-v",
-                cpp_source_cache.build_volume_mount(
+                *cpp_source_cache.build_volume_mount_args(
                     BOOST, "cppboostservicelib-pools"
                 ),
                 "-w",

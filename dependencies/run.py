@@ -255,8 +255,9 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
                 "--rm",
                 "--entrypoint",
                 "ldd",
-                "--volume",
-                cpp_source_cache.volume_mount(build_volume, readonly=True),
+                *cpp_source_cache.volume_mount_args(
+                    build_volume, readonly=True
+                ),
                 "cppboostexample-cpp-build",
                 binary,
             ],

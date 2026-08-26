@@ -129,12 +129,12 @@ def build_volume_name(framework: Path, project: str = "cppboostexample") -> str:
     return f"{project}_cpp-cmake-build-{cache_name(framework)}"
 
 
-def build_volume_mount(
+def build_volume_mount_args(
     framework: Path,
     project: str = "cppboostexample",
     *,
     readonly: bool = False,
-) -> str:
+) -> list[str]:
     """Return a Docker mount that never imports a host build directory.
 
     The framework source is bind-mounted at ``/workspace``.  Without
@@ -142,15 +142,17 @@ def build_volume_mount(
     volume from ``/workspace/build`` and copy host CMake caches into it.  Those
     caches contain absolute host paths and cannot be reused in the container.
     """
-    return volume_mount(
+    return volume_mount_args(
         build_volume_name(framework, project), readonly=readonly
     )
 
 
-def volume_mount(name: str, *, readonly: bool = False) -> str:
+def volume_mount_args(name: str, *, readonly: bool = False) -> list[str]:
     """Render a named build-volume mount without Docker's copy-up."""
-    mode = "ro,volume-nocopy" if readonly else "volume-nocopy"
-    return f"{name}:/workspace/build:{mode}"
+    spec = f"type=volume,source={name},target=/workspace/build,volume-nocopy"
+    if readonly:
+        spec += ",readonly"
+    return ["--mount", spec]
 
 
 def configure_environment(
