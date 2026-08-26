@@ -180,7 +180,7 @@ def initialize_git_snapshot(example: Path, profile: str) -> None:
 
 
 def attach_persistent_tools(source: Path, destination: Path) -> None:
-    """Share ignored host tools with disposable generated Go workspaces.
+    """Share ignored host tools with every disposable generated workspace.
 
     A ``current`` profile workspace is intentionally deleted after every run,
     while downloaded generators such as protoc and buf belong to the ordinary
@@ -234,8 +234,12 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
         (profile_artifacts / f"merge-{language}.log").write_text(merged.stdout)
         generated[language] = verify_current_graph(destination)
         initialize_git_snapshot(destination, profile)
-        if language == "go":
-            attach_persistent_tools(source, destination)
+        # Every canonical language can still own Go-generated protobuf/OpenAPI
+        # modules.  Consequently cppexample, cppboostexample, rustexample and
+        # the other mixed-language workspaces use the same host-side tools as
+        # goexample.  Keep each one's ignored cache across disposable profile
+        # runs instead of downloading protoc/buf again for every retry.
+        attach_persistent_tools(source, destination)
 
     # Mirror every other managed dependency without copying large framework
     # and native-example repositories. The generated examples above are the
