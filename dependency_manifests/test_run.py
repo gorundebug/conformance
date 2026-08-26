@@ -12,6 +12,7 @@ from run import (
     module_directories,
     pnpm_importer_specifiers,
     python_requirement,
+    resolved_workspace_modules,
 )
 
 
@@ -36,6 +37,20 @@ class DependencyManifestTests(unittest.TestCase):
                 path.write_text("module example.invalid/module\n")
             self.assertEqual(module_directories(root), [root / "api", root / "service"])
             self.assertIn("dist", IGNORED_PARTS)
+
+    def test_go_workspace_uses_physical_paths_for_symlinked_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            physical = root / "physical"
+            physical.mkdir()
+            linked = root / "linked"
+            linked.symlink_to(physical, target_is_directory=True)
+            framework = root / "framework"
+            framework.mkdir()
+            self.assertEqual(
+                resolved_workspace_modules([linked], framework),
+                [physical.resolve(), framework.resolve()],
+            )
 
     def test_rust_example_uses_the_local_framework_for_lock_validation(self) -> None:
         options = RUST_PROJECTS["rustexample"]

@@ -107,6 +107,24 @@ def ensure_go_generated_sources(project: Path, cache: Path) -> None:
         raise RuntimeError(f"Go source generation did not create: {rendered}")
 
 
+def resolved_workspace_modules(
+    modules: list[Path], framework: Path,
+) -> list[Path]:
+    """Return physical module paths for a disposable Go workspace.
+
+    The ``current`` profile symlinks unchanged repositories into its temporary
+    dependency root. Go resolves the command working directory through those
+    symlinks, so a ``go.work`` containing the lexical symlink path does not
+    consider that same module part of the workspace. Always writing physical
+    paths keeps the workspace and ``go list`` identity identical.
+    """
+    result = [path.resolve() for path in modules]
+    resolved_framework = framework.resolve()
+    if framework.is_dir() and resolved_framework not in result:
+        result.append(resolved_framework)
+    return result
+
+
 def check_go_project(
     project: Path, module_paths: tuple[str, ...], framework: Path, cache: Path,
 ) -> dict[str, object]:
@@ -116,9 +134,7 @@ def check_go_project(
     if missing:
         rendered = ", ".join(str(path.relative_to(ROOT)) for path in missing)
         raise RuntimeError(f"required Go manifests are missing: {rendered}")
-    workspace_modules = list(modules)
-    if framework.is_dir() and framework not in workspace_modules:
-        workspace_modules.append(framework)
+    workspace_modules = resolved_workspace_modules(modules, framework)
     with tempfile.TemporaryDirectory(prefix="servicegen-manifest-work-") as temporary:
         work_root = Path(temporary)
         base_env = os.environ.copy()
@@ -133,7 +149,8 @@ def check_go_project(
         packages = 0
         for module in modules:
             output = run(
-                ["go", "list", "-mod=readonly", "./..."], cwd=module, env=env,
+                ["go", "list", "-mod=readonly", "./..."],
+                cwd=module.resolve(), env=env,
             )
             packages += len([line for line in output.splitlines() if line.strip()])
     return {
