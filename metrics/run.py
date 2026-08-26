@@ -383,6 +383,20 @@ def normalize(raw_by_service: dict[str, str]) -> dict[str, Any]:
             for line in raw.splitlines()
             if (match := TYPE_RE.match(line))
         }
+        observed_histograms: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
+        for line in raw.splitlines():
+            match = SAMPLE_RE.match(line)
+            if match is None:
+                continue
+            name = match.group("name").replace(":", "_")
+            if not name.endswith("_count") or parse_value(match.group("value")) <= 0:
+                continue
+            family_name = name[: -len("_count")]
+            if metric_types.get(family_name) not in {"histogram", "summary"}:
+                continue
+            observed_histograms.add(
+                (family_name, tuple(sorted(parse_labels(match.group("labels")).items())))
+            )
         series: list[dict[str, Any]] = []
         for line in raw.splitlines():
             if not line or line.startswith("#"):
@@ -408,9 +422,18 @@ def normalize(raw_by_service: dict[str, str]) -> dict[str, Any]:
             # counter/histogram is exported as zero or omitted. That is exporter
             # behavior, not a ServiceLib semantic difference. Gauges remain in
             # the contract even at zero because their idle value is observable.
-            if parsed == 0 and metric_type in {"counter", "histogram", "summary"}:
-                continue
             labels = parse_labels(match.group("labels"))
+            if parsed == 0 and metric_type in {"counter", "histogram", "summary"}:
+                observed_zero_sum = (
+                    name.endswith("_sum")
+                    and (
+                        family_name,
+                        tuple(sorted(labels.items())),
+                    )
+                    in observed_histograms
+                )
+                if not observed_zero_sum:
+                    continue
             labels = {
                 key: value
                 for key, value in labels.items()
