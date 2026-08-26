@@ -146,7 +146,7 @@ def verify_graph(example: Path, profile: str) -> dict[str, object]:
     priority_count = source.count("callSemantics: PriorityTaskPool")
     parallel_count = source.count("callSemantics: ParallelCall")
     if profile == "function-call":
-        if function_count != 6 or task_count or priority_count or parallel_count:
+        if function_count != 19 or task_count or priority_count or parallel_count:
             raise RuntimeError(
                 f"{example.name} did not preserve the function-call profile: "
                 f"function={function_count}, task={task_count}, "
@@ -157,7 +157,13 @@ def verify_graph(example: Path, profile: str) -> dict[str, object]:
             marker for marker in EXPECTED_CURRENT_GRAPH_MARKERS
             if marker not in source
         ]
-        if missing or task_count != 1 or priority_count != 1 or parallel_count != 3:
+        if (
+            missing
+            or function_count != 8
+            or task_count != 4
+            or priority_count != 4
+            or parallel_count != 3
+        ):
             raise RuntimeError(
                 f"{example.name} did not preserve the current call-semantics profile: "
                 f"missing={missing}, task={task_count}, priority={priority_count}, "
