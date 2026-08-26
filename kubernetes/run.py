@@ -124,6 +124,14 @@ def edge_calls(value: dict[str, object], source: str, target: str) -> int:
     raise RuntimeError(f"status graph has no {source!r}->{target!r} edge")
 
 
+def write_status_artifact(name: str, value: dict[str, object]) -> None:
+    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    (ARTIFACTS / name).write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def validate_example(language: str, example: Path) -> None:
     print(f"[kubernetes] START {language} static contract", flush=True)
     required = [
@@ -331,46 +339,62 @@ def runtime_probe(example: Path) -> None:
             [*kubectl, "get", "--raw", automation_status_path],
             example, environment,
         ))
-        initial_temporal_calls = edge_calls(
-            initial_automation_status, "Temporal Schedule", "Merge Job Submissions",
-        )
-        run(
-            [
-                *kubectl, "--namespace", "servicelib-conformance", "exec",
-                "deployment/temporal-admintools", "--", "temporal", "schedule",
-                "trigger", "--schedule-id", "example-automation-schedule",
-                "--address", "temporal-frontend:7233", "--namespace", "default",
-            ],
-            example, environment,
-        )
+        write_status_artifact("automation-status-initial.json", initial_automation_status)
+        schedule_edges = {
+            "example-automation-activity-schedule": (
+                "Temporal Activity Schedule", "Scheduled Activity Pause",
+            ),
+            "example-automation-workflow-schedule": (
+                "Temporal Workflow Schedule", "Scheduled Workflow Pause",
+            ),
+        }
+        initial_temporal_calls = {
+            schedule_id: edge_calls(initial_automation_status, *edge)
+            for schedule_id, edge in schedule_edges.items()
+        }
+        for schedule_id in schedule_edges:
+            run(
+                [
+                    *kubectl, "--namespace", "servicelib-conformance", "exec",
+                    "deployment/temporal-admintools", "--", "temporal", "schedule",
+                    "trigger", "--schedule-id", schedule_id,
+                    "--address", "temporal-frontend:7233", "--namespace", "default",
+                ],
+                example, environment,
+            )
         temporal_deadline = time.monotonic() + 90
-        temporal_calls = initial_temporal_calls
-        durable_calls = 0
+        temporal_calls = dict(initial_temporal_calls)
+        automation_status = initial_automation_status
         while time.monotonic() < temporal_deadline:
             automation_status = json.loads(capture(
                 [*kubectl, "get", "--raw", automation_status_path],
                 example, environment, verbose=False,
             ))
-            temporal_calls = edge_calls(
-                automation_status, "Temporal Schedule", "Merge Job Submissions",
-            )
-            durable_calls = edge_calls(
-                automation_status, "Consume Durable Job", "Process Durable Job",
-            )
-            if temporal_calls > initial_temporal_calls and durable_calls > 0:
+            temporal_calls = {
+                schedule_id: edge_calls(automation_status, *edge)
+                for schedule_id, edge in schedule_edges.items()
+            }
+            if all(
+                temporal_calls[schedule_id] > initial_temporal_calls[schedule_id]
+                for schedule_id in schedule_edges
+            ):
+                write_status_artifact(
+                    "automation-status-after-temporal-trigger.json", automation_status,
+                )
                 print(
-                    "[kubernetes] PASS  Temporal Schedule -> function -> "
-                    "DurableCall graph",
+                    "[kubernetes] PASS  Temporal Activity/Workflow schedules -> graph",
                     flush=True,
                 )
                 break
             time.sleep(0.5)
         else:
+            write_status_artifact(
+                "automation-status-after-temporal-timeout.json", automation_status,
+            )
             raise RuntimeError(
-                "Kubernetes Temporal trigger did not traverse the Automation "
-                "Service graph: "
-                f"schedule calls {initial_temporal_calls}->{temporal_calls}, "
-                f"durable calls={durable_calls}"
+                "Kubernetes Temporal triggers did not traverse the Automation "
+                "Service Activity and Workflow schedule graphs: "
+                f"schedule calls {initial_temporal_calls}->{temporal_calls}"
             )
         request_body = json.dumps({
             "customer_id": "kubernetes-check",
