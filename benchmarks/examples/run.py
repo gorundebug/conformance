@@ -359,6 +359,9 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
     elif language.name == "cpp-boost":
         env["COMPOSE_PROJECT_NAME"] = "cppboostexample"
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
+            ROOT / "cppboostservicelib"
+        )
 
     if language.name in {"cpp-boost", "cpp-boost-native"}:
         # docker-compose.cmake.generated.yml must never fall back to `.` for

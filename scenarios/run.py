@@ -143,6 +143,9 @@ def environment(implementation: Implementation) -> dict[str, str]:
         env["USERVER_LTO"] = "ON"
     elif implementation.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
+            ROOT / "cppboostservicelib"
+        )
         # The generated build compose and the runtime overlay must mount the
         # same build volume.  Keep the pooled profile isolated from the normal
         # scenario profile because both contain generated graph semantics in

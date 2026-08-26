@@ -171,6 +171,9 @@ def language_env(language: Any) -> dict[str, str]:
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
     elif language.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
+            ROOT / "cppboostservicelib"
+        )
         cpp_source_cache.configure_environment(
             env, ROOT / "cppboostservicelib"
         )

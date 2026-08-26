@@ -754,6 +754,9 @@ def language_env(language: Language) -> dict[str, str]:
         env["SERVICEGEN_ENABLE_OTLP_TRACING"] = "ON"
     elif language.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
+            ROOT / "cppboostservicelib"
+        )
         cpp_source_cache.configure_environment(
             env, ROOT / "cppboostservicelib"
         )

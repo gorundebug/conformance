@@ -222,6 +222,9 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
     )
     if not skip_build:
         framework_env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        framework_env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
+            ROOT / "cppboostservicelib"
+        )
         source_cache = cpp_source_cache.configure_environment(
             framework_env, ROOT / "cppboostservicelib"
         )

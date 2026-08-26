@@ -435,6 +435,9 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
     elif language.name == "cppboost":
         env["COMPOSE_PROJECT_NAME"] = "cppboostexample"
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
+            ROOT / "cppboostservicelib"
+        )
         if getattr(args, "coroutine_diagnostics", False):
             env["CPPBOOSTSERVICELIB_PROFILING"] = "ON"
             env["CPPBOOSTSERVICELIB_COROUTINE_DIAGNOSTICS"] = "ON"

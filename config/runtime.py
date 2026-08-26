@@ -104,6 +104,7 @@ def main() -> int:
     compose = artifact / "compose.yml"
     env = os.environ.copy()
     env["SERVICELIB_SOURCE_CONTEXT"] = str(framework)
+    env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(framework)
     env["SERVICEGEN_CPPBOOST_BUILD_VOLUME"] = (
         cpp_source_cache.build_volume_name(framework)
     )
