@@ -19,6 +19,59 @@ CONFORMANCE_DIR = Path(__file__).resolve().parent
 
 
 class DependencyRootTest(unittest.TestCase):
+    def test_managed_checkout_recovers_from_rewritten_main_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            origin = root / "origin.git"
+            seed = root / "seed"
+            checkout = root / "checkout"
+            subprocess.run(["git", "init", "--bare", str(origin)], check=True,
+                           capture_output=True)
+            subprocess.run(["git", "init", "-b", "main", str(seed)], check=True,
+                           capture_output=True)
+            subprocess.run(["git", "-C", str(seed), "config", "user.name", "Test"],
+                           check=True)
+            subprocess.run(["git", "-C", str(seed), "config", "user.email", "test@example.com"],
+                           check=True)
+            (seed / "value").write_text("old\n")
+            subprocess.run(["git", "-C", str(seed), "add", "value"], check=True)
+            subprocess.run(["git", "-C", str(seed), "commit", "-m", "old"], check=True,
+                           capture_output=True)
+            subprocess.run(["git", "-C", str(seed), "remote", "add", "origin", str(origin)],
+                           check=True)
+            subprocess.run(["git", "-C", str(seed), "push", "-u", "origin", "main"],
+                           check=True, capture_output=True)
+            subprocess.run(["git", "clone", "--branch", "main", str(origin), str(checkout)],
+                           check=True, capture_output=True)
+
+            subprocess.run(["git", "-C", str(seed), "checkout", "--orphan", "replacement"],
+                           check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(seed), "rm", "-rf", "."], check=True,
+                           capture_output=True)
+            (seed / "value").write_text("new\n")
+            subprocess.run(["git", "-C", str(seed), "add", "value"], check=True)
+            subprocess.run(["git", "-C", str(seed), "commit", "-m", "new"], check=True,
+                           capture_output=True)
+            subprocess.run(
+                ["git", "-C", str(seed), "push", "--force", "origin", "replacement:main"],
+                check=True, capture_output=True,
+            )
+
+            subprocess.run(
+                [str(CONFORMANCE_DIR / "scripts" / "update-managed-checkout.sh"), str(checkout)],
+                check=True, capture_output=True,
+            )
+            local = subprocess.run(
+                ["git", "-C", str(checkout), "rev-parse", "HEAD"], check=True,
+                capture_output=True, text=True,
+            ).stdout.strip()
+            remote = subprocess.run(
+                ["git", "-C", str(checkout), "rev-parse", "origin/main"], check=True,
+                capture_output=True, text=True,
+            ).stdout.strip()
+            self.assertEqual(local, remote)
+            self.assertEqual((checkout / "value").read_text(), "new\n")
+
     def test_profile_workspace_removes_stale_generated_files_before_snapshot(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
         archive = Path("/tmp/generated-example.zip")

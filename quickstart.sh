@@ -122,12 +122,8 @@ for repo in "${REPOS[@]}"; do
   dir="$DEPENDENCIES_DIR/$repo"
   if [ -d "$dir/.git" ]; then
     if [ "$MANAGED_DEPENDENCIES" -eq 1 ]; then
-      if ! git -C "$dir" diff --quiet || ! git -C "$dir" diff --cached --quiet; then
-        echo "  $repo: managed checkout has local changes; refusing to update" >&2
-        exit 1
-      fi
       echo "  $repo: updating managed checkout"
-      git -C "$dir" pull --ff-only
+      "$CONFORMANCE_ROOT/scripts/update-managed-checkout.sh" "$dir"
     else
       echo "  $repo: external checkout, leaving unchanged"
     fi
