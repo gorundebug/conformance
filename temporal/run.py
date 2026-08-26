@@ -158,6 +158,9 @@ endpoints:
     tracingEnabled: true
   workflowJob:
     enabled: true
+pools:
+  defaultPool:
+    executorsCount: 2
 services:
   automationService:
     defaultGrpcTimeout: 0
