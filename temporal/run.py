@@ -2130,6 +2130,44 @@ def wait_local_cron(
     )
 
 
+def verify_workflow_status_counters_are_process_local(
+    status: dict[str, object],
+) -> None:
+    """Direct Workflow execution must not mutate process-local status counts.
+
+    The receiving Activity graphs are covered by ``wait_local_cron`` above and
+    must increment their ordinary runtime counters.  These links execute in a
+    Temporal Workflow isolate and are intentionally observable through
+    replay-safe SDK metrics/traces instead of the process status registry.
+    """
+
+    workflow_links = (
+        ("Consume Workflow Job", "Workflow Pause"),
+        ("Workflow Pause", "Call Sequential Activity A"),
+        ("Call Sequential Activity A", "Call Sequential Activity B"),
+        ("Call Sequential Activity B", "Process Workflow Job"),
+        ("Consume Fan-Out Workflow Job", "Call Fan-Out Activity A"),
+        ("Call Fan-Out Activity A", "Split Activity A Result"),
+        ("Split Activity A Result", "Call Fan-Out Activity B"),
+        ("Split Activity A Result", "Call Fan-Out Activity C"),
+        ("Temporal Workflow Schedule", "Scheduled Workflow Pause"),
+        ("Scheduled Workflow Pause", "Process Scheduled Workflow"),
+    )
+    unexpected = [
+        (source, target, edge_calls(status, source, target))
+        for source, target in workflow_links
+        if edge_calls(status, source, target) != 0
+    ]
+    if unexpected:
+        raise RuntimeError(
+            "direct Workflow links leaked into process-local status counters: "
+            + ", ".join(
+                f"{source}->{target}={calls}"
+                for source, target, calls in unexpected
+            )
+        )
+
+
 def verify_python_workflow_sandbox(
     language: Language,
     overlay: Path,
@@ -2225,6 +2263,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         )
         status = wait_graph(language, overlay, env, jobs)
         status = wait_local_cron(language, overlay, env)
+        verify_workflow_status_counters_are_process_local(status)
         workflow_composition = verify_workflow_composition(language, overlay, env)
         continue_as_new_id, continue_as_new = verify_continue_as_new(
             language, overlay, env
@@ -2278,6 +2317,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
                 ACTIVITY_SCHEDULE_ENDPOINT_NAME,
                 "Scheduled Activity Pause",
             ),
+            "workflowStatusCalls": 0,
             "workflowComposition": workflow_composition,
             "historyReplay": replay,
             "continueAsNew": True,
