@@ -10,6 +10,7 @@ from run import (
     RUST_PROJECTS,
     missing_generated_source_probes,
     module_directories,
+    path_for_diagnostic,
     pnpm_importer_specifiers,
     python_requirement,
     resolved_workspace_modules,
@@ -51,6 +52,16 @@ class DependencyManifestTests(unittest.TestCase):
                 resolved_workspace_modules([linked], framework),
                 [physical.resolve(), framework.resolve()],
             )
+
+    def test_diagnostic_path_allows_commands_outside_dependency_root(self) -> None:
+        self.assertEqual(
+            path_for_diagnostic(Path("/outside/conformance"), Path("/dependencies")),
+            "/outside/conformance",
+        )
+        self.assertEqual(
+            path_for_diagnostic(Path("/dependencies/project"), Path("/dependencies")),
+            "project",
+        )
 
     def test_rust_example_uses_the_local_framework_for_lock_validation(self) -> None:
         options = RUST_PROJECTS["rustexample"]

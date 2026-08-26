@@ -65,6 +65,13 @@ def module_directories(project: Path) -> list[Path]:
     )
 
 
+def path_for_diagnostic(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
 def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> str:
     result = subprocess.run(
         command, cwd=cwd, env=env, check=False, text=True,
@@ -72,7 +79,7 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> str:
     )
     if result.returncode:
         raise RuntimeError(
-            f"dependency manifest check failed in {cwd.relative_to(ROOT)}\n"
+            f"dependency manifest check failed in {path_for_diagnostic(cwd, ROOT)}\n"
             f"command: {' '.join(command)}\n{result.stdout}"
         )
     return result.stdout
