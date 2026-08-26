@@ -5,8 +5,10 @@ import unittest
 from pathlib import Path
 
 from run import (
+    GO_GENERATED_SOURCE_PROBES,
     IGNORED_PARTS,
     RUST_PROJECTS,
+    missing_generated_source_probes,
     module_directories,
     pnpm_importer_specifiers,
     python_requirement,
@@ -14,6 +16,14 @@ from run import (
 
 
 class DependencyManifestTests(unittest.TestCase):
+    def test_generated_source_probe_only_reports_missing_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "goexample"
+            expected = [project / path for path in GO_GENERATED_SOURCE_PROBES["goexample"]]
+            expected[0].parent.mkdir(parents=True)
+            expected[0].write_text("package generated\n")
+            self.assertEqual(missing_generated_source_probes(project), [expected[1]])
+
     def test_module_directories_ignore_generated_build_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

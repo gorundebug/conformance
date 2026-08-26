@@ -30,6 +30,14 @@ GO_PROJECT_MODULES = {
     "servicelib": (".",),
     "tsservicelib": ("test/interop",),
 }
+GO_GENERATED_SOURCE_PROBES = {
+    "goexample": (
+        "inventory_service_api/pkg/generated/proto/inventoryserviceapi/"
+        "inventoryserviceapi.generated.pb.go",
+        "order_service_api/pkg/generated/openapi/orderserviceapi/"
+        "orderserviceapi_http.openapi.go",
+    ),
+}
 RUST_PROJECTS = {
     "rustservicelib": (),
     "rustnativeexample": (),
@@ -70,9 +78,39 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> str:
     return result.stdout
 
 
+def missing_generated_source_probes(project: Path) -> list[Path]:
+    return [
+        project / relative
+        for relative in GO_GENERATED_SOURCE_PROBES.get(project.name, ())
+        if not (project / relative).is_file()
+    ]
+
+
+def ensure_go_generated_sources(project: Path, cache: Path) -> None:
+    missing = missing_generated_source_probes(project)
+    if not missing:
+        return
+    print(
+        f"[dependency-manifests] generating missing transport sources for "
+        f"{project.name}",
+        flush=True,
+    )
+    env = os.environ.copy()
+    env["GOCACHE"] = str(cache)
+    run(
+        ["make", "golang-gen-proto", "golang-gen-openapi"],
+        cwd=project, env=env,
+    )
+    missing = missing_generated_source_probes(project)
+    if missing:
+        rendered = ", ".join(str(path.relative_to(ROOT)) for path in missing)
+        raise RuntimeError(f"Go source generation did not create: {rendered}")
+
+
 def check_go_project(
     project: Path, module_paths: tuple[str, ...], framework: Path, cache: Path,
 ) -> dict[str, object]:
+    ensure_go_generated_sources(project, cache)
     modules = [project / relative for relative in module_paths]
     missing = [path / "go.mod" for path in modules if not (path / "go.mod").is_file()]
     if missing:
