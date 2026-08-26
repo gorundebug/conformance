@@ -99,6 +99,44 @@ def patches(config: str) -> list[Patch]:
     return result
 
 
+def yaml_scalar_paths(config: str) -> set[tuple[str, ...]]:
+    """Return scalar mapping paths from the generated config YAML subset.
+
+    Canonical service configuration contains nested mappings with scalar leaf
+    values.  Keeping this reader deliberately small avoids making the static
+    conformance gate depend on a third-party YAML package while still proving
+    that every generated ``$variable`` has a concrete canonical override.
+    """
+    parents: list[tuple[int, str]] = []
+    result: set[tuple[str, ...]] = set()
+    for raw_line in config.splitlines():
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+        match = re.fullmatch(r"( *)([A-Za-z][A-Za-z0-9]*):(?: (.*))?", raw_line)
+        if not match:
+            continue
+        indent = len(match.group(1))
+        key = match.group(2)
+        value = match.group(3)
+        while parents and parents[-1][0] >= indent:
+            parents.pop()
+        path = tuple(parent for _, parent in parents) + (key,)
+        if value is None or value == "":
+            parents.append((indent, key))
+        else:
+            result.add(path)
+    return result
+
+
+def unresolved_override_paths(config: str, override: str) -> list[str]:
+    override_paths = yaml_scalar_paths(override)
+    return sorted(
+        f"{patch.section}.{patch.object_name}.{patch.member}"
+        for patch in patches(config)
+        if (patch.section, patch.object_name, patch.member) not in override_paths
+    )
+
+
 def matching_brace(text: str, start: int) -> int:
     if text[start] != "{":
         raise ValueError(f"expected opening brace at {start}")
@@ -364,6 +402,11 @@ def check_service(root: Path, service: str) -> dict[str, object]:
             errors.append(f"{service}:{relative}:Go/TypeScript bytes differ")
 
     config_text = (boost_root / "config/config.yaml").read_text()
+    unresolved = unresolved_override_paths(
+        config_text, (boost_root / "config/overrides.yaml").read_text()
+    )
+    for path in unresolved:
+        errors.append(f"{service}:config/overrides.yaml:missing value for {path}")
     cpp = (boost_root / "config/config.generated.hpp").read_text()
     go = (go_root / "internal/config/config.generated.go").read_text()
     typescript = (
@@ -438,12 +481,57 @@ def check_service(root: Path, service: str) -> dict[str, object]:
         "identical_files": identical,
         "patch_count": len(patch_results),
         "patches": patch_results,
+        "unresolved_override_paths": unresolved,
         "normalized_default_snapshot": {
             "equal": snapshot_equal,
             "go_sha256": snapshot_digest(go_snapshot),
             "typescript_sha256": snapshot_digest(typescript_snapshot),
             "differences": snapshot_differences,
         },
+        "errors": errors,
+    }
+
+
+def check_automation_service(root: Path) -> dict[str, object]:
+    implementations = (
+        "goexample",
+        "cppexample",
+        "cppboostexample",
+        "pyexample",
+        "rustexample",
+        "tsexample",
+    )
+    baseline = root / implementations[0] / "automationservice" / "config"
+    config = (baseline / "config.yaml").read_bytes()
+    override = (baseline / "overrides.yaml").read_bytes()
+    identical: dict[str, dict[str, bool]] = {}
+    errors: list[str] = []
+    for implementation in implementations[1:]:
+        config_root = root / implementation / "automationservice" / "config"
+        config_equal = (config_root / "config.yaml").read_bytes() == config
+        override_equal = (config_root / "overrides.yaml").read_bytes() == override
+        identical[implementation] = {
+            "config/config.yaml": config_equal,
+            "config/overrides.yaml": override_equal,
+        }
+        if not config_equal:
+            errors.append(
+                "automationservice:config/config.yaml:"
+                f"Go/{implementation} bytes differ"
+            )
+        if not override_equal:
+            errors.append(
+                "automationservice:config/overrides.yaml:"
+                f"Go/{implementation} bytes differ"
+            )
+    unresolved = unresolved_override_paths(config.decode(), override.decode())
+    for path in unresolved:
+        errors.append(
+            "automationservice:config/overrides.yaml:missing value for " + path
+        )
+    return {
+        "identical_files": identical,
+        "unresolved_override_paths": unresolved,
         "errors": errors,
     }
 
@@ -461,6 +549,13 @@ def main() -> int:
     root = args.root.resolve()
     required = tuple(
         root / implementation / service
+        for implementation in (
+            "goexample", "cppexample", "cppboostexample",
+            "pyexample", "rustexample", "tsexample",
+        )
+        for service in ("automationservice",)
+    ) + tuple(
+        root / implementation / service
         for implementation in ("goexample", "cppboostexample", "tsexample")
         for service in ("analyticsservice", "inventoryservice", "orderservice")
     )
@@ -473,10 +568,13 @@ def main() -> int:
         service: check_service(root, service)
         for service in ("analyticsservice", "inventoryservice", "orderservice")
     }
+    automation = check_automation_service(root)
     errors = [error for result in services.values() for error in result["errors"]]
+    errors.extend(automation["errors"])
     summary = {
         "status": "pass" if not errors else "fail",
         "services": services,
+        "automation_service": automation,
         "total_typed_patches": sum(
             int(result["patch_count"]) for result in services.values()
         ),
