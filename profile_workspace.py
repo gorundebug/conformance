@@ -179,6 +179,25 @@ def initialize_git_snapshot(example: Path, profile: str) -> None:
     )
 
 
+def attach_persistent_tools(source: Path, destination: Path) -> None:
+    """Share ignored host tools with disposable generated Go workspaces.
+
+    A ``current`` profile workspace is intentionally deleted after every run,
+    while downloaded generators such as protoc and buf belong to the ordinary
+    example's ignored ``tools`` cache.  Linking that cache after the isolated
+    Git snapshot keeps profile retries offline-capable without making tools a
+    generated or tracked project artifact.
+    """
+    source_tools = source / "tools"
+    source_tools.mkdir(exist_ok=True)
+    destination_tools = destination / "tools"
+    if destination_tools.exists() or destination_tools.is_symlink():
+        raise RuntimeError(
+            f"generated profile unexpectedly owns tools path: {destination_tools}"
+        )
+    destination_tools.symlink_to(source_tools.resolve(), target_is_directory=True)
+
+
 def merge_generated_command(archive: Path) -> list[str]:
     return [
         "bash", "scripts/merge.generated.sh", "--remove-stale", str(archive)
@@ -215,6 +234,8 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
         (profile_artifacts / f"merge-{language}.log").write_text(merged.stdout)
         generated[language] = verify_current_graph(destination)
         initialize_git_snapshot(destination, profile)
+        if language == "go":
+            attach_persistent_tools(source, destination)
 
     # Mirror every other managed dependency without copying large framework
     # and native-example repositories. The generated examples above are the

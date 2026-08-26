@@ -98,6 +98,25 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn('"GOWORK": str(local_go_work)', profile)
         self.assertNotIn('"GOWORK": "off"', profile)
 
+    def test_profile_workspace_reuses_ignored_go_tools_between_retries(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            destination = root / "profile"
+            source.mkdir()
+            destination.mkdir()
+            tools = source / "tools"
+            tools.mkdir()
+            (tools / "protoc").write_text("cached\n")
+
+            globals_["attach_persistent_tools"](source, destination)
+
+            self.assertTrue((destination / "tools").is_symlink())
+            self.assertEqual(
+                (destination / "tools" / "protoc").read_text(), "cached\n"
+            )
+
     def test_generation_workspace_resolves_modules_and_inherits_profile(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "generation/run.py"))
         with tempfile.TemporaryDirectory() as directory:
