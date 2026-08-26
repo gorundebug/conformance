@@ -144,6 +144,35 @@ def verify_current_graph(example: Path) -> dict[str, int]:
     if not graph.is_file():
         raise RuntimeError(f"generated graph is missing: {graph}")
     source = graph.read_text()
+    services_marker = "services:\n"
+    if services_marker not in source:
+        raise RuntimeError(f"generated graph has no services section: {graph}")
+    services_source = source.split(services_marker, 1)[1]
+
+    def service_source(service: str) -> str:
+        marker = f"    {service}:\n"
+        if marker not in services_source:
+            raise RuntimeError(
+                f"generated graph has no {service} service: {graph}"
+            )
+        block = services_source.split(marker, 1)[1]
+        next_service = next(
+            (
+                index
+                for index, line in enumerate(block.splitlines(keepends=True))
+                if line.startswith("    ")
+                and not line.startswith("        ")
+                and line.rstrip().endswith(":")
+            ),
+            None,
+        )
+        if next_service is None:
+            return block
+        return "".join(block.splitlines(keepends=True)[:next_service])
+
+    # Profile semantics belong to the benchmark graph. Automation Service has
+    # its own workflow-local pool edges, validated by Temporal replay tests.
+    source = service_source("orderService") + service_source("inventoryService")
     actual = {
         "task_pool_links": source.count("callSemantics: TaskPool"),
         "priority_task_pool_links": source.count(
@@ -152,8 +181,8 @@ def verify_current_graph(example: Path) -> dict[str, int]:
         "parallel_call_links": source.count("callSemantics: ParallelCall"),
     }
     expected = {
-        "task_pool_links": 4,
-        "priority_task_pool_links": 4,
+        "task_pool_links": 1,
+        "priority_task_pool_links": 1,
         "parallel_call_links": 3,
     }
     if actual != expected:

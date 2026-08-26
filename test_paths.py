@@ -663,17 +663,33 @@ class DependencyRootTest(unittest.TestCase):
             graph = example / "graph"
             graph.mkdir()
             (graph / "example.generated.yaml").write_text(
-                "callSemantics: TaskPool\n" * 4
-                + "callSemantics: PriorityTaskPool\n" * 4
-                + "callSemantics: ParallelCall\n"
-                "callSemantics: ParallelCall\n"
-                "callSemantics: ParallelCall\n"
+                "services:\n"
+                "    automationService:\n"
+                "        links:\n"
+                "            link1:\n"
+                "                callSemantics: TaskPool\n"
+                "            link2:\n"
+                "                callSemantics: PriorityTaskPool\n"
+                "    inventoryService:\n"
+                "        links:\n"
+                "            link1:\n"
+                "                callSemantics: TaskPool\n"
+                "            link2:\n"
+                "                callSemantics: ParallelCall\n"
+                "    orderService:\n"
+                "        links:\n"
+                "            link1:\n"
+                "                callSemantics: PriorityTaskPool\n"
+                "            link2:\n"
+                "                callSemantics: ParallelCall\n"
+                "            link3:\n"
+                "                callSemantics: ParallelCall\n"
             )
             self.assertEqual(
                 profile["verify_current_graph"](example),
                 {
-                    "task_pool_links": 4,
-                    "priority_task_pool_links": 4,
+                    "task_pool_links": 1,
+                    "priority_task_pool_links": 1,
                     "parallel_call_links": 3,
                 },
             )
