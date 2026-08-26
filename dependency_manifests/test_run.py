@@ -4,7 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from run import IGNORED_PARTS, RUST_PROJECTS, module_directories
+from run import (
+    IGNORED_PARTS,
+    RUST_PROJECTS,
+    module_directories,
+    pnpm_importer_specifiers,
+    python_requirement,
+)
 
 
 class DependencyManifestTests(unittest.TestCase):
@@ -25,6 +31,32 @@ class DependencyManifestTests(unittest.TestCase):
         options = RUST_PROJECTS["rustexample"]
         self.assertIn("--config", options)
         self.assertTrue(any("../rustservicelib" in option for option in options))
+
+    def test_python_requirement_normalizes_name_and_specifier(self) -> None:
+        self.assertEqual(
+            python_requirement("Example_Package[grpc] >= 1.2 ; python_version > '3.12'"),
+            ("example-package", ">=1.2"),
+        )
+
+    def test_pnpm_importer_parser_reads_exact_specifiers(self) -> None:
+        self.assertEqual(
+            pnpm_importer_specifiers("""lockfileVersion: '9.0'
+importers:
+
+  .:
+    dependencies:
+      '@scope/runtime':
+        specifier: 1.2.3
+        version: 1.2.3
+  service:
+    devDependencies:
+      local:
+        specifier: workspace:*
+        version: link:../local
+packages:
+"""),
+            {".": {"@scope/runtime": "1.2.3"}, "service": {"local": "workspace:*"}},
+        )
 
 
 if __name__ == "__main__":

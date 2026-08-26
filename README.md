@@ -249,6 +249,11 @@ frameworks under test therefore come from the local dependency workspace. A
 generated import missing from `go.mod`/`go.sum`, or a Rust dependency missing
 from `Cargo.lock`, fails in a few seconds and identifies the exact project; it
 cannot remain hidden until a later Kafka, tracing or scenario Docker build.
+The same gate compares every Python package manifest with its checked-in
+`uv.lock` metadata and every TypeScript workspace importer with the exact
+specifier recorded in `pnpm-lock.yaml`. Thus all four manifest ecosystems are
+validated before any expensive image build; the preflight is read-only and does
+not rely on a package registry for Python or TypeScript.
 
 ```bash
 make dependency-manifests
