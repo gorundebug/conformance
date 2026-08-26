@@ -584,6 +584,39 @@ def verify_temporal_metric_sources(
     raise RuntimeError(f"Temporal metric sources did not become ready: {last_error}")
 
 
+def verify_workflow_pool_metrics(text: str) -> dict[str, object]:
+    """Prove that the selected graph profile used its declared Workflow callers."""
+    profile = os.environ.get("CONFORMANCE_EXAMPLE_PROFILE", "function-call")
+    task_total = metric_sum(text, "task_pool_tasks_total", {})
+    priority_total = metric_sum(text, "priority_task_pool_tasks_total", {})
+    if profile == "current":
+        # The canonical sequential Workflow traverses two TaskPool links and
+        # one PriorityTaskPool link. Its fan-out Workflow traverses one and two
+        # respectively. These are Workflow SDK metrics, not process-pool data.
+        if task_total < 3 or priority_total < 3:
+            raise RuntimeError(
+                "current profile did not execute both workflow-local pools: "
+                f"task={task_total}, priority={priority_total}, expected >=3 each"
+            )
+        return {
+            "profile": profile,
+            "taskPoolTasks": task_total,
+            "priorityTaskPoolTasks": priority_total,
+            "workflowLocal": True,
+        }
+    if task_total != 0 or priority_total != 0:
+        raise RuntimeError(
+            "function-call profile unexpectedly emitted Workflow pool metrics: "
+            f"task={task_total}, priority={priority_total}"
+        )
+    return {
+        "profile": profile,
+        "taskPoolTasks": 0,
+        "priorityTaskPoolTasks": 0,
+        "workflowLocal": True,
+    }
+
+
 def edge_calls(status: dict[str, object], source: str, target: str) -> int:
     nodes = status.get("nodes")
     edges = status.get("edges")
@@ -2212,6 +2245,9 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
         )
         metrics = verify_metrics(metrics_text, jobs)
         temporal_metrics = verify_temporal_metric_sources(ARTIFACTS / language.name)
+        workflow_pools = verify_workflow_pool_metrics(
+            fetch_text(TEMPORAL_SDK_METRICS_URL)
+        )
         trace_summary, traced_workflows, traces = verify_tracing(
             language, overlay, env, overrides, schedule_description
         )
@@ -2234,6 +2270,7 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             "pythonSandbox": python_sandbox,
             "metrics": metrics,
             "temporalMetrics": temporal_metrics,
+            "workflowPools": workflow_pools,
             "scheduleReuse": True,
             "queuedCancellation": True,
             "traceContinuity": trace_summary,
