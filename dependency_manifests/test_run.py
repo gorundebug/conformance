@@ -14,6 +14,7 @@ from run import (
     pnpm_importer_specifiers,
     python_requirement,
     resolved_workspace_modules,
+    rust_metadata_command,
 )
 
 
@@ -67,6 +68,26 @@ class DependencyManifestTests(unittest.TestCase):
         options = RUST_PROJECTS["rustexample"]
         self.assertIn("--config", options)
         self.assertTrue(any("../rustservicelib" in option for option in options))
+
+    def test_rust_metadata_mounts_physical_symlink_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "physical-project"
+            framework = root / "physical-framework"
+            project.mkdir()
+            framework.mkdir()
+            linked_project = root / "project"
+            linked_framework = root / "framework"
+            linked_project.symlink_to(project, target_is_directory=True)
+            linked_framework.symlink_to(framework, target_is_directory=True)
+            command = rust_metadata_command(
+                linked_project, RUST_PROJECTS["rustexample"], linked_framework,
+            )
+            self.assertIn(f"{project.resolve()}:/workspace/project:ro", command)
+            self.assertIn(
+                f"{framework.resolve()}:/workspace/rustservicelib:ro", command,
+            )
+            self.assertNotIn(str(linked_project), " ".join(command))
 
     def test_python_requirement_normalizes_name_and_specifier(self) -> None:
         self.assertEqual(

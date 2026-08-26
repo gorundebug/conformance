@@ -167,21 +167,36 @@ def check_go_project(
     }
 
 
-def check_rust_project(project: Path, cargo_options: tuple[str, ...]) -> dict[str, str]:
+def rust_metadata_command(
+    project: Path, cargo_options: tuple[str, ...], framework: Path,
+) -> list[str]:
+    command = [
+        "docker", "run", "--rm",
+        "-v", f"{project.resolve()}:/workspace/project:ro",
+    ]
+    if cargo_options:
+        command.extend([
+            "-v", f"{framework.resolve()}:/workspace/rustservicelib:ro",
+        ])
+    command.extend([
+        "-w", "/workspace/project",
+        RUST_TOOLCHAIN_IMAGE,
+        "cargo", *cargo_options,
+        "metadata", "--locked", "--offline", "--no-deps", "--format-version", "1",
+    ])
+    return command
+
+
+def check_rust_project(
+    project: Path, cargo_options: tuple[str, ...], framework: Path,
+) -> dict[str, str]:
     for name in ("Cargo.toml", "Cargo.lock"):
         manifest = project / name
         if not manifest.is_file():
             raise RuntimeError(
                 f"required Rust manifest is missing: {manifest.relative_to(ROOT)}"
             )
-    command = [
-        "docker", "run", "--rm",
-        "-v", f"{ROOT}:/repo:ro",
-        "-w", f"/repo/{project.relative_to(ROOT)}",
-        RUST_TOOLCHAIN_IMAGE,
-        "cargo", *cargo_options,
-        "metadata", "--locked", "--offline", "--no-deps", "--format-version", "1",
-    ]
+    command = rust_metadata_command(project, cargo_options, framework)
     run(command, cwd=CONFORMANCE_ROOT, env=os.environ.copy())
     return {"project": project.name, "lockfile": "Cargo.lock"}
 
@@ -354,7 +369,9 @@ def main() -> int:
         project = ROOT / name
         if not project.is_dir():
             raise RuntimeError(f"required dependency project is missing: {project}")
-        rust_checked.append(check_rust_project(project, cargo_options))
+        rust_checked.append(check_rust_project(
+            project, cargo_options, ROOT / "rustservicelib",
+        ))
         print(f"[dependency-manifests] PASS {name}: Cargo.lock is current", flush=True)
     python_checked: list[dict[str, object]] = []
     for name in PYTHON_PROJECTS:
