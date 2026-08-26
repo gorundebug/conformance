@@ -359,6 +359,36 @@ class DependencyRootTest(unittest.TestCase):
                 }],
             )
 
+    def test_suite_runner_preserves_current_domain_failure_summary(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "run_suite.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            artifacts = Path(directory)
+            summary = artifacts / "temporal" / "summary.json"
+            summary.parent.mkdir(parents=True)
+            summary.write_text('{"status":"pass","stale":true}\n')
+            globals_["main"].__globals__["ARTIFACTS"] = artifacts
+
+            def failing_suite(*_args: object, **_kwargs: object) -> mock.Mock:
+                summary.write_text(
+                    '{"status":"fail","failures":{"python":"sandbox"}}\n'
+                )
+                return mock.Mock(returncode=1)
+
+            with (
+                mock.patch.object(
+                    sys, "argv", ["run_suite.py", "temporal", "temporal/run.py"]
+                ),
+                mock.patch.object(globals_["subprocess"], "run", side_effect=failing_suite),
+                contextlib.redirect_stderr(io.StringIO()),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(globals_["main"](), 1)
+
+            self.assertEqual(
+                json.loads(summary.read_text()),
+                {"status": "fail", "failures": {"python": "sandbox"}},
+            )
+
     def test_aggregate_preserves_suite_diagnostics(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "aggregate.py"))
         with tempfile.TemporaryDirectory() as directory:

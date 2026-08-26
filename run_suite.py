@@ -49,24 +49,29 @@ def main() -> int:
             file=sys.stderr,
             flush=True,
         )
-        summary.parent.mkdir(parents=True, exist_ok=True)
-        summary.write_text(
-            json.dumps(
-                {
-                    "schemaVersion": "1.0",
-                    "operation": "verify",
-                    "status": "fail",
-                    "error": f"suite command exited with code {result.returncode}",
-                    "command": command,
-                    "diagnostics": [diagnostic],
-                    "artifacts": [],
-                    "summary": {"errors": 1, "warnings": 0},
-                },
-                indent=2,
-                sort_keys=True,
+        # A suite may already have written a richer, domain-specific failure
+        # summary. Keep it intact so the exact language/assertion survives the
+        # wrapper. Only synthesize a generic summary when the command failed
+        # before producing one.
+        if not summary.is_file():
+            summary.parent.mkdir(parents=True, exist_ok=True)
+            summary.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": "1.0",
+                        "operation": "verify",
+                        "status": "fail",
+                        "error": f"suite command exited with code {result.returncode}",
+                        "command": command,
+                        "diagnostics": [diagnostic],
+                        "artifacts": [],
+                        "summary": {"errors": 1, "warnings": 0},
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
             )
-            + "\n"
-        )
     return result.returncode
 
 
