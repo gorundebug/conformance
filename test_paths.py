@@ -1202,8 +1202,14 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn("host.docker.internal:host-gateway", command)
 
     def test_dependency_proxy_maps_the_host_for_plain_docker_runs(self) -> None:
+        dependency_root = Path(
+            os.environ.get(
+                "CONFORMANCE_DEPENDENCIES_DIR",
+                str(CONFORMANCE_DIR.parent),
+            )
+        )
         wrapper = (
-            CONFORMANCE_DIR.parent / "cppexample" / "scripts" /
+            dependency_root / "cppexample" / "scripts" /
             "docker-dependency-proxy.generated.sh"
         ).read_text()
         self.assertIn(
