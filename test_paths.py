@@ -79,6 +79,14 @@ class DependencyRootTest(unittest.TestCase):
             self.assertEqual(local, remote)
             self.assertEqual((checkout / "value").read_text(), "new\n")
 
+    def test_managed_checkout_retries_transient_mirror_failures(self) -> None:
+        script = (
+            CONFORMANCE_DIR / "scripts" / "update-managed-checkout.sh"
+        ).read_text()
+        self.assertIn("fetch_attempts=3", script)
+        self.assertIn("managed checkout fetch failed; retrying", script)
+        self.assertNotIn("https://github.com", script)
+
     def test_profile_workspace_removes_stale_generated_files_before_snapshot(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
         archive = Path("/tmp/generated-example.zip")
