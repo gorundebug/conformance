@@ -102,35 +102,35 @@
     "goexample": [
       "model/pkg/serdes/orderprocessed.go",
       "model/pkg/types/orderprocessed.go",
-      "orderservice/internal/functions/orderprocessedendpointsink.go"
+      "orderservice/internal/functions/endpoint/orderprocessedendpointsink.go"
     ],
     "cppexample": [
       "model/include/example/model/serdes/order_processed_serde.hpp",
       "model/include/example/model/types/order_processed.hpp",
-      "orderservice/internal/functions/order_processed_endpoint.hpp",
-      "orderservice/internal/functions/order_processed_endpoint_test.cpp",
+      "orderservice/internal/functions/endpoint/order_processed_endpoint_sink.hpp",
+      "orderservice/internal/functions/endpoint/order_processed_endpoint_sink_test.cpp",
       "orderservice/internal/serdes/unknown_type_serde.hpp",
       "orderservice/internal/types/unknown_type.hpp"
     ],
     "cppboostexample": [
       "model/include/example/model/serdes/order_processed_serde.hpp",
       "model/include/example/model/types/order_processed.hpp",
-      "orderservice/internal/functions/order_processed_endpoint.hpp",
-      "orderservice/internal/functions/order_processed_endpoint_test.cpp",
+      "orderservice/internal/functions/endpoint/order_processed_endpoint_sink.hpp",
+      "orderservice/internal/functions/endpoint/order_processed_endpoint_sink_test.cpp",
       "orderservice/internal/serdes/unknown_type_serde.hpp",
       "orderservice/internal/types/unknown_type.hpp"
     ],
     "pyexample": [
       "model/src/model/models/order_processed.py",
-      "orderservice/src/order_service/internal/functions/order_processed_endpoint.py",
+      "orderservice/src/order_service/internal/functions/endpoint/order_processed_endpoint_sink.py",
       "orderservice/src/order_service/models/unknown_type.py",
-      "orderservice/tests/functions/test_order_processed_endpoint.py"
+      "orderservice/tests/functions/endpoint/test_order_processed_endpoint_sink.py"
     ],
     "rustexample": [
       "inventoryservice/src/lib.rs",
       "model/src/types/order_processed.rs",
-      "orderservice/src/internal/functions/process_order.rs",
-      "orderservice/src/internal/functions/order_processed_endpoint.rs",
+      "orderservice/src/internal/functions/endpoint/process_order_source.rs",
+      "orderservice/src/internal/functions/endpoint/order_processed_endpoint_sink.rs",
       "orderservice/src/internal/types/mod.rs",
       "orderservice/src/internal/types/types.generated.rs",
       "orderservice/src/internal/types/unknown_type.rs",
@@ -147,11 +147,11 @@
       "orderservice/Dockerfile.standalone.generated",
       "orderservice/docker-compose.standalone.generated.yml",
       "orderservice/package.standalone.generated.json",
-      "orderservice/src/internal/functions/order-processed-endpoint.ts",
-      "orderservice/src/internal/functions/process-order.ts",
+      "orderservice/src/internal/functions/endpoint/order-processed-endpoint-sink.ts",
+      "orderservice/src/internal/functions/endpoint/process-order-source.ts",
       "orderservice/src/internal/types/order-state.ts",
       "orderservice/src/internal/types/order.ts",
-      "orderservice/test/functions/order-processed-endpoint.test.ts"
+      "orderservice/test/functions/endpoint/order-processed-endpoint-sink.test.ts"
     ]
   },
   "example_layout": {
@@ -177,18 +177,18 @@
       "scripts/sanitizer-integration.generated.sh"
     ],
     "changed_interface_boundaries": [
-      "analyticsservice/internal/functions/order_processed_endpoint.hpp",
-      "orderservice/internal/functions/order_processed_endpoint.hpp",
-      "orderservice/internal/functions/process_order.hpp"
+      "analyticsservice/internal/functions/endpoint/order_processed_endpoint_source.hpp",
+      "orderservice/internal/functions/endpoint/order_processed_endpoint_sink.hpp",
+      "orderservice/internal/functions/endpoint/process_order_source.hpp"
     ],
     "required_boundary_interface_tokens": {
-      "orderservice/internal/functions/process_order.hpp": [
-        "struct ProcessOrder final",
+      "orderservice/internal/functions/endpoint/process_order_source.hpp": [
+        "struct ProcessOrderSource final",
         "using Request =",
         "using Response =",
         "struct SharedState final",
         "struct State final",
-        "explicit ProcessOrder(",
+        "explicit ProcessOrderSource(",
         "servicelib::BeginResult<State> beginRequest(",
         "void consumeMessage(",
         "std::string getMessageId(",

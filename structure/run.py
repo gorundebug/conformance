@@ -87,7 +87,7 @@ def changed_common(left_root: Path, right_root: Path) -> set[str]:
 def interface_files(root: Path) -> set[str]:
     result = {
         path.relative_to(root).as_posix()
-        for path in root.glob("*service/internal/functions/*.hpp")
+        for path in root.glob("*service/internal/functions/**/*.hpp")
         if path.is_file()
     }
     result.update(
