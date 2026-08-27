@@ -11,6 +11,7 @@ set -euo pipefail
 #   ./quickstart.sh                # clone what's missing, then run `make all`
 #   ./quickstart.sh --clone-only   # only clone/update sibling repos, don't run
 #   ./quickstart.sh --dependencies-dir /path/to/repos
+#   ./quickstart.sh --skip-git-mirror-refresh       # trust cached Git revisions
 #   ./quickstart.sh --profile current                # full suite with pools
 #   ./quickstart.sh --profile current -- tracing     # tracing with pools
 #
@@ -41,10 +42,15 @@ EXAMPLE_PROFILE="function-call"
 REPOS=(goexample gonativeexample cppexample cppnativeexample cppboostexample cppboostnativeexample pyexample pynativeexample rustexample rustnativeexample tsexample tsnativeexample servicegen servicelib cppservicelib cppboostservicelib pyservicelib rustservicelib tsservicelib)
 
 clone_only=0
+refresh_git_mirror=1
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --clone-only)
       clone_only=1
+      shift
+      ;;
+    --skip-git-mirror-refresh)
+      refresh_git_mirror=0
       shift
       ;;
     --dependencies-dir)
@@ -101,7 +107,7 @@ export PERFORMANCE_NATIVE_DEPENDENCIES_DIR="$DEPENDENCIES_DIR/performance-native
 
 echo "==> Checking prerequisites"
 missing=0
-for tool in git docker go python3; do
+for tool in git docker go python3 curl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "  missing: $tool" >&2
     missing=1
@@ -115,7 +121,7 @@ if [ "$missing" -ne 0 ]; then
   echo "Install the missing tools above and re-run." >&2
   exit 1
 fi
-echo "  git, docker, docker compose, go, python3: OK"
+echo "  git, docker, docker compose, go, python3, curl: OK"
 
 # Managed checkouts are the first network operation performed by quickstart.
 # Configure the shared Git mirror before fetch/clone; the complete Nexus
@@ -132,6 +138,13 @@ if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
   export GIT_CONFIG_KEY_1="url.$bootstrap_git_mirror/gitlab.com/.insteadOf"
   export GIT_CONFIG_VALUE_1=https://gitlab.com/
   echo "==> Routing managed Git checkouts through $bootstrap_git_mirror"
+  if [ "$refresh_git_mirror" -eq 1 ]; then
+    echo "==> Refreshing every cached Git mirror before resolving revisions"
+    curl --fail --show-error --silent --request POST \
+      "$bootstrap_git_mirror/__servicegen_refresh"
+  else
+    echo "==> Trusting cached Git mirror revisions (--skip-git-mirror-refresh)"
+  fi
 fi
 
 echo "==> Preparing repositories in $DEPENDENCIES_DIR"
@@ -159,6 +172,16 @@ if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
   fi
   export SERVICEGEN_NEXUS_CLIENT_HOST="${SERVICEGEN_DEPENDENCY_PROXY_HOST:-localhost}"
   eval "$("$proxy_script" env)"
+  userver_revision="$(sed -nE \
+    's|.*userver\.git#([0-9a-f]+).*|\1|p' \
+    "$DEPENDENCIES_DIR/cppservicelib/docker-compose.cmake.yml" | head -n 1)"
+  if [ -z "$userver_revision" ]; then
+    echo "Unable to resolve the pinned userver revision" >&2
+    exit 1
+  fi
+  proxy_docker_host="${SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST:-host.docker.internal}"
+  proxy_port="${SERVICEGEN_DEPENDENCY_PROXY_PORT:-${SERVICEGEN_NEXUS_PORT:-18081}}"
+  export USERVER_SOURCE_CONTEXT="http://$proxy_docker_host:$proxy_port/repository/github-raw/userver-framework/userver/archive/$userver_revision.tar.gz"
   export SERVICEGEN_REAL_DOCKER="$(command -v docker)"
   # Keep the wrapper outside .artifacts. A profile switch deliberately clears
   # that directory before the suite starts; placing the wrapper there made
