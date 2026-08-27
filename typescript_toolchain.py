@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import dependency_download_mirrors
+
 
 CONFORMANCE_DIR = Path(__file__).resolve().parent
 PNPM_STORE = CONFORMANCE_DIR / ".dependencies" / ".pnpm-store" / "v11"
@@ -13,17 +15,7 @@ PNPM_STORE = CONFORMANCE_DIR / ".dependencies" / ".pnpm-store" / "v11"
 def environment() -> dict[str, str]:
     """Keep every host-side package and install-script download proxied."""
     environment = {**os.environ, "CI": "true"}
-    github_raw = environment.get("SERVICEGEN_GITHUB_RAW_URL", "").rstrip("/")
-    if github_raw:
-        # node-pre-gyp derives this unusual key from the package name and only
-        # replaces its first hyphen. Keep it centralized so every suite gets
-        # the same binary mirror without knowing which package triggers it.
-        environment[
-            "npm_config_confluent_kafka-javascript_binary_host_mirror"
-        ] = (
-            f"{github_raw}/confluentinc/confluent-kafka-javascript/"
-            "releases/download/"
-        )
+    environment.update(dependency_download_mirrors.environment())
     return environment
 
 

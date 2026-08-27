@@ -20,16 +20,27 @@ CONFORMANCE_DIR = Path(__file__).resolve().parent
 
 class DependencyRootTest(unittest.TestCase):
     def test_typescript_installs_enforce_proxy_and_binary_mirror(self) -> None:
+        import dependency_download_mirrors
         import typescript_toolchain
 
         proxy = "http://localhost:18081/repository"
-        with mock.patch.dict(
-            os.environ,
-            {
-                "NPM_CONFIG_REGISTRY": f"{proxy}/npm-proxy/",
-                "SERVICEGEN_GITHUB_RAW_URL": f"{proxy}/github-raw",
-            },
-            clear=False,
+        mirror = (
+            f"{proxy}/github-raw/confluentinc/"
+            "confluent-kafka-javascript/releases/download/"
+        )
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"NPM_CONFIG_REGISTRY": f"{proxy}/npm-proxy/"},
+                clear=False,
+            ),
+            mock.patch.object(
+                dependency_download_mirrors,
+                "environment",
+                return_value={
+                    "npm_config_confluent_kafka-javascript_binary_host_mirror": mirror
+                },
+            ),
         ):
             command = typescript_toolchain.install_command()
             environment = typescript_toolchain.environment()
@@ -40,9 +51,32 @@ class DependencyRootTest(unittest.TestCase):
             environment[
                 "npm_config_confluent_kafka-javascript_binary_host_mirror"
             ],
-            f"{proxy}/github-raw/confluentinc/"
-            "confluent-kafka-javascript/releases/download/",
+            mirror,
         )
+
+    def test_dependency_download_mirror_catalog_is_generic(self) -> None:
+        import dependency_download_mirrors
+
+        with tempfile.TemporaryDirectory() as directory:
+            catalog = Path(directory) / "mirrors.env"
+            catalog.write_text(
+                "first_mirror=${SERVICEGEN_GITHUB_RAW_URL}/one/releases/\n"
+                "second_mirror=${SERVICEGEN_GITHUB_RAW_URL}/two/releases/\n"
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "SERVICEGEN_GITHUB_RAW_URL":
+                        "http://localhost:18081/repository/github-raw"
+                },
+                clear=False,
+            ):
+                values = dependency_download_mirrors.environment(catalog)
+            self.assertEqual(len(values), 2)
+            self.assertEqual(
+                values["second_mirror"],
+                "http://localhost:18081/repository/github-raw/two/releases/",
+            )
 
     def test_managed_checkout_recovers_from_rewritten_main_history(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -420,7 +454,7 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn("--config.registry=", source)
         self.assertIn("NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/", source)
         self.assertIn(
-            "npm_config_confluent_kafka-javascript_binary_host_mirror=",
+            "dependency_download_mirrors.docker_environment()",
             source,
         )
 

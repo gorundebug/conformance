@@ -29,6 +29,7 @@ CONFORMANCE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(CONFORMANCE))
 
 import cpp_source_cache  # noqa: E402
+import dependency_download_mirrors  # noqa: E402
 import go_toolchain  # noqa: E402
 
 
@@ -560,13 +561,11 @@ def build_typescript(target: Path, component: str) -> None:
         )
         proxy_port = os.environ.get("SERVICEGEN_NEXUS_PORT", "18081")
         proxy_base = f"http://{proxy_host}:{proxy_port}/repository"
-        proxy_arguments = [
-            "-e", f"NPM_CONFIG_REGISTRY={proxy_base}/npm-proxy/",
-            "-e",
-            "npm_config_confluent_kafka-javascript_binary_host_mirror="
-            f"{proxy_base}/github-raw/confluentinc/"
-            "confluent-kafka-javascript/releases/download/",
-        ]
+        proxy_arguments = ["-e", f"NPM_CONFIG_REGISTRY={proxy_base}/npm-proxy/"]
+        for name, value in sorted(
+            dependency_download_mirrors.docker_environment().items()
+        ):
+            proxy_arguments.extend(["-e", f"{name}={value}"])
     script = (
         "corepack enable && "
         "corepack pnpm config set store-dir /pnpm/store && "
