@@ -140,7 +140,7 @@ if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
   echo "==> Routing managed Git checkouts through $bootstrap_git_mirror"
   if [ "$refresh_git_mirror" -eq 1 ]; then
     echo "==> Refreshing every cached Git mirror before resolving revisions"
-    curl --fail --show-error --silent --request POST \
+    curl --fail-with-body --show-error --silent --request POST \
       "$bootstrap_git_mirror/__servicegen_refresh"
   else
     echo "==> Trusting cached Git mirror revisions (--skip-git-mirror-refresh)"
