@@ -43,8 +43,8 @@ def docker_url(url: str) -> tuple[str, str | None]:
     """Translate a host-local proxy URL for use inside a Docker container."""
     parsed = urlsplit(url)
     docker_host = os.environ.get(
-        "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST",
-        os.environ.get("SERVICEGEN_NEXUS_DOCKER_HOST", "host.docker.internal"),
+        "DEPENDENCY_PROXY_DOCKER_HOST",
+        os.environ.get("DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"),
     )
     if parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
         rendered_host = (
@@ -235,7 +235,7 @@ def prepare_command(framework: Path) -> list[str]:
         "-DCPPBOOSTSERVICELIB_ENABLE_OTEL=ON "
         "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
         "-DCPPBOOSTSERVICELIB_GITHUB_ARCHIVE_BASE="
-        '"${SERVICEGEN_GITHUB_RAW_URL:-https://github.com}"'
+        '"${DEPENDENCY_GITHUB_RAW_URL:-https://github.com}"'
     )
     # Every source, including opentelemetry-proto, is populated during
     # configure from immutable archives. No dependency build target is needed
@@ -261,14 +261,14 @@ def prepare_command(framework: Path) -> list[str]:
         "-v", f"{host_cache}:{container_cache}", "-w",
         "/workspace",
     ]
-    github_raw_url = os.environ.get("SERVICEGEN_GITHUB_RAW_URL")
+    github_raw_url = os.environ.get("DEPENDENCY_GITHUB_RAW_URL")
     if github_raw_url:
         github_raw_url, add_host = docker_url(github_raw_url)
         if add_host is not None:
             # Docker Desktop resolves this name natively; host-gateway makes
             # the same command work with Docker Engine on Linux.
             command.extend(["--add-host", add_host])
-        command.extend(["--env", f"SERVICEGEN_GITHUB_RAW_URL={github_raw_url}"])
+        command.extend(["--env", f"DEPENDENCY_GITHUB_RAW_URL={github_raw_url}"])
     command.extend([
         "cppboostservicelib-build:latest", "/bin/bash", "-lc", run,
     ])
@@ -283,9 +283,9 @@ def ensure(framework: Path) -> Path:
         build_proxy_args: list[str] = []
         add_host: str | None = None
         for name in (
-            "SERVICEGEN_APT_UBUNTU_ARCHIVE_URL",
-            "SERVICEGEN_APT_UBUNTU_SECURITY_URL",
-            "SERVICEGEN_APT_UBUNTU_PORTS_URL",
+            "DEPENDENCY_APT_UBUNTU_ARCHIVE_URL",
+            "DEPENDENCY_APT_UBUNTU_SECURITY_URL",
+            "DEPENDENCY_APT_UBUNTU_PORTS_URL",
         ):
             if value := os.environ.get(name):
                 value, candidate = docker_url(value)

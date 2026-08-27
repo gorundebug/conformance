@@ -605,14 +605,14 @@ def write_run_manifest(
 
 def build_profiler_image(env: dict[str, str]) -> None:
     build_args: list[str] = []
-    if env.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+    if env.get("DEPENDENCY_PROXY_DIR"):
         build_args.extend([
             "--add-host", "host.docker.internal:host-gateway",
         ])
     for name in (
-        "SERVICEGEN_APT_DEBIAN_URL",
-        "SERVICEGEN_APT_DEBIAN_SECURITY_URL",
-        "SERVICEGEN_GITHUB_RAW_URL",
+        "DEPENDENCY_APT_DEBIAN_URL",
+        "DEPENDENCY_APT_DEBIAN_SECURITY_URL",
+        "DEPENDENCY_GITHUB_RAW_URL",
         "PIP_INDEX_URL",
         "PIP_TRUSTED_HOST",
     ):
@@ -627,11 +627,11 @@ def build_profiler_image(env: dict[str, str]) -> None:
 
 def docker_build_environment_value(env: dict[str, str], name: str) -> str | None:
     value = env.get(name)
-    if not value or not env.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+    if not value or not env.get("DEPENDENCY_PROXY_DIR"):
         return value
-    host = env.get("SERVICEGEN_DEPENDENCY_PROXY_HOST", "localhost")
+    host = env.get("DEPENDENCY_PROXY_HOST", "localhost")
     docker_host = env.get(
-        "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+        "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
     )
     if name == "PIP_TRUSTED_HOST" and value == host:
         return docker_host

@@ -555,11 +555,11 @@ def build_rust(target: Path, component: str) -> None:
 def build_typescript(target: Path, component: str) -> None:
     package = component_package_name("typescript", target / component)
     proxy_arguments: list[str] = []
-    if os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+    if os.environ.get("DEPENDENCY_PROXY_DIR"):
         proxy_host = os.environ.get(
-            "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+            "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
         )
-        proxy_port = os.environ.get("SERVICEGEN_NEXUS_PORT", "18081")
+        proxy_port = os.environ.get("DEPENDENCY_PROXY_PORT", "18081")
         proxy_base = f"http://{proxy_host}:{proxy_port}/repository"
         proxy_arguments = ["-e", f"NPM_CONFIG_REGISTRY={proxy_base}/npm-proxy/"]
         for name, value in sorted(
@@ -629,14 +629,14 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
 
 def ensure_rust_image() -> None:
     build_args: list[str] = []
-    if os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+    if os.environ.get("DEPENDENCY_PROXY_DIR"):
         build_args.extend([
             "--add-host", "host.docker.internal:host-gateway",
         ])
     for name in (
-        "SERVICEGEN_MAVEN_CENTRAL_URL",
-        "SERVICEGEN_APT_DEBIAN_URL",
-        "SERVICEGEN_APT_DEBIAN_SECURITY_URL",
+        "DEPENDENCY_MAVEN_CENTRAL_URL",
+        "DEPENDENCY_APT_DEBIAN_URL",
+        "DEPENDENCY_APT_DEBIAN_SECURITY_URL",
     ):
         if value := docker_build_environment_value(name):
             build_args.extend(["--build-arg", f"{name}={value}"])
@@ -655,14 +655,14 @@ def ensure_rust_image() -> None:
 
 def ensure_go_image() -> None:
     build_args: list[str] = []
-    if os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+    if os.environ.get("DEPENDENCY_PROXY_DIR"):
         build_args.extend([
             "--add-host", "host.docker.internal:host-gateway",
         ])
     for name in (
-        "SERVICEGEN_GITHUB_RAW_URL",
-        "SERVICEGEN_APT_DEBIAN_URL",
-        "SERVICEGEN_APT_DEBIAN_SECURITY_URL",
+        "DEPENDENCY_GITHUB_RAW_URL",
+        "DEPENDENCY_APT_DEBIAN_URL",
+        "DEPENDENCY_APT_DEBIAN_SECURITY_URL",
     ):
         if value := docker_build_environment_value(name):
             build_args.extend(["--build-arg", f"{name}={value}"])
@@ -682,11 +682,11 @@ def ensure_go_image() -> None:
 
 def docker_build_environment_value(name: str) -> str | None:
     value = os.environ.get(name)
-    if not value or not os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+    if not value or not os.environ.get("DEPENDENCY_PROXY_DIR"):
         return value
-    host = os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_HOST", "localhost")
+    host = os.environ.get("DEPENDENCY_PROXY_HOST", "localhost")
     docker_host = os.environ.get(
-        "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+        "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
     )
     return value.replace(f"://{host}:", f"://{docker_host}:")
 

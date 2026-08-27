@@ -50,8 +50,8 @@ it on its own:
 
 ```bash
 ./quickstart.sh --clone-only
-export SERVICEGEN_DEPENDENCY_PROXY_DIR="$HOME/.servicegen/dependency-proxy"
-make -C .dependencies/goexample SERVICEGEN_NEXUS_ACCEPT_EULA=true dependency-cache-up # first start only
+export DEPENDENCY_PROXY_DIR="$HOME/.servicegen/dependency-proxy"
+make -C .dependencies/goexample DEPENDENCY_PROXY_ACCEPT_EULA=true dependency-cache-up # first start only
 ./quickstart.sh
 ```
 
@@ -60,7 +60,7 @@ Docker Desktop resolves `host.docker.internal` natively; Linux uses Docker's
 `host-gateway` mapping. The shared data survives `dependency-cache-down`.
 Pinned C++ sources populate their separate versioned source cache from
 immutable archives routed through Nexus. Without
-`SERVICEGEN_DEPENDENCY_PROXY_DIR`, all downloads continue to use their normal
+`DEPENDENCY_PROXY_DIR`, all downloads continue to use their normal
 upstreams.
 
 After changing any C++ dependency version or its population logic, invalidate

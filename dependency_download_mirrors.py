@@ -39,9 +39,9 @@ def environment(path: Path | None = None) -> dict[str, str]:
 
 def docker_environment(path: Path | None = None) -> dict[str, str]:
     result = environment(path)
-    host = os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_HOST", "localhost")
+    host = os.environ.get("DEPENDENCY_PROXY_HOST", "localhost")
     docker_host = os.environ.get(
-        "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+        "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
     )
     return {
         name: value.replace(f"://{host}:", f"://{docker_host}:")

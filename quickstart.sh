@@ -128,9 +128,9 @@ echo "  git, docker, docker compose, go, python3, curl: OK"
 # environment is loaded below after goexample (which owns the generated proxy
 # launcher) is available. Git keeps printing the original GitHub/GitLab URL,
 # but url.*.insteadOf routes the transport through this mirror.
-if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
-  proxy_host="${SERVICEGEN_DEPENDENCY_PROXY_HOST:-localhost}"
-  git_mirror_port="${SERVICEGEN_GIT_MIRROR_PORT:-18084}"
+if [ -n "${DEPENDENCY_PROXY_DIR:-}" ]; then
+  proxy_host="${DEPENDENCY_PROXY_HOST:-localhost}"
+  git_mirror_port="${DEPENDENCY_GIT_MIRROR_PORT:-18084}"
   bootstrap_git_mirror="http://$proxy_host:$git_mirror_port/cgi-bin/git"
   export GIT_CONFIG_COUNT=2
   export GIT_CONFIG_KEY_0="url.$bootstrap_git_mirror/github.com/.insteadOf"
@@ -164,13 +164,13 @@ for repo in "${REPOS[@]}"; do
 done
 
 PROXY_BIN_DIR=""
-if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
+if [ -n "${DEPENDENCY_PROXY_DIR:-}" ]; then
   proxy_script="$DEPENDENCIES_DIR/goexample/scripts/dependency-cache.generated.sh"
   if [ ! -x "$proxy_script" ]; then
     echo "Shared dependency proxy requested, but $proxy_script is missing" >&2
     exit 1
   fi
-  export SERVICEGEN_NEXUS_CLIENT_HOST="${SERVICEGEN_DEPENDENCY_PROXY_HOST:-localhost}"
+  export DEPENDENCY_PROXY_CLIENT_HOST="${DEPENDENCY_PROXY_HOST:-localhost}"
   eval "$("$proxy_script" env)"
   proxy_resolver="$DEPENDENCIES_DIR/cppexample/scripts/dependency-proxy-env.generated.sh"
   if [ ! -f "$proxy_resolver" ]; then
@@ -186,7 +186,7 @@ if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
   PROXY_BIN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/servicelib-proxy-bin.XXXXXX")"
   ln -s "$DEPENDENCIES_DIR/cppexample/scripts/docker-dependency-proxy.generated.sh" "$PROXY_BIN_DIR/docker"
   export PATH="$PROXY_BIN_DIR:$PATH"
-  echo "==> Using shared dependency proxy (host: $SERVICEGEN_NEXUS_CLIENT_HOST, containers: ${SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST:-host.docker.internal})"
+  echo "==> Using shared dependency proxy (host: $DEPENDENCY_PROXY_CLIENT_HOST, containers: ${DEPENDENCY_PROXY_DOCKER_HOST:-host.docker.internal})"
 fi
 
 # goexample/cppexample/pyexample each split their service/module code into

@@ -60,13 +60,13 @@ class DependencyRootTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             catalog = Path(directory) / "mirrors.env"
             catalog.write_text(
-                "first_mirror=${SERVICEGEN_GITHUB_RAW_URL}/one/releases/\n"
-                "second_mirror=${SERVICEGEN_GITHUB_RAW_URL}/two/releases/\n"
+                "first_mirror=${DEPENDENCY_GITHUB_RAW_URL}/one/releases/\n"
+                "second_mirror=${DEPENDENCY_GITHUB_RAW_URL}/two/releases/\n"
             )
             with mock.patch.dict(
                 os.environ,
                 {
-                    "SERVICEGEN_GITHUB_RAW_URL":
+                    "DEPENDENCY_GITHUB_RAW_URL":
                         "http://localhost:18081/repository/github-raw"
                 },
                 clear=False,
@@ -1011,7 +1011,7 @@ class DependencyRootTest(unittest.TestCase):
             CONFORMANCE_DIR / ".artifacts" / "transports" / "go.work",
         )
         self.assertEqual(
-            Path(generator_environment["SERVICEGEN_CONAN_HOME"]),
+            Path(generator_environment["DEPENDENCY_CONAN_HOME"]),
             CONFORMANCE_DIR / ".conan2-cache",
         )
         generator_workspace = Path(generator_environment["GOWORK"]).read_text()
@@ -1188,30 +1188,30 @@ class DependencyRootTest(unittest.TestCase):
             )
         )
         framework = dependency_root / "cppboostservicelib"
-        old_raw = os.environ.get("SERVICEGEN_GITHUB_RAW_URL")
-        old_host = os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST")
+        old_raw = os.environ.get("DEPENDENCY_GITHUB_RAW_URL")
+        old_host = os.environ.get("DEPENDENCY_PROXY_DOCKER_HOST")
         try:
-            os.environ["SERVICEGEN_GITHUB_RAW_URL"] = (
+            os.environ["DEPENDENCY_GITHUB_RAW_URL"] = (
                 "http://localhost:18081/repository/github-raw"
             )
-            os.environ["SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST"] = (
+            os.environ["DEPENDENCY_PROXY_DOCKER_HOST"] = (
                 "host.docker.internal"
             )
             command = globals_["prepare_command"](framework)
         finally:
             if old_raw is None:
-                os.environ.pop("SERVICEGEN_GITHUB_RAW_URL", None)
+                os.environ.pop("DEPENDENCY_GITHUB_RAW_URL", None)
             else:
-                os.environ["SERVICEGEN_GITHUB_RAW_URL"] = old_raw
+                os.environ["DEPENDENCY_GITHUB_RAW_URL"] = old_raw
             if old_host is None:
                 os.environ.pop(
-                    "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", None
+                    "DEPENDENCY_PROXY_DOCKER_HOST", None
                 )
             else:
-                os.environ["SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST"] = old_host
+                os.environ["DEPENDENCY_PROXY_DOCKER_HOST"] = old_host
 
         self.assertIn(
-            "SERVICEGEN_GITHUB_RAW_URL=http://host.docker.internal:18081/"
+            "DEPENDENCY_GITHUB_RAW_URL=http://host.docker.internal:18081/"
             "repository/github-raw",
             command,
         )
@@ -1252,10 +1252,10 @@ class DependencyRootTest(unittest.TestCase):
 
     def test_direct_make_enables_the_dependency_proxy(self) -> None:
         makefile = (CONFORMANCE_DIR / "Makefile").read_text()
-        self.assertIn("SERVICEGEN_DEPENDENCY_PROXY_DIR", makefile)
+        self.assertIn("DEPENDENCY_PROXY_DIR", makefile)
         self.assertIn(
-            "export SERVICEGEN_GITHUB_RAW_URL := "
-            "$(SERVICEGEN_DEPENDENCY_PROXY_BASE)/github-raw",
+            "export DEPENDENCY_GITHUB_RAW_URL := "
+            "$(DEPENDENCY_PROXY_BASE)/github-raw",
             makefile,
         )
         self.assertIn(

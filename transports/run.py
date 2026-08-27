@@ -520,7 +520,7 @@ def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[st
     # and forced generated transport fixtures to rebuild the same packages.
     conan_home = CONFORMANCE_DIR / ".conan2-cache"
     conan_home.mkdir(parents=True, exist_ok=True)
-    environment["SERVICEGEN_CONAN_HOME"] = str(conan_home)
+    environment["DEPENDENCY_CONAN_HOME"] = str(conan_home)
     go_work = ARTIFACT.parent / "go.work"
     go_work.parent.mkdir(parents=True, exist_ok=True)
     go_work.write_text(go_toolchain.render_workspace(
