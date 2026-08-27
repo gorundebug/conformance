@@ -19,6 +19,31 @@ CONFORMANCE_DIR = Path(__file__).resolve().parent
 
 
 class DependencyRootTest(unittest.TestCase):
+    def test_typescript_installs_enforce_proxy_and_binary_mirror(self) -> None:
+        import typescript_toolchain
+
+        proxy = "http://localhost:18081/repository"
+        with mock.patch.dict(
+            os.environ,
+            {
+                "NPM_CONFIG_REGISTRY": f"{proxy}/npm-proxy/",
+                "SERVICEGEN_GITHUB_RAW_URL": f"{proxy}/github-raw",
+            },
+            clear=False,
+        ):
+            command = typescript_toolchain.install_command()
+            environment = typescript_toolchain.environment()
+        self.assertIn(
+            f"--config.registry={proxy}/npm-proxy/", command
+        )
+        self.assertEqual(
+            environment[
+                "npm_config_confluent_kafka-javascript_binary_host_mirror"
+            ],
+            f"{proxy}/github-raw/confluentinc/"
+            "confluent-kafka-javascript/releases/download/",
+        )
+
     def test_managed_checkout_recovers_from_rewritten_main_history(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -389,6 +414,15 @@ class DependencyRootTest(unittest.TestCase):
         source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
         self.assertIn('r"(?m)^generate\\s*:"', source)
         self.assertIn('if re.search(', source)
+
+    def test_standalone_typescript_forces_proxy_registry(self) -> None:
+        source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
+        self.assertIn("--config.registry=", source)
+        self.assertIn("NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/", source)
+        self.assertIn(
+            "npm_config_confluent_kafka-javascript_binary_host_mirror=",
+            source,
+        )
 
     def test_aggregate_prints_complete_terminal_summary(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "aggregate.py"))

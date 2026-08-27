@@ -553,10 +553,25 @@ def build_rust(target: Path, component: str) -> None:
 
 def build_typescript(target: Path, component: str) -> None:
     package = component_package_name("typescript", target / component)
+    proxy_arguments: list[str] = []
+    if os.environ.get("SERVICEGEN_DEPENDENCY_PROXY_DIR"):
+        proxy_host = os.environ.get(
+            "SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+        )
+        proxy_port = os.environ.get("SERVICEGEN_NEXUS_PORT", "18081")
+        proxy_base = f"http://{proxy_host}:{proxy_port}/repository"
+        proxy_arguments = [
+            "-e", f"NPM_CONFIG_REGISTRY={proxy_base}/npm-proxy/",
+            "-e",
+            "npm_config_confluent_kafka-javascript_binary_host_mirror="
+            f"{proxy_base}/github-raw/confluentinc/"
+            "confluent-kafka-javascript/releases/download/",
+        ]
     script = (
         "corepack enable && "
         "corepack pnpm config set store-dir /pnpm/store && "
-        "corepack pnpm install --no-frozen-lockfile && "
+        "corepack pnpm --config.registry=\"${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}\" "
+        "install --no-frozen-lockfile && "
         f"corepack pnpm --filter {package}... build && "
         f"corepack pnpm --filter {package} test"
     )
@@ -566,6 +581,7 @@ def build_typescript(target: Path, component: str) -> None:
             "docker", "run", "--rm",
             "--name", name,
             "-e", "CI=true",
+            *proxy_arguments,
             "-v", docker_mount(target, "/workspace"),
             "-v", "standalone-components-pnpm:/pnpm/store",
             "-w", "/workspace",
