@@ -169,7 +169,7 @@ def verify_source_matrix() -> dict[str, object]:
 
 def boost_framework_build_script() -> str:
     return (
-        "cmake -S . -B build/docker -G Ninja "
+        "cmake --fresh -S . -B build/docker -G Ninja "
         "-DCMAKE_BUILD_TYPE=Debug "
         "-DCMAKE_INSTALL_PREFIX=/workspace/build/docker-install "
         "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
@@ -178,7 +178,7 @@ def boost_framework_build_script() -> str:
         "cmake --build build/docker --parallel && "
         "ctest --test-dir build/docker --output-on-failure && "
         "cmake --install build/docker && "
-        "cmake -S tests/consumer -B build/consumer -G Ninja "
+        "cmake --fresh -S tests/consumer -B build/consumer -G Ninja "
         "-DCMAKE_PREFIX_PATH=/workspace/build/docker-install && "
         "cmake --build build/consumer --parallel && "
         "./build/consumer/cppboostservicelib_consumer"

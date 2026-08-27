@@ -14,6 +14,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 
 SOURCE_CACHE_VERSION = b"servicelib-conformance-source-cache-v3\0"
+BUILD_CACHE_LAYOUT_VERSION = "v2"
 CONFORMANCE_DIR = Path(__file__).resolve().parent
 CONTAINER_SOURCE_DIR = "/servicegen-cpp-source-cache"
 SOURCE_DIRECTORIES = {
@@ -126,7 +127,10 @@ def source_mount(framework: Path) -> str:
 
 
 def build_volume_name(framework: Path, project: str = "cppboostexample") -> str:
-    return f"{project}_cpp-cmake-build-{cache_name(framework)}"
+    return (
+        f"{project}_cpp-cmake-build-{BUILD_CACHE_LAYOUT_VERSION}-"
+        f"{cache_name(framework)}"
+    )
 
 
 def build_volume_mount_args(

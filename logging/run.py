@@ -161,7 +161,7 @@ def main() -> int:
             "--target servicelib_telemetry_test && " + canonical_script
         )
         boost_script = (
-            "cmake -S . -B build/docker -G Ninja "
+            "cmake --fresh -S . -B build/docker -G Ninja "
             "-DCMAKE_BUILD_TYPE=Debug "
             "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
             f"{cpp_source_cache.cmake_args(BOOST)}&& "
