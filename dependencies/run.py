@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -131,7 +132,10 @@ def manifest_dependencies(path: Path) -> dict[str, dict[str, str]]:
             r"        (repository|revision|conanVersion):\s+(.+)", raw_line
         )
         if in_dependencies and current and match:
-            dependencies[current][match.group(1)] = match.group(2)
+            value = match.group(2)
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = ast.literal_eval(value)
+            dependencies[current][match.group(1)] = value
     return dependencies
 
 

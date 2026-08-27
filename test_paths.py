@@ -429,6 +429,22 @@ class DependencyRootTest(unittest.TestCase):
         self.assertGreaterEqual(source.count('"conan" / "dependencies_generated.py"'), 2)
         self.assertNotIn('"cmake" / "DependencyVersions.cmake"', source)
 
+    def test_dependency_manifest_reader_decodes_quoted_scalar_values(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "dependencies/run.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "dependencies.yaml"
+            manifest.write_text(
+                "dependencies:\n"
+                "    re2:\n"
+                "        repository: https://github.com/google/re2\n"
+                "        revision: 0c5616d\n"
+                '        conanVersion: "20230301"\n',
+                encoding="utf-8",
+            )
+            dependencies = globals_["manifest_dependencies"](manifest)
+
+        self.assertEqual(dependencies["re2"]["conanVersion"], "20230301")
+
     def test_standalone_cpp_builds_install_conan_graph_before_cmake(self) -> None:
         source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
         install = "./scripts/conan-install.generated.sh Debug"
