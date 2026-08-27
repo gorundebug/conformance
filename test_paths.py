@@ -1203,12 +1203,14 @@ class DependencyRootTest(unittest.TestCase):
 
     def test_dependency_proxy_maps_the_host_for_plain_docker_runs(self) -> None:
         wrapper = (
-            CONFORMANCE_DIR / "scripts/docker-dependency-proxy.sh"
+            CONFORMANCE_DIR.parent / "cppexample" / "scripts" /
+            "docker-dependency-proxy.generated.sh"
         ).read_text()
         self.assertIn(
             '--add-host "host.docker.internal:host-gateway"',
             wrapper,
         )
+        self.assertIn("proxy_build_variables=(", wrapper)
 
     def test_quickstart_configures_git_mirror_before_managed_fetches(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
@@ -1240,6 +1242,10 @@ class DependencyRootTest(unittest.TestCase):
         )
         launcher = CONFORMANCE_DIR / "scripts/dependency-proxy-bin/docker"
         self.assertTrue(os.access(launcher, os.X_OK))
+        self.assertIn(
+            "cppexample/scripts/docker-dependency-proxy.generated.sh",
+            launcher.read_text(),
+        )
 
     def test_source_cache_invalidation_preserves_unrelated_volumes(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))

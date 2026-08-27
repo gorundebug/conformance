@@ -184,7 +184,7 @@ if [ -n "${SERVICEGEN_DEPENDENCY_PROXY_DIR:-}" ]; then
   # PATH silently fall back to the real Docker CLI and leaked host-side
   # localhost proxy URLs into container builds.
   PROXY_BIN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/servicelib-proxy-bin.XXXXXX")"
-  ln -s "$CONFORMANCE_ROOT/scripts/docker-dependency-proxy.sh" "$PROXY_BIN_DIR/docker"
+  ln -s "$DEPENDENCIES_DIR/cppexample/scripts/docker-dependency-proxy.generated.sh" "$PROXY_BIN_DIR/docker"
   export PATH="$PROXY_BIN_DIR:$PATH"
   echo "==> Using shared dependency proxy (host: $SERVICEGEN_NEXUS_CLIENT_HOST, containers: ${SERVICEGEN_DEPENDENCY_PROXY_DOCKER_HOST:-host.docker.internal})"
 fi

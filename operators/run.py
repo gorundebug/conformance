@@ -99,39 +99,39 @@ FUNCTION_CONTRACTS = {
         ),
         "forbidden": ("...outputs", "...collectors", "Payload<T>", "out?: Collector"),
     },
-    ROOT / "goexample/orderservice/internal/functions/processorderitems.go": {
+    ROOT / "goexample/orderservice/internal/functions/order/processorderitems.go": {
         "required": (
             "FlatMap(ctx context.Context, _ runtime.Stream, value *types2.Order, out runtime.Collect[*types.OrderItem])",
             "(*ProcessOrderItems, error)",
         ),
         "forbidden": ("...runtime.Collect",),
     },
-    ROOT / "cppexample/orderservice/internal/functions/process_order_items.hpp": {
+    ROOT / "cppexample/orderservice/internal/functions/order/process_order_items.hpp": {
         "required": (
             "template <typename Output>", "servicelib::StreamBase& stream",
             "Output&& out", "std::unique_ptr<ProcessOrderItems> MakeProcessOrderItems",
         ),
         "forbidden": ("typename... Outputs", "std::get<0>(collectors)"),
     },
-    ROOT / "cppboostexample/orderservice/internal/functions/process_order_items.hpp": {
+    ROOT / "cppboostexample/orderservice/internal/functions/order/process_order_items.hpp": {
         "required": (
             "template <typename Output>", "servicelib::StreamBase& stream",
             "Output&& out", "std::unique_ptr<ProcessOrderItems> MakeProcessOrderItems",
         ),
         "forbidden": ("typename... Outputs", "std::get<0>(collectors)"),
     },
-    ROOT / "pyexample/orderservice/src/order_service/internal/functions/process_order_items.py": {
+    ROOT / "pyexample/orderservice/src/order_service/internal/functions/order/process_order_items.py": {
         "required": ("stream: Stream", "value: Order", "out: Collect[OrderItem]"),
         "forbidden": ("*outputs", "*collectors"),
     },
-    ROOT / "rustexample/orderservice/src/internal/functions/process_order_items.rs": {
+    ROOT / "rustexample/orderservice/src/internal/functions/order/process_order_items.rs": {
         "required": (
             "_stream: &dyn RuntimeStream", "value: &Order",
             "out: &Collector<OrderItem>",
         ),
         "forbidden": ("outputs: &[", "collectors: &[", "Payload<Order>", "&Stream<OrderItem>"),
     },
-    ROOT / "tsexample/orderservice/src/internal/functions/process-order-items.ts": {
+    ROOT / "tsexample/orderservice/src/internal/functions/order/process-order-items.ts": {
         "required": (
             "_stream: Stream",
             "value: Readonly<Order>",
