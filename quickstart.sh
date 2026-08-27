@@ -178,7 +178,7 @@ if [ -n "${DEPENDENCY_PROXY_DIR:-}" ]; then
     exit 1
   fi
   source "$proxy_resolver"
-  export SERVICEGEN_REAL_DOCKER="$(command -v docker)"
+  export DEPENDENCY_REAL_DOCKER="$(command -v docker)"
   # Keep the wrapper outside .artifacts. A profile switch deliberately clears
   # that directory before the suite starts; placing the wrapper there made
   # PATH silently fall back to the real Docker CLI and leaked host-side
