@@ -604,7 +604,15 @@ def write_run_manifest(
 
 
 def build_profiler_image(env: dict[str, str]) -> None:
-    build_args: list[str] = []
+    registry = "docker.io"
+    if env.get("DEPENDENCY_PROXY_DIR"):
+        registry = (
+            f"{env.get('DEPENDENCY_PROXY_HOST', 'localhost')}:"
+            f"{env.get('DEPENDENCY_PROXY_DOCKER_PORT', '18083')}"
+        )
+    build_args: list[str] = [
+        "--build-arg", f"DEPENDENCY_DOCKER_REGISTRY={registry}",
+    ]
     if env.get("DEPENDENCY_PROXY_DIR"):
         build_args.extend([
             "--add-host", "host.docker.internal:host-gateway",

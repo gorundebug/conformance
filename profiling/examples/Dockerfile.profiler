@@ -1,4 +1,5 @@
-FROM debian:bookworm-slim AS allocation-builder
+ARG DEPENDENCY_DOCKER_REGISTRY=docker.io
+FROM ${DEPENDENCY_DOCKER_REGISTRY}/library/debian:bookworm-slim AS allocation-builder
 
 ARG DEPENDENCY_APT_DEBIAN_URL=
 ARG DEPENDENCY_APT_DEBIAN_SECURITY_URL=
@@ -15,7 +16,7 @@ COPY allocation_profile.c /src/allocation_profile.c
 RUN gcc -std=c11 -O2 -fPIC -shared -Wall -Wextra -Werror \
     /src/allocation_profile.c -ldl -o /liballocation_profile.so
 
-FROM debian:bookworm-slim
+FROM ${DEPENDENCY_DOCKER_REGISTRY}/library/debian:bookworm-slim
 
 ARG DEPENDENCY_APT_DEBIAN_URL=
 ARG DEPENDENCY_APT_DEBIAN_SECURITY_URL=

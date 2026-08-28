@@ -57,6 +57,10 @@ class TypeScriptProfilingTest(unittest.TestCase):
             profiling.build_profiler_image(environment)
         command = run.call_args.args[0]
         self.assertIn(
+            "DEPENDENCY_DOCKER_REGISTRY=localhost:18083",
+            command,
+        )
+        self.assertIn(
             "PIP_INDEX_URL=http://host.docker.internal:18081/repository/pypi-proxy/simple",
             command,
         )

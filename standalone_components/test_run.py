@@ -10,6 +10,26 @@ from standalone_components import run
 
 
 class StandaloneComponentTest(unittest.TestCase):
+    def test_docker_images_use_proxy_registry_only_when_enabled(self) -> None:
+        with mock.patch.dict(run.os.environ, {}, clear=True):
+            self.assertEqual(
+                run.dependency_docker_image("library/node:24"),
+                "docker.io/library/node:24",
+            )
+        with mock.patch.dict(
+            run.os.environ,
+            {
+                "DEPENDENCY_PROXY_DIR": "/cache",
+                "DEPENDENCY_PROXY_HOST": "proxy.example",
+                "DEPENDENCY_PROXY_DOCKER_PORT": "19000",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                run.dependency_docker_image("library/node:24"),
+                "proxy.example:19000/library/node:24",
+            )
+
     def test_declared_module_matrix_is_complete(self) -> None:
         self.assertEqual(set(run.DECLARED_MODULES), set(run.COMPONENTS))
         self.assertEqual(set(run.SERVICES) | set(run.MODULES), set(run.COMPONENTS))

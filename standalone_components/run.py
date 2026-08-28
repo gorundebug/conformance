@@ -46,6 +46,18 @@ GO_TOOLCHAIN_IMAGE = ""
 RUN_ID = f"servicegen-standalone-{os.getpid()}-{int(time.time())}"
 ACTIVE_CONTAINERS: set[str] = set()
 
+
+def dependency_docker_registry() -> str:
+    if not os.environ.get("DEPENDENCY_PROXY_DIR"):
+        return "docker.io"
+    host = os.environ.get("DEPENDENCY_PROXY_HOST", "localhost")
+    port = os.environ.get("DEPENDENCY_PROXY_DOCKER_PORT", "18083")
+    return f"{host}:{port}"
+
+
+def dependency_docker_image(image: str) -> str:
+    return f"{dependency_docker_registry()}/{image}"
+
 SERVICES = (
     "analyticsservice", "automationservice", "inventoryservice", "orderservice",
 )
@@ -584,7 +596,7 @@ def build_typescript(target: Path, component: str) -> None:
             "-v", docker_mount(target, "/workspace"),
             "-v", "standalone-components-pnpm:/pnpm/store",
             "-w", "/workspace",
-            "node:24.19.0-bookworm-slim",
+            dependency_docker_image("library/node:24.19.0-bookworm-slim"),
             "/bin/bash", "-lc", script,
         ],
         target,
@@ -643,6 +655,8 @@ def ensure_rust_image() -> None:
     run_command(
         [
             "docker", "build",
+            "--build-arg",
+            f"DEPENDENCY_DOCKER_REGISTRY={dependency_docker_registry()}",
             *build_args,
             "-f", str(Path(__file__).with_name("Dockerfile.rust")),
             "-t", RUST_TOOLCHAIN_IMAGE,
@@ -670,6 +684,8 @@ def ensure_go_image() -> None:
         [
             "docker", "build",
             "--build-arg", f"GO_VERSION={GO_VERSION}",
+            "--build-arg",
+            f"DEPENDENCY_DOCKER_REGISTRY={dependency_docker_registry()}",
             *build_args,
             "-f", str(Path(__file__).with_name("Dockerfile.go")),
             "-t", GO_TOOLCHAIN_IMAGE,

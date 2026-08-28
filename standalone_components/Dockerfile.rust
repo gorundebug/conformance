@@ -1,5 +1,5 @@
-# syntax=docker/dockerfile:1.7
-FROM rust:1.97-bookworm
+ARG DEPENDENCY_DOCKER_REGISTRY=docker.io
+FROM ${DEPENDENCY_DOCKER_REGISTRY}/library/rust:1.97-bookworm
 
 ARG TARGETARCH
 ARG OPENAPI_GENERATOR_VERSION=7.24.0
