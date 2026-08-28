@@ -8,8 +8,11 @@ ARG PROTOC_GEN_GO_VERSION=v1.36.3
 ARG PROTOC_GEN_GO_GRPC_VERSION=v1.5.1
 ARG OAPI_CODEGEN_VERSION=v2.4.1
 ARG DEPENDENCY_GITHUB_RAW_URL=https://github.com
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
 ARG DEPENDENCY_APT_DEBIAN_URL=
 ARG DEPENDENCY_APT_DEBIAN_SECURITY_URL=
+ENV GOPROXY=${GOPROXY} GOSUMDB=${GOSUMDB}
 RUN if [ -n "$DEPENDENCY_APT_DEBIAN_URL$DEPENDENCY_APT_DEBIAN_SECURITY_URL" ]; then \
       find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i \
         -e "s|http://deb.debian.org/debian-security|$DEPENDENCY_APT_DEBIAN_SECURITY_URL|g" \

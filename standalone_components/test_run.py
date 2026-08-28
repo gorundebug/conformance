@@ -191,7 +191,6 @@ class StandaloneComponentTest(unittest.TestCase):
                 },
             }
             (service / "package.json").write_text(json.dumps(package))
-            (service / "package.standalone.generated.json").write_text(json.dumps(package))
             model = example / "model"
             model.mkdir()
             (model / "package.json").write_text('{"name":"@gorundebug/model"}\n')
@@ -219,6 +218,31 @@ class StandaloneComponentTest(unittest.TestCase):
                 "  '@swc/core': true",
                 (target / "pnpm-workspace.yaml").read_text(),
             )
+
+    def test_docker_run_proxy_arguments_apply_one_container_contract(self) -> None:
+        with mock.patch.dict(
+            run.os.environ,
+            {
+                "DEPENDENCY_PROXY_DIR": "/cache",
+                "DEPENDENCY_PROXY_HOST": "localhost",
+                "DEPENDENCY_PROXY_DOCKER_HOST": "host.docker.internal",
+                "GOPROXY": "http://localhost:18081/repository/go-proxy/",
+                "GOSUMDB": "off",
+            },
+            clear=True,
+        ), mock.patch.object(
+            run.dependency_download_mirrors, "docker_environment", return_value={}
+        ):
+            arguments = run.docker_run_proxy_arguments()
+
+        self.assertEqual(
+            arguments[:2], ["--add-host", "host.docker.internal:host-gateway"]
+        )
+        self.assertIn(
+            "GOPROXY=http://host.docker.internal:18081/repository/go-proxy/",
+            arguments,
+        )
+        self.assertIn("GOSUMDB=off", arguments)
 
     def test_diagnostic_summary_is_separate_from_authoritative_summary(self) -> None:
         self.assertNotEqual(run.SUMMARY, run.DIAGNOSTIC_SUMMARY)

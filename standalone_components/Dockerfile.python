@@ -1,0 +1,11 @@
+ARG DEPENDENCY_DOCKER_REGISTRY=docker.io
+FROM ${DEPENDENCY_DOCKER_REGISTRY}/library/python:3.12-bookworm
+
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG PIP_TRUSTED_HOST=
+ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN --mount=type=cache,id=standalone-python-pip,target=/root/.cache/pip,sharing=locked \
+    python -m pip install uv

@@ -41,6 +41,7 @@ ARTIFACTS = CONFORMANCE / ".artifacts" / "standalone-components"
 SUMMARY = ARTIFACTS / "summary.json"
 DIAGNOSTIC_SUMMARY = ARTIFACTS / "diagnostic-summary.json"
 RUST_TOOLCHAIN_IMAGE = "servicelib-standalone-rust:1.97"
+PYTHON_TOOLCHAIN_IMAGE = "servicelib-standalone-python:3.12"
 GO_VERSION = ""
 GO_TOOLCHAIN_IMAGE = ""
 RUN_ID = f"servicegen-standalone-{os.getpid()}-{int(time.time())}"
@@ -89,6 +90,8 @@ def docker_process_environment(overrides: dict[str, str] | None = None) -> dict[
         "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
     )
     result["PIP_TRUSTED_HOST"] = docker_host
+    if value := os.environ.get("GOSUMDB"):
+        result["GOSUMDB"] = value
     for index in range(int(os.environ.get("GIT_CONFIG_COUNT", "0"))):
         key_name = f"GIT_CONFIG_KEY_{index}"
         value_name = f"GIT_CONFIG_VALUE_{index}"
@@ -100,6 +103,17 @@ def docker_process_environment(overrides: dict[str, str] | None = None) -> dict[
     if count := os.environ.get("GIT_CONFIG_COUNT"):
         result["GIT_CONFIG_COUNT"] = count
     return result
+
+
+def docker_run_proxy_arguments() -> list[str]:
+    if not os.environ.get("DEPENDENCY_PROXY_DIR"):
+        return []
+    environment = docker_process_environment()
+    environment.update(dependency_download_mirrors.docker_environment())
+    arguments = ["--add-host", "host.docker.internal:host-gateway"]
+    for name, value in sorted(environment.items()):
+        arguments.extend(["-e", f"{name}={value}"])
+    return arguments
 
 SERVICES = (
     "analyticsservice", "automationservice", "inventoryservice", "orderservice",
@@ -239,10 +253,8 @@ def materialize_python(
         copy_source(example / dependency, dependencies / dependency)
 
     if component in SERVICES:
-        standalone = component_root / "pyproject.standalone.generated.toml"
-        if not standalone.is_file():
-            raise RuntimeError(f"standalone Python manifest is missing: {standalone}")
-        manifest = standalone.read_text()
+        manifest_path = component_root / "pyproject.toml"
+        manifest = manifest_path.read_text()
         framework_target = dependencies / language.framework
         copy_source(root / language.framework, framework_target)
         manifest = re.sub(
@@ -253,7 +265,7 @@ def materialize_python(
         )
         if 'path = ".servicegen/dependencies/pyservicelib"' not in manifest:
             raise RuntimeError("Python framework Git source was not replaced locally")
-        (component_root / "pyproject.toml").write_text(manifest)
+        manifest_path.write_text(manifest)
 
 
 def materialize_rust(root: Path, language: Language, component: str, target: Path) -> None:
@@ -325,10 +337,7 @@ def materialize_typescript(
         copy_source(example / dependency, target / dependency)
     if component in SERVICES:
         copy_source(root / language.framework, target / language.framework)
-        standalone = component_root / "package.standalone.generated.json"
-        if not standalone.is_file():
-            raise RuntimeError(f"standalone TypeScript manifest is missing: {standalone}")
-        package = json.loads(standalone.read_text())
+        package = json.loads((component_root / "package.json").read_text())
         local_names: dict[str, str] = {}
         for directory in (*DECLARED_MODULES[component], language.framework):
             dependency_package = json.loads((target / directory / "package.json").read_text())
@@ -514,6 +523,7 @@ def build_go(target: Path, component: str) -> None:
         [
             "docker", "run", "--rm",
             "--name", name,
+            *docker_run_proxy_arguments(),
             "-e", "GOWORK=/workspace/go.work",
             "-e", "GOCACHE=/root/.cache/go-build",
             "-e", "GOMODCACHE=/go/pkg/mod",
@@ -535,12 +545,13 @@ def build_python(target: Path, component: str) -> None:
     prefix = [
         "docker", "run", "--rm",
         "--name", sync_name,
+        *docker_run_proxy_arguments(),
         "-e", "UV_CACHE_DIR=/root/.cache/uv",
         "-e", "UV_LINK_MODE=copy",
         "-v", docker_mount(component_root, "/workspace"),
         "-v", "standalone-components-uv:/root/.cache/uv",
         "-w", "/workspace",
-        "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
+        PYTHON_TOOLCHAIN_IMAGE,
     ]
     if component in SERVICES:
         run_command(
@@ -618,6 +629,7 @@ def build_rust(target: Path, component: str) -> None:
         [
             "docker", "run", "--rm",
             "--name", name,
+            *docker_run_proxy_arguments(),
             "-v", docker_mount(target, "/workspace"),
             "-v", "standalone-components-cargo-registry:/usr/local/cargo/registry",
             "-v", "standalone-components-cargo-git:/usr/local/cargo/git",
@@ -632,18 +644,6 @@ def build_rust(target: Path, component: str) -> None:
 
 def build_typescript(target: Path, component: str) -> None:
     package = component_package_name("typescript", target / component)
-    proxy_arguments: list[str] = []
-    if os.environ.get("DEPENDENCY_PROXY_DIR"):
-        proxy_host = os.environ.get(
-            "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
-        )
-        proxy_port = os.environ.get("DEPENDENCY_PROXY_PORT", "18081")
-        proxy_base = f"http://{proxy_host}:{proxy_port}/repository"
-        proxy_arguments = ["-e", f"NPM_CONFIG_REGISTRY={proxy_base}/npm-proxy/"]
-        for name, value in sorted(
-            dependency_download_mirrors.docker_environment().items()
-        ):
-            proxy_arguments.extend(["-e", f"{name}={value}"])
     script = (
         "corepack enable && "
         "corepack pnpm config set store-dir /pnpm/store && "
@@ -657,8 +657,8 @@ def build_typescript(target: Path, component: str) -> None:
         [
             "docker", "run", "--rm",
             "--name", name,
+            *docker_run_proxy_arguments(),
             "-e", "CI=true",
-            *proxy_arguments,
             "-v", docker_mount(target, "/workspace"),
             "-v", "standalone-components-pnpm:/pnpm/store",
             "-w", "/workspace",
@@ -733,6 +733,28 @@ def ensure_rust_image() -> None:
     )
 
 
+def ensure_python_image() -> None:
+    build_args: list[str] = []
+    if os.environ.get("DEPENDENCY_PROXY_DIR"):
+        build_args.extend(["--add-host", "host.docker.internal:host-gateway"])
+    for name in ("PIP_INDEX_URL", "PIP_TRUSTED_HOST"):
+        if value := docker_process_environment().get(name):
+            build_args.extend(["--build-arg", f"{name}={value}"])
+    run_command(
+        [
+            "docker", "build",
+            "--build-arg",
+            f"DEPENDENCY_DOCKER_REGISTRY={dependency_docker_registry()}",
+            *build_args,
+            "-f", str(Path(__file__).with_name("Dockerfile.python")),
+            "-t", PYTHON_TOOLCHAIN_IMAGE,
+            str(Path(__file__).parent),
+        ],
+        CONFORMANCE,
+        log_name="python-toolchain",
+    )
+
+
 def ensure_go_image() -> None:
     build_args: list[str] = []
     if os.environ.get("DEPENDENCY_PROXY_DIR"):
@@ -740,6 +762,8 @@ def ensure_go_image() -> None:
             "--add-host", "host.docker.internal:host-gateway",
         ])
     for name in (
+        "GOPROXY",
+        "GOSUMDB",
         "DEPENDENCY_GITHUB_RAW_URL",
         "DEPENDENCY_APT_DEBIAN_URL",
         "DEPENDENCY_APT_DEBIAN_SECURITY_URL",
@@ -783,8 +807,8 @@ def build_cpp(
     example, compose, env, source_cache = cpp_context
     build_dir = f"/workspace/build/standalone-components/{component}"
     definitions = [
-        "-DSERVICEGEN_MODULES_ROOT=/standalone",
-        "-DSERVICEGEN_FETCH_CPP_DEPENDENCIES=OFF",
+        "-DMODULES_ROOT=/standalone",
+        "-DFETCH_CPP_DEPENDENCIES=OFF",
     ]
     if language_name == "cpp":
         definitions.extend([
@@ -951,6 +975,13 @@ def main() -> int:
                 failures.append(f"rust:toolchain: {error}")
                 print(f"[standalone] FAIL rust:toolchain: {error}", file=sys.stderr)
                 unavailable_implementations.add("rust")
+        if not args.prepare_only and "python" in required_implementations:
+            try:
+                ensure_python_image()
+            except Exception as error:  # noqa: BLE001
+                failures.append(f"python:toolchain: {error}")
+                print(f"[standalone] FAIL python:toolchain: {error}", file=sys.stderr)
+                unavailable_implementations.add("python")
         for language_name in languages:
             language_results: dict[str, object] = {}
             matrix[language_name] = language_results
