@@ -371,6 +371,36 @@ class StandaloneComponentTest(unittest.TestCase):
         self.assertIn('"FETCH_CPP_DEPENDENCIES": "OFF"', source)
         self.assertNotIn("SERVICEGEN_FETCH_CPP_DEPENDENCIES", source)
 
+    def test_cpp_component_build_uses_conan_cmake_protoc_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "isolated"
+            target.mkdir()
+            commands: list[list[str]] = []
+
+            def record(command: list[str], *_args: object, **_kwargs: object) -> None:
+                commands.append(command)
+
+            context: run.CppContext = (
+                root,
+                ["docker", "compose"],
+                {},
+                None,
+            )
+            with mock.patch.object(run, "run_command", side_effect=record):
+                run.build_cpp(
+                    root,
+                    target,
+                    "cpp",
+                    "inventory_service_api",
+                    context,
+                )
+
+            rendered = " ".join(commands[0])
+            self.assertNotIn("command -v protoc", rendered)
+            self.assertNotIn("Protobuf_PROTOC_EXECUTABLE", rendered)
+            self.assertIn("CMAKE_TOOLCHAIN_FILE", rendered)
+
     def test_python_service_uses_generated_dependency_bootstrap(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
