@@ -240,6 +240,30 @@ def component_package_name(language: str, component_root: Path) -> str:
     return component_root.name
 
 
+def go_workspace_replacements(example: Path, dependencies: tuple[str, ...]) -> list[str]:
+    """Select the canonical version-qualified local replacements we materialize."""
+    workspace = (example / "go.work").read_text()
+    replacements: list[str] = []
+    for dependency in dependencies:
+        dependency_dir = component_directory("go", dependency)
+        go_mod = (example / dependency_dir / "go.mod").read_text()
+        module_match = re.search(r"(?m)^module\s+(\S+)\s*$", go_mod)
+        if module_match is None:
+            raise RuntimeError(f"Go module path is absent in {dependency_dir}/go.mod")
+        module_path = module_match.group(1)
+        replacement_match = re.search(
+            rf"(?m)^\s*({re.escape(module_path)}\s+\S+\s+=>\s+\./{re.escape(dependency_dir)})\s*$",
+            workspace,
+        )
+        if replacement_match is None:
+            raise RuntimeError(
+                f"version-qualified local replacement for {module_path} is absent "
+                f"in {example / 'go.work'}"
+            )
+        replacements.append(replacement_match.group(1))
+    return replacements
+
+
 def materialize_go(root: Path, language: Language, component: str, target: Path) -> None:
     example = root / language.example
     component_dir = component_directory(language.name, component)
@@ -257,7 +281,12 @@ def materialize_go(root: Path, language: Language, component: str, target: Path)
     ]
     go_version = go_toolchain.workspace_version(example / "go.work")
     body = "\n".join(f"\t./{entry}" for entry in uses)
-    (target / "go.work").write_text(f"go {go_version}\n\nuse (\n{body}\n)\n")
+    workspace = f"go {go_version}\n\nuse (\n{body}\n)\n"
+    replacements = go_workspace_replacements(example, DECLARED_MODULES[component])
+    if replacements:
+        replacement_body = "\n".join(f"\t{entry}" for entry in replacements)
+        workspace += f"\nreplace (\n{replacement_body}\n)\n"
+    (target / "go.work").write_text(workspace)
 
 
 def materialize_cpp(root: Path, language: Language, component: str, target: Path) -> None:

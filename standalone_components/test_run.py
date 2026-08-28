@@ -106,7 +106,16 @@ class StandaloneComponentTest(unittest.TestCase):
                 (example / physical_name / "go.mod").write_text(
                     f"module github.com/gorundebug/{physical_name}\n\ngo 1.99.2\n"
                 )
-            (example / "go.work").write_text("go 1.99.2\n")
+            (example / "go.work").write_text(
+                "go 1.99.2\n\nreplace (\n"
+                "\tgithub.com/gorundebug/model_go v0.7.0 => ./model_go\n"
+                ")\n"
+            )
+            (example / "analyticsservice" / "go.mod").write_text(
+                "module github.com/gorundebug/analyticsservice\n\n"
+                "go 1.99.2\n\n"
+                "require github.com/gorundebug/model_go v0.7.0\n"
+            )
             (root / "servicelib").mkdir()
             (root / "servicelib" / "go.mod").write_text(
                 "module github.com/gorundebug/servicelib\n\ngo 1.99.2\n"
@@ -119,6 +128,10 @@ class StandaloneComponentTest(unittest.TestCase):
             self.assertIn("./analyticsservice", workspace)
             self.assertIn("./model_go", workspace)
             self.assertIn("./servicelib", workspace)
+            self.assertIn(
+                "github.com/gorundebug/model_go v0.7.0 => ./model_go",
+                workspace,
+            )
             self.assertNotIn("unusedmodule", workspace)
             self.assertFalse((target / "inventory_service_api").exists())
 
