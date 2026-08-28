@@ -37,7 +37,7 @@ endif
 	config-runtime config-runtime-core config-runtime-go \
 	config-runtime-typescript dependencies pools operators serde transports \
 	kafka temporal tracing metrics dashboards dashboards-core logging scenarios \
-	call-semantics standalone-components kubernetes \
+	call-semantics standalone-components published-components kubernetes \
 	generation profiling profiling-all profiling-tests \
 	profiling-durable profiling-durable-quick \
 	benchmarks benchmark benchmarks-quick benchmarks-durable benchmarks-durable-quick benchmarks-tests \
@@ -50,7 +50,7 @@ endif
 # this phony prerequisite executes once even when several suites are selected.
 MANIFEST_GATED_TARGETS := tooling structure signatures config-core config-schema \
 	config-runtime-core config-runtime-go config-runtime-typescript dependencies \
-	standalone-components pools operators serde transports kafka temporal tracing \
+	standalone-components published-components pools operators serde transports kafka temporal tracing \
 	metrics dashboards-core logging scenarios call-semantics generation kubernetes profiling
 $(MANIFEST_GATED_TARGETS): dependency-manifests
 
@@ -73,7 +73,7 @@ release: fast integration profiling
 
 fast: dependency-manifests tooling structure signatures config pools operators serde
 
-integration: config-runtime dependencies standalone-components transports kafka temporal tracing metrics dashboards logging scenarios call-semantics generation kubernetes
+integration: config-runtime dependencies standalone-components published-components transports kafka temporal tracing metrics dashboards logging scenarios call-semantics generation kubernetes
 
 resume:
 	python3 resume.py
@@ -108,6 +108,9 @@ dependencies:
 
 standalone-components:
 	python3 run_suite.py standalone-components python3 standalone_components/run.py
+
+published-components:
+	python3 run_suite.py published-components python3 published_components/run.py
 
 pools:
 	python3 run_suite.py pools python3 pools/run.py

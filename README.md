@@ -213,7 +213,7 @@ cover the common workflows:
 
 ```bash
 make fast         # dependency manifests, structure, signatures, config, pools, operators and serde
-make integration  # runtime, standalone builds, transports, Kafka, telemetry and scenarios
+make integration  # runtime, standalone/published builds, transports, Kafka, telemetry and scenarios
 make release      # fast + integration + mandatory profiling + aggregate report
 make resume       # run only failed or missing leaf suites, then aggregate
 ```
@@ -232,7 +232,7 @@ The same targets are available from a clean checkout through quickstart:
 ./quickstart.sh -- resume
 ```
 
-After every suite passes, `make release` writes a single 26-suite result matrix to
+After every suite passes, `make release` writes a single 27-suite result matrix to
 `.artifacts/summary.json`. The aggregate step also rejects a partial
 Go/C++/Python/Rust metrics, tracing or logging run. It prints the complete
 PASS/FAIL suite matrix, the final passed count and the report path to the
@@ -311,6 +311,31 @@ written to `.artifacts/standalone-components/summary.json`. A filtered
 language/component invocation is diagnostic and writes
 `.artifacts/standalone-components/diagnostic-summary.json`, so it cannot
 replace the last authoritative full-matrix result.
+
+## Published component builds
+
+The `published-components` gate verifies the other half of the hybrid repository
+contract. It snapshots tracked source files into temporary repositories under
+their exact generated GitHub identities, creates the exact declared release
+tags, serves them from an isolated Git mirror, clones every repository into an
+empty directory, and builds services with `USE_LOCAL_MODULES=0`. No sibling
+workspace module can satisfy a dependency accidentally.
+
+```bash
+make published-components
+./quickstart.sh -- published-components
+python3 published_components/run.py \
+  --language go --component orderservice
+```
+
+With `DEPENDENCY_PROXY_DIR` set, third-party Git and package downloads use the
+configured proxy/cache and the temporary mirror is offline. Without that
+variable, third-party dependencies use their ordinary registries while only
+the temporary `github.com/gorundebug/*` repository identities are redirected.
+Both modes therefore test the same published-module semantics without requiring
+the fixtures to exist on public GitHub. The result is written to
+`.artifacts/published-components/summary.json`. Filtered and prepare-only runs
+write `diagnostic-summary.json` and cannot replace the authoritative full matrix.
 
 ## Kubernetes and Helm
 

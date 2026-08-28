@@ -23,6 +23,7 @@ set -euo pipefail
 #   ./quickstart.sh -- call-semantics                # FunctionCall graph (default)
 #   ./quickstart.sh --profile current -- call-semantics  # pooled graph
 #   ./quickstart.sh -- standalone-components         # isolated local builds
+#   ./quickstart.sh -- published-components          # isolated repository builds
 #   ./quickstart.sh -- kubernetes                    # Helm + local k3s rollout
 #   ./quickstart.sh -- benchmarks                    # full 12-variant benchmark
 #   ./quickstart.sh -- profiling-all                 # CPU profiles for all variants

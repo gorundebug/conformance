@@ -15,13 +15,16 @@ OUTPUT = ARTIFACTS / "summary.json"
 SUITES = (
     "dependency-manifests", "tooling", "structure", "signatures", "config", "config-schema",
     "config-runtime", "config-runtime-go", "config-runtime-typescript",
-    "dependencies", "standalone-components", "pools",
+    "dependencies", "standalone-components", "published-components", "pools",
     "operators", "serde", "transports", "kafka", "temporal", "tracing", "metrics",
     "dashboards", "logging",
     "scenarios", "call-semantics", "generation", "kubernetes", "profiling",
 )
 LANGUAGE_SUITES = {
     "standalone-components": {
+        "go", "cpp", "cppboost", "python", "rust", "typescript",
+    },
+    "published-components": {
         "go", "cpp", "cppboost", "python", "rust", "typescript",
     },
     "pools": {"go", "canonical-cpp", "cppboost", "typescript"},
