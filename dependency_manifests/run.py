@@ -319,11 +319,32 @@ def pnpm_importer_specifiers(text: str) -> dict[str, dict[str, str]]:
     return importers
 
 
+def pnpm_workspace_overrides(project: Path) -> dict[str, str]:
+    workspace = project / "pnpm-workspace.yaml"
+    if not workspace.is_file():
+        return {}
+    overrides: dict[str, str] = {}
+    in_overrides = False
+    for line in workspace.read_text().splitlines():
+        if line == "overrides:":
+            in_overrides = True
+            continue
+        if not in_overrides:
+            continue
+        if line and not line.startswith(" "):
+            break
+        match = re.match(r"^  ([^ ].*?):\s*(.+)$", line)
+        if match:
+            overrides[yaml_scalar(match.group(1))] = yaml_scalar(match.group(2))
+    return overrides
+
+
 def check_typescript_project(project: Path) -> dict[str, object]:
     lock_path = project / "pnpm-lock.yaml"
     if not lock_path.is_file():
         raise RuntimeError(f"required TypeScript lockfile is missing: {lock_path.relative_to(ROOT)}")
     locked = pnpm_importer_specifiers(lock_path.read_text())
+    overrides = pnpm_workspace_overrides(project)
     checked: list[str] = []
     for manifest in sorted(project.rglob("package.json")):
         relative = manifest.relative_to(project)
@@ -335,6 +356,9 @@ def check_typescript_project(project: Path) -> dict[str, object]:
             values = package.get(key, {})
             if isinstance(values, dict):
                 expected.update({str(name): str(specifier) for name, specifier in values.items()})
+        for name, specifier in overrides.items():
+            if name in expected:
+                expected[name] = specifier
         importer = str(relative.parent) if relative.parent != Path(".") else "."
         if importer not in locked:
             raise RuntimeError(f"{manifest.relative_to(ROOT)} has no pnpm lock importer")
