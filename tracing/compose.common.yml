@@ -1,6 +1,6 @@
 services:
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.136.0
+    image: ${DEPENDENCY_DOCKER_REGISTRY:-docker.io}/otel/opentelemetry-collector-contrib:0.136.0
     command:
       - --config=/etc/otelcol-contrib/config.yaml
     volumes:

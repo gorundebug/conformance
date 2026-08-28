@@ -25,7 +25,7 @@ services:
     restart: "no"
 
   loadgen:
-    image: grafana/k6:0.55.2
+    image: ${DEPENDENCY_DOCKER_REGISTRY:-docker.io}/grafana/k6:0.55.2
     cpus: ${BENCHMARK_LOADGEN_CORES}
     user: "0:0"
     profiles: [benchmark]
