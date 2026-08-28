@@ -176,6 +176,18 @@ class PublishedComponentsTest(unittest.TestCase):
             "tsexample-orderservice",
         )
 
+    def test_service_packagers_follow_release_artifact_shape(self) -> None:
+        self.assertIsNone(run.service_package_script("go", "orderservice"))
+        self.assertIsNone(run.service_package_script("cpp", "automationservice"))
+        self.assertEqual(
+            run.service_package_script("cpp", "orderservice"),
+            "scripts/package-cpp-service.generated.sh",
+        )
+        self.assertEqual(
+            run.service_package_script("python", "automationservice"),
+            "scripts/package-python-service.generated.sh",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

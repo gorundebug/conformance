@@ -65,6 +65,7 @@ class RepositorySpec:
     name: str
     source: Path
     tags: tuple[str, ...]
+    package_script: str | None = None
 
     @property
     def relative_path(self) -> Path:
@@ -83,6 +84,25 @@ SERVICE_REPOSITORIES: dict[str, str] = {
     "rust": "rustexample-{service}",
     "typescript": "tsexample-{service}",
 }
+
+SERVICE_PACKAGE_SCRIPTS: dict[str, str] = {
+    "cpp": "scripts/package-cpp-service.generated.sh",
+    "cppboost": "scripts/package-cpp-service.generated.sh",
+    "python": "scripts/package-python-service.generated.sh",
+    "rust": "scripts/package-rust-service.generated.sh",
+    "typescript": "scripts/package-typescript-service.generated.sh",
+}
+
+
+def service_package_script(language_name: str, service: str) -> str | None:
+    # Automation Service falls back to generated Go in languages without the
+    # Temporal SDK. Its repository is already autonomous and does not use the
+    # native language packager.
+    if service == "automationservice" and language_name in {
+        "cpp", "cppboost", "rust",
+    }:
+        return None
+    return SERVICE_PACKAGE_SCRIPTS.get(language_name)
 
 
 def command(
@@ -192,6 +212,7 @@ def repository_specs(root: Path) -> list[RepositorySpec]:
                 repository_name,
                 source,
                 tuple(sorted(tags)),
+                service_package_script(language_name, service),
             )
     return sorted(specs.values(), key=lambda item: (item.owner, item.name))
 
@@ -241,7 +262,21 @@ def snapshot_repository(spec: RepositorySpec, mirror_root: Path, scratch: Path) 
     worktree = scratch / f"{spec.owner}-{spec.name}"
     if worktree.exists():
         shutil.rmtree(worktree)
-    copy_tracked_source(spec.source, worktree)
+    if spec.package_script is None:
+        copy_tracked_source(spec.source, worktree)
+    else:
+        project = scratch / f".{spec.owner}-{spec.name}-project"
+        copy_tracked_source(spec.source.parent, project)
+        package_script = project / spec.package_script
+        if not package_script.is_file():
+            raise RuntimeError(
+                f"service package script is missing: {package_script}"
+            )
+        command(
+            [str(package_script), str(project / spec.source.name), str(worktree)],
+            cwd=project,
+        )
+        shutil.rmtree(project)
     run_git(["init", "--initial-branch=main"], worktree)
     run_git(["config", "user.name", "ServiceGen Conformance"], worktree)
     run_git(["config", "user.email", "conformance@localhost"], worktree)
