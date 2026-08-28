@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -121,10 +122,19 @@ SERVICES = (
     "analyticsservice", "automationservice", "inventoryservice", "orderservice",
 )
 MODULES = ("inventory_service_api", "model", "order_service_api")
+LANGUAGE_NEUTRAL_MODULES = frozenset({"inventory_service_api", "order_service_api"})
+MODULE_LANGUAGE_SUFFIX = {
+    "go": "go",
+    "cpp": "cpp",
+    "cppboost": "cpp",
+    "python": "python",
+    "rust": "rust",
+    "typescript": "ts",
+}
 COMPONENTS = SERVICES + MODULES
 DECLARED_MODULES: dict[str, tuple[str, ...]] = {
     "analyticsservice": ("model",),
-    "automationservice": (),
+    "automationservice": ("model",),
     "inventoryservice": ("inventory_service_api", "model"),
     "orderservice": (
         "inventory_service_api",
@@ -135,6 +145,13 @@ DECLARED_MODULES: dict[str, tuple[str, ...]] = {
     "model": (),
     "order_service_api": (),
 }
+
+
+def component_directory(language: str, component: str) -> str:
+    """Return the generated physical directory for a logical component."""
+    if component not in MODULES or component in LANGUAGE_NEUTRAL_MODULES:
+        return component
+    return f"{component}_{MODULE_LANGUAGE_SUFFIX[language]}"
 
 
 @dataclass(frozen=True)
@@ -217,17 +234,27 @@ def component_package_name(language: str, component_root: Path) -> str:
             return match.group(1)
     if language == "typescript":
         return str(json.loads((component_root / "package.json").read_text())["name"])
+    if language == "python":
+        project = tomllib.loads((component_root / "pyproject.toml").read_text())
+        return str(project["project"]["name"])
     return component_root.name
 
 
 def materialize_go(root: Path, language: Language, component: str, target: Path) -> None:
     example = root / language.example
-    copy_source(example / component, target / component)
+    component_dir = component_directory(language.name, component)
+    copy_source(example / component_dir, target / component_dir)
     for dependency in DECLARED_MODULES[component]:
-        copy_source(example / dependency, target / dependency)
+        dependency_dir = component_directory(language.name, dependency)
+        copy_source(example / dependency_dir, target / dependency_dir)
     copy_source(root / language.framework, target / language.framework)
 
-    uses = [component, *DECLARED_MODULES[component], language.framework]
+    uses = [
+        component_dir,
+        *(component_directory(language.name, item)
+          for item in DECLARED_MODULES[component]),
+        language.framework,
+    ]
     go_version = go_toolchain.workspace_version(example / "go.work")
     body = "\n".join(f"\t./{entry}" for entry in uses)
     (target / "go.work").write_text(f"go {go_version}\n\nuse (\n{body}\n)\n")
@@ -235,9 +262,11 @@ def materialize_go(root: Path, language: Language, component: str, target: Path)
 
 def materialize_cpp(root: Path, language: Language, component: str, target: Path) -> None:
     example = root / language.example
-    copy_source(example / component, target / component)
+    component_dir = component_directory(language.name, component)
+    copy_source(example / component_dir, target / component_dir)
     for dependency in DECLARED_MODULES[component]:
-        copy_source(example / dependency, target / dependency)
+        dependency_dir = component_directory(language.name, dependency)
+        copy_source(example / dependency_dir, target / dependency_dir)
 
 
 def materialize_python(
@@ -247,12 +276,14 @@ def materialize_python(
     target: Path,
 ) -> None:
     example = root / language.example
-    component_root = target / component
-    copy_source(example / component, component_root)
+    component_dir = component_directory(language.name, component)
+    component_root = target / component_dir
+    copy_source(example / component_dir, component_root)
     dependencies = component_root / ".servicegen" / "dependencies"
     dependencies.mkdir(parents=True)
     for dependency in DECLARED_MODULES[component]:
-        copy_source(example / dependency, dependencies / dependency)
+        dependency_dir = component_directory(language.name, dependency)
+        copy_source(example / dependency_dir, dependencies / dependency_dir)
 
     if component in SERVICES:
         manifest_path = component_root / "pyproject.toml"
@@ -267,17 +298,39 @@ def materialize_python(
         )
         if 'path = ".servicegen/dependencies/pyservicelib"' not in manifest:
             raise RuntimeError("Python framework Git source was not replaced locally")
+        for dependency in DECLARED_MODULES[component]:
+            dependency_dir = component_directory(language.name, dependency)
+            package_name = component_package_name(
+                "python", dependencies / dependency_dir,
+            )
+            source_pattern = (
+                rf"(?m)^{re.escape(package_name)}\s*=\s*"
+                r"\{\s*workspace\s*=\s*true\s*\}$"
+            )
+            source_replacement = (
+                f'{package_name} = '
+                f'{{ path = ".local-dependencies/{dependency_dir}" }}'
+            )
+            manifest, replacements = re.subn(
+                source_pattern, source_replacement, manifest, count=1,
+            )
+            if replacements != 1:
+                raise RuntimeError(
+                    f"Python local source for {package_name} was not found"
+                )
         manifest_path.write_text(manifest)
 
 
 def materialize_rust(root: Path, language: Language, component: str, target: Path) -> None:
     example = root / language.example
-    copy_source(example / component, target / component)
+    component_dir = component_directory(language.name, component)
+    copy_source(example / component_dir, target / component_dir)
     for dependency in DECLARED_MODULES[component]:
-        copy_source(example / dependency, target / dependency)
+        dependency_dir = component_directory(language.name, dependency)
+        copy_source(example / dependency_dir, target / dependency_dir)
     if component in SERVICES:
         copy_source(root / language.framework, target / language.framework)
-        manifest_path = target / component / "Cargo.toml"
+        manifest_path = target / component_dir / "Cargo.toml"
         manifest = manifest_path.read_text()
         manifest, replacements = re.subn(
             r'servicelib-gorundebug\s*=\s*\{\s*git\s*=\s*"[^"]+",\s*tag\s*=\s*"[^"]+"\s*\}',
@@ -290,7 +343,11 @@ def materialize_rust(root: Path, language: Language, component: str, target: Pat
         manifest_path.write_text(manifest)
 
     workspace_source = (example / "Cargo.toml").read_text()
-    members = [component, *DECLARED_MODULES[component]]
+    members = [
+        component_dir,
+        *(component_directory(language.name, item)
+          for item in DECLARED_MODULES[component]),
+    ]
     workspace_source = re.sub(
         r'(?ms)^members\s*=\s*\[.*?^\]',
         "members = [\n" + "".join(f'    "{item}",\n' for item in members) + "]",
@@ -298,7 +355,9 @@ def materialize_rust(root: Path, language: Language, component: str, target: Pat
         count=1,
     )
     package_names = {
-        dependency: component_package_name("rust", target / dependency)
+        component_directory(language.name, dependency): component_package_name(
+            "rust", target / component_directory(language.name, dependency)
+        )
         for dependency in DECLARED_MODULES[component]
     }
     patch_body = "".join(
@@ -333,15 +392,22 @@ def materialize_typescript(
     target: Path,
 ) -> None:
     example = root / language.example
-    component_root = target / component
-    copy_source(example / component, component_root)
+    component_dir = component_directory(language.name, component)
+    component_root = target / component_dir
+    copy_source(example / component_dir, component_root)
     for dependency in DECLARED_MODULES[component]:
-        copy_source(example / dependency, target / dependency)
+        dependency_dir = component_directory(language.name, dependency)
+        copy_source(example / dependency_dir, target / dependency_dir)
     if component in SERVICES:
         copy_source(root / language.framework, target / language.framework)
         package = json.loads((component_root / "package.json").read_text())
         local_names: dict[str, str] = {}
-        for directory in (*DECLARED_MODULES[component], language.framework):
+        dependency_dirs = (
+            *(component_directory(language.name, item)
+              for item in DECLARED_MODULES[component]),
+            language.framework,
+        )
+        for directory in dependency_dirs:
             dependency_package = json.loads((target / directory / "package.json").read_text())
             local_names[str(dependency_package["name"])] = "workspace:*"
         for name, version in local_names.items():
@@ -357,7 +423,20 @@ def materialize_typescript(
     root_package = example / "package.json"
     if root_package.is_file():
         shutil.copy2(root_package, target / "package.json")
-    workspace = [component, *DECLARED_MODULES[component]]
+    dependency_wrapper = example / "dependency-download-env.generated.sh"
+    if not dependency_wrapper.is_file():
+        raise RuntimeError(
+            f"TypeScript dependency wrapper is missing: {dependency_wrapper}"
+        )
+    shutil.copy2(
+        dependency_wrapper,
+        target / "dependency-download-env.generated.sh",
+    )
+    workspace = [
+        component_dir,
+        *(component_directory(language.name, item)
+          for item in DECLARED_MODULES[component]),
+    ]
     if component in SERVICES:
         workspace.append(language.framework)
     (target / "pnpm-workspace.yaml").write_text(
@@ -503,9 +582,12 @@ def docker_mount(path: Path, destination: str, *, read_only: bool = False) -> st
 
 
 def build_go(target: Path, component: str) -> None:
-    generation_targets = [*DECLARED_MODULES[component]]
+    component_dir = component_directory("go", component)
+    generation_targets = [
+        component_directory("go", item) for item in DECLARED_MODULES[component]
+    ]
     if component in MODULES:
-        generation_targets.append(component)
+        generation_targets.append(component_dir)
     generation = " && ".join(
         f"make -C /workspace/{item} all "
         "TOOLS_DIR=/usr/local/bin PROTOC=/usr/local/bin/protoc "
@@ -515,7 +597,7 @@ def build_go(target: Path, component: str) -> None:
     service_generation = ""
     if component in SERVICES:
         service_generation = (
-            f"make -C /workspace/{component} gen-proto "
+            f"make -C /workspace/{component_dir} gen-proto "
             "TOOLS_DIR=/usr/local/bin PROTOC=/usr/local/bin/protoc"
         )
     phases = [value for value in (generation, service_generation, "go test ./...") if value]
@@ -532,7 +614,7 @@ def build_go(target: Path, component: str) -> None:
             "-v", docker_mount(target, "/workspace"),
             "-v", "standalone-components-go-build:/root/.cache/go-build",
             "-v", "standalone-components-go-modules:/go/pkg/mod",
-            "-w", f"/workspace/{component}",
+            "-w", f"/workspace/{component_dir}",
             GO_TOOLCHAIN_IMAGE, "/bin/bash", "-c", script,
         ],
         target,
@@ -541,7 +623,7 @@ def build_go(target: Path, component: str) -> None:
 
 
 def build_python(target: Path, component: str) -> None:
-    component_root = target / component
+    component_root = target / component_directory("python", component)
 
     sync_name = container_name("python", component, "sync")
     prefix = [
@@ -608,13 +690,14 @@ def build_python(target: Path, component: str) -> None:
 
 
 def build_rust(target: Path, component: str) -> None:
-    package = component_package_name("rust", target / component)
+    component_dir = component_directory("rust", component)
+    package = component_package_name("rust", target / component_dir)
     generation_targets = [
-        item
+        component_directory("rust", item)
         for item in (*DECLARED_MODULES[component], component)
         if re.search(
             r"(?m)^generate\s*:",
-            (target / item / "Makefile").read_text(),
+            (target / component_directory("rust", item) / "Makefile").read_text(),
         )
     ]
     generation = " && ".join(
@@ -645,10 +728,12 @@ def build_rust(target: Path, component: str) -> None:
 
 
 def build_typescript(target: Path, component: str) -> None:
-    package = component_package_name("typescript", target / component)
+    component_dir = component_directory("typescript", component)
+    package = component_package_name("typescript", target / component_dir)
     script = (
         "corepack enable && "
         "corepack pnpm config set store-dir /pnpm/store && "
+        "/workspace/dependency-download-env.generated.sh --retry "
         "corepack pnpm --config.registry=\"${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}\" "
         "install --no-frozen-lockfile && "
         f"corepack pnpm --filter {package}... build && "
@@ -807,6 +892,7 @@ def build_cpp(
     cpp_context: CppContext,
 ) -> None:
     example, compose, env, source_cache = cpp_context
+    component_dir = component_directory(language_name, component)
     build_dir = f"/workspace/build/standalone-components/{component}"
     definitions = [
         "-DMODULES_ROOT=/standalone",
@@ -863,7 +949,7 @@ def build_cpp(
         *protoc_commands,
         "&&", f"cmake -E remove_directory {build_dir}",
         "&&",
-        f"cmake -S /standalone/{component} -B {build_dir} -G Ninja",
+        f"cmake -S /standalone/{component_dir} -B {build_dir} -G Ninja",
         "-DCMAKE_BUILD_TYPE=Debug",
         '-DCMAKE_TOOLCHAIN_FILE="$conan_toolchain"',
         '-DCMAKE_MODULE_PATH="$conan_generators"',

@@ -101,9 +101,10 @@ class StandaloneComponentTest(unittest.TestCase):
             root = Path(directory)
             example = root / "goexample"
             for name in (*run.COMPONENTS, "unusedmodule"):
-                (example / name).mkdir(parents=True)
-                (example / name / "go.mod").write_text(
-                    f"module github.com/gorundebug/{name}\n\ngo 1.99.2\n"
+                physical_name = run.component_directory("go", name)
+                (example / physical_name).mkdir(parents=True)
+                (example / physical_name / "go.mod").write_text(
+                    f"module github.com/gorundebug/{physical_name}\n\ngo 1.99.2\n"
                 )
             (example / "go.work").write_text("go 1.99.2\n")
             (root / "servicelib").mkdir()
@@ -116,7 +117,7 @@ class StandaloneComponentTest(unittest.TestCase):
             workspace = (target / "go.work").read_text()
             self.assertIn("go 1.99.2", workspace)
             self.assertIn("./analyticsservice", workspace)
-            self.assertIn("./model", workspace)
+            self.assertIn("./model_go", workspace)
             self.assertIn("./servicelib", workspace)
             self.assertNotIn("unusedmodule", workspace)
             self.assertFalse((target / "inventory_service_api").exists())
@@ -142,11 +143,11 @@ class StandaloneComponentTest(unittest.TestCase):
             example.mkdir()
             (example / "Cargo.toml").write_text(
                 '[workspace]\nresolver = "2"\nmembers = [\n'
-                '    "analyticsservice",\n    "model",\n'
+                '    "analyticsservice",\n    "model_rust",\n'
                 '    "inventory_service_api",\n]\n\n'
                 '[patch."https://github.com/gorundebug/rustexample.git"]\n'
                 'inventory-service-api = { path = "inventory_service_api" }\n'
-                'example-model = { path = "model" }\n'
+                'example-model = { path = "model_rust" }\n'
                 'order-service-api = { path = "order_service_api" }\n'
             )
             service = example / "analyticsservice"
@@ -156,7 +157,7 @@ class StandaloneComponentTest(unittest.TestCase):
                 '[dependencies]\n'
                 'servicelib-gorundebug = { git = "https://example", tag = "v1" }\n'
             )
-            model = example / "model"
+            model = example / "model_rust"
             model.mkdir()
             (model / "Cargo.toml").write_text(
                 '[package]\nname = "example-model"\nversion = "0.1.0"\n'
@@ -171,9 +172,47 @@ class StandaloneComponentTest(unittest.TestCase):
             run.materialize_component(root, "rust", "analyticsservice", target)
             workspace = (target / "Cargo.toml").read_text()
 
-            self.assertIn('example-model = { path = "model" }', workspace)
+            self.assertIn('example-model = { path = "model_rust" }', workspace)
             self.assertNotIn("inventory-service-api", workspace)
             self.assertNotIn("order-service-api", workspace)
+
+    def test_python_service_replaces_workspace_module_with_local_fetch_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            example = root / "pyexample"
+            service = example / "analyticsservice"
+            service.mkdir(parents=True)
+            (service / "pyproject.toml").write_text(
+                '[project]\nname = "analytics-service"\nversion = "0.1.0"\n'
+                'dependencies = ["pyservicelib-gorundebug", "model"]\n'
+                '[tool.uv.sources]\n'
+                'pyservicelib-gorundebug = '
+                '{ git = "https://example", tag = "v1" }\n'
+                'model = { workspace = true }\n'
+            )
+            model = example / "model_python"
+            model.mkdir()
+            (model / "pyproject.toml").write_text(
+                '[project]\nname = "model"\nversion = "0.1.0"\n'
+            )
+            framework = root / "pyservicelib"
+            framework.mkdir()
+            (framework / "pyproject.toml").write_text(
+                '[project]\nname = "pyservicelib-gorundebug"\nversion = "0.1.0"\n'
+            )
+
+            target = root / "isolated"
+            run.materialize_component(root, "python", "analyticsservice", target)
+            manifest = (target / "analyticsservice" / "pyproject.toml").read_text()
+
+            self.assertIn(
+                'model = { path = ".local-dependencies/model_python" }',
+                manifest,
+            )
+            self.assertTrue(
+                (target / "analyticsservice" / ".servicegen" /
+                 "dependencies" / "model_python").is_dir()
+            )
 
     def test_typescript_override_preserves_public_package_names(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -181,6 +220,9 @@ class StandaloneComponentTest(unittest.TestCase):
             example = root / "tsexample"
             (example / "package.json").parent.mkdir(parents=True)
             (example / "package.json").write_text('{"name":"root"}\n')
+            wrapper = example / "dependency-download-env.generated.sh"
+            wrapper.write_text("#!/bin/sh\nexec env \"$@\"\n")
+            wrapper.chmod(0o755)
             service = example / "analyticsservice"
             service.mkdir()
             package = {
@@ -191,7 +233,7 @@ class StandaloneComponentTest(unittest.TestCase):
                 },
             }
             (service / "package.json").write_text(json.dumps(package))
-            model = example / "model"
+            model = example / "model_ts"
             model.mkdir()
             (model / "package.json").write_text('{"name":"@gorundebug/model"}\n')
             framework = root / "tsservicelib"
@@ -218,6 +260,23 @@ class StandaloneComponentTest(unittest.TestCase):
                 "  '@swc/core': true",
                 (target / "pnpm-workspace.yaml").read_text(),
             )
+            self.assertIn(
+                '  - "model_ts"',
+                (target / "pnpm-workspace.yaml").read_text(),
+            )
+
+    def test_component_directory_suffixes_only_language_specific_modules(self) -> None:
+        self.assertEqual(run.component_directory("go", "model"), "model_go")
+        self.assertEqual(run.component_directory("cppboost", "model"), "model_cpp")
+        self.assertEqual(run.component_directory("typescript", "model"), "model_ts")
+        self.assertEqual(
+            run.component_directory("rust", "inventory_service_api"),
+            "inventory_service_api",
+        )
+        self.assertEqual(
+            run.component_directory("python", "order_service_api"),
+            "order_service_api",
+        )
 
     def test_docker_run_proxy_arguments_apply_one_container_contract(self) -> None:
         with mock.patch.dict(
