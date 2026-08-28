@@ -292,7 +292,7 @@ class StandaloneComponentTest(unittest.TestCase):
 
             rendered = [" ".join(command) for command in commands]
             self.assertIn(
-                "SERVICEGEN_LOCAL_DEPENDENCIES_DIR="
+                "LOCAL_DEPENDENCIES_DIR="
                 "/workspace/.servicegen/dependencies",
                 rendered[0],
             )
