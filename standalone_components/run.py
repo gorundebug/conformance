@@ -92,6 +92,8 @@ def docker_process_environment(overrides: dict[str, str] | None = None) -> dict[
     result["PIP_TRUSTED_HOST"] = docker_host
     if value := os.environ.get("GOSUMDB"):
         result["GOSUMDB"] = value
+    if value := result.get("NPM_CONFIG_REGISTRY"):
+        result["COREPACK_NPM_REGISTRY"] = value
     for index in range(int(os.environ.get("GIT_CONFIG_COUNT", "0"))):
         key_name = f"GIT_CONFIG_KEY_{index}"
         value_name = f"GIT_CONFIG_VALUE_{index}"
@@ -558,7 +560,7 @@ def build_python(target: Path, component: str) -> None:
             [
                 *prefix,
                 "/bin/bash", "-lc",
-                "SERVICEGEN_LOCAL_DEPENDENCIES_DIR="
+                "LOCAL_DEPENDENCIES_DIR="
                 "/workspace/.servicegen/dependencies "
                 "./scripts/fetch-dependencies.generated.sh && "
                 "uv sync --all-extras",

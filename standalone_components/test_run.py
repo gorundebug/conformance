@@ -228,6 +228,9 @@ class StandaloneComponentTest(unittest.TestCase):
                 "DEPENDENCY_PROXY_DOCKER_HOST": "host.docker.internal",
                 "GOPROXY": "http://localhost:18081/repository/go-proxy/",
                 "GOSUMDB": "off",
+                "NPM_CONFIG_REGISTRY": (
+                    "http://localhost:18081/repository/npm-proxy/"
+                ),
             },
             clear=True,
         ), mock.patch.object(
@@ -243,6 +246,11 @@ class StandaloneComponentTest(unittest.TestCase):
             arguments,
         )
         self.assertIn("GOSUMDB=off", arguments)
+        self.assertIn(
+            "COREPACK_NPM_REGISTRY="
+            "http://host.docker.internal:18081/repository/npm-proxy/",
+            arguments,
+        )
 
     def test_diagnostic_summary_is_separate_from_authoritative_summary(self) -> None:
         self.assertNotEqual(run.SUMMARY, run.DIAGNOSTIC_SUMMARY)
