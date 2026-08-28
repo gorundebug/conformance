@@ -30,6 +30,41 @@ class StandaloneComponentTest(unittest.TestCase):
                 "proxy.example:19000/library/node:24",
             )
 
+    def test_docker_process_environment_uses_container_proxy_host(self) -> None:
+        with mock.patch.dict(
+            run.os.environ,
+            {
+                "DEPENDENCY_PROXY_DIR": "/cache",
+                "DEPENDENCY_PROXY_HOST": "localhost",
+                "DEPENDENCY_PROXY_DOCKER_HOST": "host.docker.internal",
+                "DEPENDENCY_APT_UBUNTU_PORTS_URL": (
+                    "http://localhost:18081/repository/apt-ubuntu-ports"
+                ),
+                "DEPENDENCY_CONAN_REMOTE_URL": (
+                    "http://localhost:18081/repository/conan-proxy"
+                ),
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": (
+                    "url.http://localhost:18084/cgi-bin/git/github.com/.insteadOf"
+                ),
+                "GIT_CONFIG_VALUE_0": "https://github.com/",
+            },
+            clear=True,
+        ):
+            environment = run.docker_process_environment({"UNCHANGED": "yes"})
+
+        self.assertEqual(environment["UNCHANGED"], "yes")
+        self.assertEqual(
+            environment["DEPENDENCY_APT_UBUNTU_PORTS_URL"],
+            "http://host.docker.internal:18081/repository/apt-ubuntu-ports",
+        )
+        self.assertEqual(
+            environment["DEPENDENCY_CONAN_REMOTE_URL"],
+            "http://host.docker.internal:18081/repository/conan-proxy",
+        )
+        self.assertIn("host.docker.internal:18084", environment["GIT_CONFIG_KEY_0"])
+        self.assertEqual(environment["PIP_TRUSTED_HOST"], "host.docker.internal")
+
     def test_declared_module_matrix_is_complete(self) -> None:
         self.assertEqual(set(run.DECLARED_MODULES), set(run.COMPONENTS))
         self.assertEqual(set(run.SERVICES) | set(run.MODULES), set(run.COMPONENTS))

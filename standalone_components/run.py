@@ -46,6 +46,24 @@ GO_TOOLCHAIN_IMAGE = ""
 RUN_ID = f"servicegen-standalone-{os.getpid()}-{int(time.time())}"
 ACTIVE_CONTAINERS: set[str] = set()
 
+DOCKER_PROXY_URL_VARIABLES = (
+    "GOPROXY",
+    "NPM_CONFIG_REGISTRY",
+    "PIP_INDEX_URL",
+    "UV_INDEX_URL",
+    "CARGO_REGISTRIES_CRATES_IO_INDEX",
+    "DEPENDENCY_MAVEN_CENTRAL_URL",
+    "DEPENDENCY_CONAN_REMOTE_URL",
+    "DEPENDENCY_GITHUB_RAW_URL",
+    "DEPENDENCY_GITLAB_RAW_URL",
+    "DEPENDENCY_APT_UBUNTU_ARCHIVE_URL",
+    "DEPENDENCY_APT_UBUNTU_SECURITY_URL",
+    "DEPENDENCY_APT_UBUNTU_PORTS_URL",
+    "DEPENDENCY_APT_DEBIAN_URL",
+    "DEPENDENCY_APT_DEBIAN_SECURITY_URL",
+    "DEPENDENCY_GIT_MIRROR_URL",
+)
+
 
 def dependency_docker_registry() -> str:
     if not os.environ.get("DEPENDENCY_PROXY_DIR"):
@@ -57,6 +75,31 @@ def dependency_docker_registry() -> str:
 
 def dependency_docker_image(image: str) -> str:
     return f"{dependency_docker_registry()}/{image}"
+
+
+def docker_process_environment(overrides: dict[str, str] | None = None) -> dict[str, str]:
+    """Return container-reachable proxy URLs for a Docker client process."""
+    result = dict(overrides or {})
+    if not os.environ.get("DEPENDENCY_PROXY_DIR"):
+        return result
+    for name in DOCKER_PROXY_URL_VARIABLES:
+        if value := os.environ.get(name):
+            result[name] = docker_build_environment_value(name) or value
+    docker_host = os.environ.get(
+        "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+    )
+    result["PIP_TRUSTED_HOST"] = docker_host
+    for index in range(int(os.environ.get("GIT_CONFIG_COUNT", "0"))):
+        key_name = f"GIT_CONFIG_KEY_{index}"
+        value_name = f"GIT_CONFIG_VALUE_{index}"
+        if key := os.environ.get(key_name):
+            host = os.environ.get("DEPENDENCY_PROXY_HOST", "localhost")
+            result[key_name] = key.replace(f"://{host}:", f"://{docker_host}:")
+        if value := os.environ.get(value_name):
+            result[value_name] = value
+    if count := os.environ.get("GIT_CONFIG_COUNT"):
+        result["GIT_CONFIG_COUNT"] = count
+    return result
 
 SERVICES = (
     "analyticsservice", "automationservice", "inventoryservice", "orderservice",
@@ -621,10 +664,10 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
     language = LANGUAGES[language_name]
     example = root / language.example
     compose = ["docker", "compose", "-f", "docker-compose.cmake.generated.yml"]
-    env = {
+    env = docker_process_environment({
         "SERVICELIB_SOURCE_CONTEXT": str(root / language.framework),
         "SERVICEGEN_FETCH_CPP_DEPENDENCIES": "OFF",
-    }
+    })
     source_cache: Path | None = None
     if language_name == "cppboost":
         source_cache = cpp_source_cache.configure_environment(
