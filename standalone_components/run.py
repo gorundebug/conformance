@@ -312,6 +312,10 @@ def materialize_python(
     dependencies.mkdir(parents=True)
     for dependency in DECLARED_MODULES[component]:
         dependency_dir = component_directory(language.name, dependency)
+        # The public service Make contract consumes unpublished modules from
+        # the generated sibling layout when USE_LOCAL_MODULES=1. Keep the
+        # private copy as well for the host-side Python diagnostic below.
+        copy_source(example / dependency_dir, target / dependency_dir)
         copy_source(example / dependency_dir, dependencies / dependency_dir)
 
     if component in SERVICES:
@@ -786,6 +790,42 @@ def build_typescript(target: Path, component: str) -> None:
     )
 
 
+def build_service_with_make(
+    root: Path,
+    target: Path,
+    language_name: str,
+    component: str,
+) -> None:
+    """Build an isolated service through its documented public interface."""
+    component_dir = component_directory(language_name, component)
+    environment = docker_process_environment()
+    local_framework_contexts = {
+        "go": ("GOSERVICELIB_SOURCE_CONTEXT", root / "servicelib"),
+        "cpp": ("SERVICELIB_SOURCE_CONTEXT", root / "cppservicelib"),
+        "cppboost": (
+            "CPPBOOSTSERVICELIB_SOURCE_CONTEXT",
+            root / "cppboostservicelib",
+        ),
+        "rust": ("RUSTSERVICELIB_SOURCE_CONTEXT", root / "rustservicelib"),
+        "typescript": ("TSSERVICELIB_SOURCE_CONTEXT", root / "tsservicelib"),
+    }
+    if context := local_framework_contexts.get(language_name):
+        name, path = context
+        if not path.is_dir():
+            raise RuntimeError(f"local framework source is missing: {path}")
+        environment[name] = str(path)
+    if language_name == "cpp":
+        userver = root / "userver"
+        if userver.is_dir():
+            environment["USERVER_SOURCE_CONTEXT"] = str(userver)
+    run_command(
+        ["make", "docker-build", "USE_LOCAL_MODULES=1"],
+        target / component_dir,
+        env=environment,
+        log_name=f"{language_name}-{component}-make-docker-build",
+    )
+
+
 CppContext = tuple[Path, list[str], dict[str, str], Path | None]
 
 
@@ -1139,7 +1179,14 @@ def main() -> int:
                     materialize_component(root, language_name, component, target)
                     item["materialized"] = True
                     if not args.prepare_only:
-                        if implementation in {"cpp", "cppboost"}:
+                        if component in SERVICES:
+                            build_service_with_make(
+                                root,
+                                target,
+                                implementation,
+                                component,
+                            )
+                        elif implementation in {"cpp", "cppboost"}:
                             build_cpp(
                                 root,
                                 target,

@@ -226,6 +226,29 @@ class StandaloneComponentTest(unittest.TestCase):
                 (target / "analyticsservice" / ".servicegen" /
                  "dependencies" / "model_python").is_dir()
             )
+            self.assertTrue((target / "model_python").is_dir())
+
+    def test_service_build_uses_public_make_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "isolated"
+            (target / "orderservice").mkdir(parents=True)
+            framework = root / "servicelib"
+            framework.mkdir()
+            with mock.patch.object(run, "run_command") as command:
+                run.build_service_with_make(
+                    root, target, "go", "orderservice",
+                )
+
+            args, kwargs = command.call_args
+            self.assertEqual(
+                args[0], ["make", "docker-build", "USE_LOCAL_MODULES=1"],
+            )
+            self.assertEqual(args[1], target / "orderservice")
+            self.assertEqual(
+                kwargs["env"]["GOSERVICELIB_SOURCE_CONTEXT"],
+                str(framework),
+            )
 
     def test_typescript_override_preserves_public_package_names(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
