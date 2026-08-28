@@ -616,25 +616,7 @@ def docker_mount(path: Path, destination: str, *, read_only: bool = False) -> st
 
 def build_go(target: Path, component: str) -> None:
     component_dir = component_directory("go", component)
-    generation_targets = [
-        component_directory("go", item) for item in DECLARED_MODULES[component]
-    ]
-    if component in MODULES:
-        generation_targets.append(component_dir)
-    generation = " && ".join(
-        f"make -C /workspace/{item} all "
-        "TOOLS_DIR=/usr/local/bin PROTOC=/usr/local/bin/protoc "
-        "OAPI_CODEGEN=/usr/local/bin/oapi-codegen"
-        for item in generation_targets
-    )
-    service_generation = ""
-    if component in SERVICES:
-        service_generation = (
-            f"make -C /workspace/{component_dir} gen-proto "
-            "TOOLS_DIR=/usr/local/bin PROTOC=/usr/local/bin/protoc"
-        )
-    phases = [value for value in (generation, service_generation, "go test ./...") if value]
-    script = " && ".join(phases)
+    script = f"make -C /workspace/{component_dir} test"
     name = container_name("go", component)
     run_command(
         [
