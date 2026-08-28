@@ -827,7 +827,7 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
     compose = ["docker", "compose", "-f", "docker-compose.cmake.generated.yml"]
     env = docker_process_environment({
         "SERVICELIB_SOURCE_CONTEXT": str(root / language.framework),
-        "SERVICEGEN_FETCH_CPP_DEPENDENCIES": "OFF",
+        "FETCH_CPP_DEPENDENCIES": "OFF",
     })
     source_cache: Path | None = None
     if language_name == "cppboost":

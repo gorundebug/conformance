@@ -366,6 +366,11 @@ class StandaloneComponentTest(unittest.TestCase):
                 environment["USERVER_SOURCE_CONTEXT"], str(root / "userver")
             )
 
+    def test_cpp_toolchain_uses_the_generated_neutral_fetch_switch(self) -> None:
+        source = Path(run.__file__).read_text()
+        self.assertIn('"FETCH_CPP_DEPENDENCIES": "OFF"', source)
+        self.assertNotIn("SERVICEGEN_FETCH_CPP_DEPENDENCIES", source)
+
     def test_python_service_uses_generated_dependency_bootstrap(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
