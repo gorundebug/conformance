@@ -283,6 +283,29 @@ def materialize_rust(root: Path, language: Language, component: str, target: Pat
         workspace_source,
         count=1,
     )
+    package_names = {
+        dependency: component_package_name("rust", target / dependency)
+        for dependency in DECLARED_MODULES[component]
+    }
+    patch_body = "".join(
+        f'{package_name} = {{ path = "{directory}" }}\n'
+        for directory, package_name in package_names.items()
+    )
+    patch_replacement = (
+        '[patch."https://github.com/gorundebug/rustexample.git"]\n'
+        + patch_body
+        if patch_body
+        else ""
+    )
+    workspace_source, patch_replacements = re.subn(
+        r'(?ms)^\[patch\."https://github\.com/gorundebug/rustexample\.git"\]\n'
+        r'.*?(?=^\[|\Z)',
+        patch_replacement,
+        workspace_source,
+        count=1,
+    )
+    if patch_replacements != 1:
+        raise RuntimeError("Rust workspace local patch table was not found")
     (target / "Cargo.toml").write_text(workspace_source)
     lock = example / "Cargo.lock"
     if lock.is_file():

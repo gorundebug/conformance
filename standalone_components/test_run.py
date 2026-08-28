@@ -135,6 +135,46 @@ class StandaloneComponentTest(unittest.TestCase):
                 "go",
             )
 
+    def test_rust_workspace_patches_only_declared_local_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            example = root / "rustexample"
+            example.mkdir()
+            (example / "Cargo.toml").write_text(
+                '[workspace]\nresolver = "2"\nmembers = [\n'
+                '    "analyticsservice",\n    "model",\n'
+                '    "inventory_service_api",\n]\n\n'
+                '[patch."https://github.com/gorundebug/rustexample.git"]\n'
+                'inventory-service-api = { path = "inventory_service_api" }\n'
+                'example-model = { path = "model" }\n'
+                'order-service-api = { path = "order_service_api" }\n'
+            )
+            service = example / "analyticsservice"
+            service.mkdir()
+            (service / "Cargo.toml").write_text(
+                '[package]\nname = "analyticsservice"\nversion = "0.1.0"\n'
+                '[dependencies]\n'
+                'servicelib-gorundebug = { git = "https://example", tag = "v1" }\n'
+            )
+            model = example / "model"
+            model.mkdir()
+            (model / "Cargo.toml").write_text(
+                '[package]\nname = "example-model"\nversion = "0.1.0"\n'
+            )
+            framework = root / "rustservicelib"
+            framework.mkdir()
+            (framework / "Cargo.toml").write_text(
+                '[package]\nname = "servicelib-gorundebug"\nversion = "0.1.0"\n'
+            )
+
+            target = root / "isolated"
+            run.materialize_component(root, "rust", "analyticsservice", target)
+            workspace = (target / "Cargo.toml").read_text()
+
+            self.assertIn('example-model = { path = "model" }', workspace)
+            self.assertNotIn("inventory-service-api", workspace)
+            self.assertNotIn("order-service-api", workspace)
+
     def test_typescript_override_preserves_public_package_names(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
