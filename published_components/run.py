@@ -142,12 +142,27 @@ def latest_tag(repository: Path) -> str:
     return tag if result.returncode == 0 and tag else "v0.0.0-local"
 
 
+def tracked_files(repository: Path) -> Iterable[Path]:
+    """Yield files that belong to the repository's published HEAD shape."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+    for encoded in result.stdout.split(b"\0"):
+        if encoded:
+            yield repository / os.fsdecode(encoded)
+
+
 def declared_internal_tags(root: Path) -> dict[str, set[str]]:
     """Return exact gorundebug repository tags referenced by generated files."""
     result: dict[str, set[str]] = {}
     for language in standalone.LANGUAGES.values():
         example = root / language.example
-        for path in example.rglob("*"):
+        if not example.is_dir():
+            continue
+        for path in tracked_files(example):
             if not path.is_file() or path.name in {"go.sum", "Cargo.lock", "pnpm-lock.yaml"}:
                 continue
             if path.suffix not in {"", ".mk", ".toml", ".sh", ".yml", ".yaml"}:

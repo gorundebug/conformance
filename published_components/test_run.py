@@ -20,6 +20,14 @@ class PublishedComponentsTest(unittest.TestCase):
                 "MODEL_SOURCE := "
                 "https://github.com/gorundebug/model_go.git\\#v4.5.6\n"
             )
+            subprocess.run(["git", "init", "-q"], cwd=example, check=True)
+            subprocess.run(["git", "add", "orderservice/make.generated.mk"],
+                           cwd=example, check=True)
+            (example / "dist").mkdir()
+            (example / "dist" / "stale.generated.mk").write_text(
+                "MODEL_SOURCE := "
+                "https://github.com/gorundebug/model_go.git\\#v1.0.0\n"
+            )
 
             self.assertEqual(
                 run.declared_internal_tags(root),
@@ -39,6 +47,9 @@ class PublishedComponentsTest(unittest.TestCase):
             (module / "go.mod").write_text(
                 "module github.com/gorundebug/model_go\n"
             )
+            subprocess.run(["git", "init", "-q"], cwd=example, check=True)
+            subprocess.run(["git", "add", "clone.generated.sh", "model_go/go.mod"],
+                           cwd=example, check=True)
 
             specs = run.repository_specs(root)
 
