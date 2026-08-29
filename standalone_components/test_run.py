@@ -43,6 +43,9 @@ class StandaloneComponentTest(unittest.TestCase):
                 "DEPENDENCY_CONAN_REMOTE_URL": (
                     "http://localhost:18081/repository/conan-proxy"
                 ),
+                "DEPENDENCY_CONAN_UPLOAD_URL": (
+                    "http://localhost:18081/repository/conan-hosted"
+                ),
                 "GIT_CONFIG_COUNT": "1",
                 "GIT_CONFIG_KEY_0": (
                     "url.http://localhost:18084/cgi-bin/git/github.com/.insteadOf"
@@ -61,6 +64,10 @@ class StandaloneComponentTest(unittest.TestCase):
         self.assertEqual(
             environment["DEPENDENCY_CONAN_REMOTE_URL"],
             "http://host.docker.internal:18081/repository/conan-proxy",
+        )
+        self.assertEqual(
+            environment["DEPENDENCY_CONAN_UPLOAD_URL"],
+            "http://host.docker.internal:18081/repository/conan-hosted",
         )
         self.assertIn("host.docker.internal:18084", environment["GIT_CONFIG_KEY_0"])
         self.assertEqual(environment["PIP_TRUSTED_HOST"], "host.docker.internal")
