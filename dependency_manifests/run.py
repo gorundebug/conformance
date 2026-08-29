@@ -20,12 +20,12 @@ ARTIFACT = CONFORMANCE_ROOT / ".artifacts" / "dependency-manifests" / "summary.j
 GO_PROJECT_MODULES = {
     "goexample": (
         "analyticsservice", "automationservice", "inventory_service_api",
-        "inventoryservice", "model", "order_service_api", "orderservice",
+        "inventoryservice", "model_go", "order_service_api", "orderservice",
     ),
     "gonativeexample": (".",),
-    "cppexample": ("automationservice", "inventory_service_api", "model", "order_service_api"),
-    "cppboostexample": ("automationservice", "inventory_service_api", "model", "order_service_api"),
-    "rustexample": ("automationservice", "inventory_service_api", "model", "order_service_api"),
+    "cppexample": ("automationservice", "inventory_service_api", "model_go", "order_service_api"),
+    "cppboostexample": ("automationservice", "inventory_service_api", "model_go", "order_service_api"),
+    "rustexample": ("automationservice", "inventory_service_api", "model_go", "order_service_api"),
     "servicegen": (".",),
     "servicelib": (".",),
     "tsservicelib": ("test/interop",),
