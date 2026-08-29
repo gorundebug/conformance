@@ -89,6 +89,43 @@ class PublishedComponentsTest(unittest.TestCase):
         self.assertNotIn("DEPENDENCY_PROXY_DIR", environment)
         self.assertEqual(environment["GIT_CONFIG_COUNT"], "1")
 
+    def test_direct_runner_loads_generated_proxy_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            launcher = (
+                root / "goexample" / "scripts" /
+                "dependency-cache.generated.sh"
+            )
+            launcher.parent.mkdir(parents=True)
+            launcher.write_text("#!/usr/bin/env bash\n")
+            completed = subprocess.CompletedProcess(
+                args=[], returncode=0,
+                stdout=(
+                    b"DEPENDENCY_PROXY_DIR=/cache\0"
+                    b"CARGO_REGISTRIES_CRATES_IO_INDEX="
+                    b"sparse+http://localhost:18081/repository/cargo-proxy/\0"
+                ),
+                stderr=b"",
+            )
+            with mock.patch.dict(
+                "os.environ", {"DEPENDENCY_PROXY_DIR": "/cache"}, clear=True
+            ), mock.patch.object(
+                run.subprocess, "run", return_value=completed
+            ) as invoke:
+                run.load_dependency_proxy_environment(root)
+                self.assertEqual(
+                    run.os.environ["CARGO_REGISTRIES_CRATES_IO_INDEX"],
+                    "sparse+http://localhost:18081/repository/cargo-proxy/",
+                )
+            self.assertEqual(invoke.call_count, 1)
+
+    def test_direct_runner_does_not_load_proxy_environment_when_disabled(self) -> None:
+        with mock.patch.dict("os.environ", {}, clear=True), mock.patch.object(
+            run.subprocess, "run"
+        ) as invoke:
+            run.load_dependency_proxy_environment(Path("/missing"))
+        invoke.assert_not_called()
+
     def test_snapshot_copies_only_tracked_head_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

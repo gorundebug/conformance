@@ -98,7 +98,7 @@ current images.
 ## Run
 
 Missing native projects are cloned automatically at their pinned revisions.
-To fetch all four explicitly without building or running benchmarks:
+To fetch all six explicitly without building or running benchmarks:
 
 ```bash
 make setup-native

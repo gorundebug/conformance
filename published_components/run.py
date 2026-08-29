@@ -507,6 +507,41 @@ def build_environment(port: int) -> dict[str, str]:
     return environment
 
 
+def load_dependency_proxy_environment(root: Path) -> None:
+    """Resolve the generated proxy contract for direct runner invocations.
+
+    Quickstart already evaluates this environment, but the public Python
+    runner also supports being called directly with only DEPENDENCY_PROXY_DIR.
+    Keep both entrypoints identical by asking the generated project launcher
+    for the canonical registry URLs instead of duplicating them here.
+    """
+    if not os.environ.get("DEPENDENCY_PROXY_DIR"):
+        return
+    launcher = root / "goexample" / "scripts" / "dependency-cache.generated.sh"
+    if not launcher.is_file():
+        raise RuntimeError(f"dependency proxy launcher is missing: {launcher}")
+    result = subprocess.run(
+        [
+            "/bin/bash", "-c",
+            'eval "$("$1" env)"; env -0',
+            "published-components-proxy-env", str(launcher),
+        ],
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "DEPENDENCY_PROXY_CLIENT_HOST": os.environ.get(
+                "DEPENDENCY_PROXY_HOST", "localhost"
+            ),
+        },
+    )
+    for entry in result.stdout.split(b"\0"):
+        if not entry or b"=" not in entry:
+            continue
+        name, value = entry.split(b"=", 1)
+        os.environ[name.decode()] = value.decode()
+
+
 def build_services(
     root: Path,
     specs: Sequence[RepositorySpec],
@@ -925,6 +960,7 @@ def main() -> int:
     root = args.local_root.expanduser().resolve()
     if not root.is_dir():
         raise RuntimeError(f"local repository root is missing: {root}")
+    load_dependency_proxy_environment(root)
     cleanup_stale_containers()
     cleanup_stale_workspaces()
     workspace = Path(tempfile.mkdtemp(prefix=WORKSPACE_PREFIX)).resolve()

@@ -40,6 +40,22 @@ anything. An existing shared checkout can be reused explicitly:
 ./quickstart.sh --dependencies-dir /path/to/repos -- tracing
 ```
 
+The default graph profile is `function-call`. Select the generated
+pooled/parallel graph with `--profile current`; profile selection belongs
+before the `--` separator:
+
+```bash
+./quickstart.sh                                  # complete function-call matrix
+./quickstart.sh --profile current                # complete current matrix
+./quickstart.sh --profile current -- tracing     # one current-profile suite
+./quickstart.sh -- resume                        # failed/missing suites only
+```
+
+For a deliberately clean run, remove `.artifacts` before quickstart. Do this
+between the two complete profiles when neither run may reuse a prior suite
+result. Switching profiles also invalidates incompatible artifacts
+automatically.
+
 ### Optional shared package proxy
 
 Generated examples include one project-independent Nexus proxy for Go, npm,
@@ -62,6 +78,11 @@ Pinned C++ sources populate their separate versioned source cache from
 immutable archives routed through Nexus. Without
 `DEPENDENCY_PROXY_DIR`, all downloads continue to use their normal
 upstreams.
+
+By default quickstart refreshes all existing Git mirrors before resolving
+managed revisions and fails if that refresh fails. Use
+`--skip-git-mirror-refresh` only when intentionally testing a known-fresh
+offline cache; it is not a recovery option for a failed refresh.
 
 After changing any C++ dependency version or its population logic, invalidate
 the prepared sources and CMake state explicitly:
@@ -142,8 +163,9 @@ adding language-specific normalization.
 
 ## Metrics and runtime execution graph
 
-The metrics test starts the same five language examples with all three services
-and Redpanda, sends one deterministic order request, waits until Analytics
+The metrics test starts all six language examples with the three services in
+the order-processing flow and Redpanda, sends one deterministic order request,
+waits until Analytics
 Service consumes the resulting Kafka event, reads `/metrics` from all three
 services and compares the ServiceLib metric contract against Go:
 
@@ -349,7 +371,7 @@ model.
 The gate then performs one complete Go runtime probe. It builds the existing
 minimal service images, pushes them to the temporary local registry, installs
 the pinned official Redpanda chart when Kafka is present, and rolls out all
-three services. The local environment also contains Prometheus, Grafana,
+four services. The local environment also contains Prometheus, Grafana,
 Jaeger, Loki and the OpenTelemetry Collector. The probe sends a real
 HTTP-to-gRPC order, waits for the authenticated Kafka event to reach Analytics
 Service, and verifies Kubernetes health, metrics, dashboards, traces and logs.
