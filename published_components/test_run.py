@@ -106,15 +106,16 @@ class PublishedComponentsTest(unittest.TestCase):
     def test_snapshot_preserves_force_tracked_ignored_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "source"
-            source.mkdir()
-            subprocess.run(["git", "init", "-q"], cwd=source, check=True)
+            repository = root / "repository"
+            source = repository / "service"
+            source.mkdir(parents=True)
+            subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
             subprocess.run(
-                ["git", "config", "user.name", "Test"], cwd=source, check=True
+                ["git", "config", "user.name", "Test"], cwd=repository, check=True
             )
             subprocess.run(
                 ["git", "config", "user.email", "test@localhost"],
-                cwd=source,
+                cwd=repository,
                 check=True,
             )
             (source / ".gitignore").write_text("module/\n")
@@ -122,14 +123,16 @@ class PublishedComponentsTest(unittest.TestCase):
             module.mkdir()
             (module / "tracked.txt").write_text("published")
             subprocess.run(
-                ["git", "add", ".gitignore"], cwd=source, check=True
+                ["git", "add", "service/.gitignore"], cwd=repository, check=True
             )
             subprocess.run(
-                ["git", "add", "--force", "module/tracked.txt"],
-                cwd=source,
+                ["git", "add", "--force", "service/module/tracked.txt"],
+                cwd=repository,
                 check=True,
             )
-            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=source, check=True)
+            subprocess.run(
+                ["git", "commit", "-qm", "fixture"], cwd=repository, check=True
+            )
 
             mirror = root / "mirror"
             scratch = root / "scratch"
@@ -148,6 +151,42 @@ class PublishedComponentsTest(unittest.TestCase):
                 text=True,
             ).stdout.splitlines()
             self.assertIn("module/tracked.txt", files)
+
+    def test_snapshot_preserves_standalone_repository_commit_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=source, check=True)
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=source, check=True
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "test@localhost"],
+                cwd=source,
+                check=True,
+            )
+            (source / "locked.txt").write_text("locked")
+            subprocess.run(["git", "add", "locked.txt"], cwd=source, check=True)
+            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=source, check=True)
+            subprocess.run(["git", "tag", "v1.0.0"], cwd=source, check=True)
+            commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=source, check=True,
+                capture_output=True, text=True,
+            ).stdout.strip()
+
+            mirror = root / "mirror"
+            scratch = root / "scratch"
+            mirror.mkdir()
+            scratch.mkdir()
+            spec = run.RepositorySpec("gorundebug", "fixture", source, ("v1.0.0",))
+            run.snapshot_repository(spec, mirror, scratch)
+            mirrored = subprocess.run(
+                ["git", "--git-dir", str(mirror / spec.relative_path),
+                 "rev-parse", "v1.0.0^{commit}"],
+                check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            self.assertEqual(mirrored, commit)
 
     def test_stale_workspace_cleanup_removes_only_owned_prefix(self) -> None:
         temporary_root = Path(tempfile.gettempdir()).resolve()

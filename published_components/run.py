@@ -259,6 +259,38 @@ def copy_tracked_source(source: Path, destination: Path) -> None:
 
 
 def snapshot_repository(spec: RepositorySpec, mirror_root: Path, scratch: Path) -> None:
+    destination = mirror_root / spec.relative_path
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    source_repository = Path(
+        command(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=spec.source,
+            capture=True,
+        ).strip()
+    ).resolve()
+    if spec.package_script is None and spec.source.resolve() == source_repository:
+        # A real standalone repository may be referenced by lockfiles through
+        # an exact commit SHA (uv and Cargo both do this). Rebuilding its
+        # history around a synthetic fixture commit would leave the tag usable
+        # while making that locked commit impossible to fetch. Preserve the
+        # published repository identity; synthetic histories are only for
+        # project subtrees that are being tested as independently publishable.
+        for tag in spec.tags:
+            command(
+                ["git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"],
+                cwd=spec.source,
+                capture=True,
+            )
+        command(
+            ["git", "clone", "--mirror", str(spec.source), str(destination)],
+            cwd=scratch,
+        )
+        run_git(["update-server-info"], destination)
+        return
+
     worktree = scratch / f"{spec.owner}-{spec.name}"
     if worktree.exists():
         shutil.rmtree(worktree)
@@ -287,10 +319,6 @@ def snapshot_repository(spec: RepositorySpec, mirror_root: Path, scratch: Path) 
     run_git(["commit", "--quiet", "-m", "Published component fixture"], worktree)
     for tag in spec.tags:
         run_git(["tag", tag], worktree)
-    destination = mirror_root / spec.relative_path
-    if destination.exists():
-        shutil.rmtree(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
     command(["git", "clone", "--mirror", str(worktree), str(destination)], cwd=scratch)
     run_git(["update-server-info"], destination)
 
