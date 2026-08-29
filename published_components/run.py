@@ -303,6 +303,18 @@ def snapshot_repository(spec: RepositorySpec, mirror_root: Path, scratch: Path) 
             ["git", "clone", "--mirror", str(spec.source), str(destination)],
             cwd=scratch,
         )
+        # Docker BuildKit resolves an annotated tag to its peeled commit but
+        # may then request the tag object as an unadvertised SHA over smart
+        # HTTP.  Annotation metadata is irrelevant to a source build, so make
+        # the isolated fixture's required release refs lightweight while
+        # preserving the exact published commit identity.
+        for tag in spec.tags:
+            commit = command(
+                ["git", "rev-parse", f"refs/tags/{tag}^{{commit}}"],
+                cwd=spec.source,
+                capture=True,
+            ).strip()
+            run_git(["update-ref", f"refs/tags/{tag}", commit], destination)
         run_git(["update-server-info"], destination)
         return
 
@@ -523,13 +535,128 @@ def build_services(
             if not checkout.is_dir():
                 raise RuntimeError(f"service checkout is missing: {checkout}")
             print(f"[published] BUILD {language_name}:{service}@{tag}", flush=True)
+            context_arguments = published_context_arguments(
+                language_name, checkout, checkout_root, tag
+            )
             command(
-                ["make", "docker-build", "USE_LOCAL_MODULES=0"],
+                [
+                    "make", "docker-build", "USE_LOCAL_MODULES=0",
+                    *context_arguments,
+                ],
                 cwd=checkout,
                 env=environment,
             )
             passed.append(f"{language_name}:{service}@{tag}")
     return passed
+
+
+def published_context_arguments(
+    language_name: str,
+    service_checkout: Path,
+    checkout_root: Path,
+    tag: str,
+) -> list[str]:
+    """Use independently cloned published sources as Docker named contexts.
+
+    BuildKit's internal Git client requests raw object IDs after resolving a
+    tag, which a deliberately restricted offline CGI mirror does not serve.
+    The runner has already cloned and verified every declared tag through that
+    mirror, so pass those exact isolated checkouts to the Docker build instead
+    of downloading the same source a second time.
+    """
+    makefile = (service_checkout / "make.generated.mk").read_text()
+    owner_root = checkout_root / INTERNAL_ORGANIZATION
+
+    def source(repository: str, relative: str | None = None) -> Path:
+        path = owner_root / repository / tag
+        if relative:
+            path /= relative
+        if not path.is_dir():
+            raise RuntimeError(f"published source checkout is missing: {path}")
+        return path
+
+    project_repository = standalone.LANGUAGES[language_name].example
+    contexts: dict[str, Path] = {
+        "GOSERVICELIB_SOURCE_CONTEXT": source("servicelib"),
+        "MODEL_GO_SOURCE_CONTEXT": source("model_go"),
+    }
+    if language_name == "go":
+        contexts.update({
+            "INVENTORY_SERVICE_API_SOURCE_CONTEXT": source(
+                "inventory_service_api"
+            ),
+            "ORDER_SERVICE_API_SOURCE_CONTEXT": source("order_service_api"),
+        })
+    elif language_name == "cpp":
+        contexts.update({
+            "SERVICELIB_SOURCE_CONTEXT": source("cppservicelib"),
+            "MODULE_MODEL_CPP_SOURCE_CONTEXT": source(
+                project_repository, "model_cpp"
+            ),
+            "MODULE_INVENTORY_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "inventory_service_api"
+            ),
+            "MODULE_ORDER_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "order_service_api"
+            ),
+        })
+    elif language_name == "cppboost":
+        contexts.update({
+            "CPPBOOSTSERVICELIB_SOURCE_CONTEXT": source("cppboostservicelib"),
+            "MODULE_MODEL_CPP_SOURCE_CONTEXT": source(
+                project_repository, "model_cpp"
+            ),
+            "MODULE_INVENTORY_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "inventory_service_api"
+            ),
+            "MODULE_ORDER_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "order_service_api"
+            ),
+        })
+    elif language_name == "python":
+        contexts.update({
+            "MODEL_PYTHON_SOURCE_CONTEXT": source(
+                project_repository, "model_python"
+            ),
+            "INVENTORY_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "inventory_service_api"
+            ),
+            "ORDER_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "order_service_api"
+            ),
+        })
+    elif language_name == "rust":
+        contexts.update({
+            "RUSTSERVICELIB_SOURCE_CONTEXT": source("rustservicelib"),
+            "EXAMPLE_MODEL_SOURCE_CONTEXT": source(
+                project_repository, "model_rust"
+            ),
+            "INVENTORY_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "inventory_service_api"
+            ),
+            "ORDER_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "order_service_api"
+            ),
+        })
+    elif language_name == "typescript":
+        contexts.update({
+            "TSSERVICELIB_SOURCE_CONTEXT": source("tsservicelib"),
+            "MODEL_TS_SOURCE_CONTEXT": source(
+                project_repository, "model_ts"
+            ),
+            "INVENTORY_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "inventory_service_api"
+            ),
+            "ORDER_SERVICE_API_SOURCE_CONTEXT": source(
+                project_repository, "order_service_api"
+            ),
+        })
+
+    return [
+        f"{name}={path}"
+        for name, path in sorted(contexts.items())
+        if name in makefile
+    ]
 
 
 def docker_environment_arguments(port: int) -> list[str]:

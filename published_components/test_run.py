@@ -163,7 +163,7 @@ class PublishedComponentsTest(unittest.TestCase):
             ).stdout.splitlines()
             self.assertIn("module/tracked.txt", files)
 
-    def test_snapshot_preserves_standalone_repository_commit_identity(self) -> None:
+    def test_snapshot_preserves_annotated_tag_commit_as_lightweight_ref(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "source"
@@ -180,7 +180,10 @@ class PublishedComponentsTest(unittest.TestCase):
             (source / "locked.txt").write_text("locked")
             subprocess.run(["git", "add", "locked.txt"], cwd=source, check=True)
             subprocess.run(["git", "commit", "-qm", "fixture"], cwd=source, check=True)
-            subprocess.run(["git", "tag", "v1.0.0"], cwd=source, check=True)
+            subprocess.run(
+                ["git", "tag", "-a", "v1.0.0", "-m", "fixture"],
+                cwd=source, check=True,
+            )
             commit = subprocess.run(
                 ["git", "rev-parse", "HEAD"], cwd=source, check=True,
                 capture_output=True, text=True,
@@ -198,6 +201,12 @@ class PublishedComponentsTest(unittest.TestCase):
                 check=True, capture_output=True, text=True,
             ).stdout.strip()
             self.assertEqual(mirrored, commit)
+            object_type = subprocess.run(
+                ["git", "--git-dir", str(mirror / spec.relative_path),
+                 "cat-file", "-t", "v1.0.0"],
+                check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            self.assertEqual(object_type, "commit")
 
     def test_stale_workspace_cleanup_removes_only_owned_prefix(self) -> None:
         temporary_root = Path(tempfile.gettempdir()).resolve()
