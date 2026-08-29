@@ -80,6 +80,35 @@ def dependency_docker_image(image: str) -> str:
     return f"{dependency_docker_registry()}/{image}"
 
 
+def load_dependency_proxy_environment(root: Path) -> None:
+    """Resolve the generated proxy contract for a direct runner invocation."""
+    if not os.environ.get("DEPENDENCY_PROXY_DIR"):
+        return
+    launcher = root / "goexample" / "scripts" / "dependency-cache.generated.sh"
+    if not launcher.is_file():
+        raise RuntimeError(f"dependency proxy launcher is missing: {launcher}")
+    result = subprocess.run(
+        [
+            "/bin/bash", "-c",
+            'eval "$("$1" env)"; env -0',
+            "standalone-components-proxy-env", str(launcher),
+        ],
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "DEPENDENCY_PROXY_CLIENT_HOST": os.environ.get(
+                "DEPENDENCY_PROXY_HOST", "localhost"
+            ),
+        },
+    )
+    for entry in result.stdout.split(b"\0"):
+        if not entry or b"=" not in entry:
+            continue
+        name, value = entry.split(b"=", 1)
+        os.environ[name.decode()] = value.decode()
+
+
 def docker_process_environment(overrides: dict[str, str] | None = None) -> dict[str, str]:
     """Return container-reachable proxy URLs for a Docker client process."""
     result = dict(overrides or {})
@@ -1062,6 +1091,7 @@ def main() -> int:
     global GO_VERSION, GO_TOOLCHAIN_IMAGE
     args = parse_args()
     root = args.local_root.expanduser().resolve()
+    load_dependency_proxy_environment(root)
     GO_VERSION = go_toolchain.example_version(root)
     GO_TOOLCHAIN_IMAGE = f"servicelib-standalone-go:{GO_VERSION}"
     languages = selected(args.language, LANGUAGES)

@@ -508,38 +508,8 @@ def build_environment(port: int) -> dict[str, str]:
 
 
 def load_dependency_proxy_environment(root: Path) -> None:
-    """Resolve the generated proxy contract for direct runner invocations.
-
-    Quickstart already evaluates this environment, but the public Python
-    runner also supports being called directly with only DEPENDENCY_PROXY_DIR.
-    Keep both entrypoints identical by asking the generated project launcher
-    for the canonical registry URLs instead of duplicating them here.
-    """
-    if not os.environ.get("DEPENDENCY_PROXY_DIR"):
-        return
-    launcher = root / "goexample" / "scripts" / "dependency-cache.generated.sh"
-    if not launcher.is_file():
-        raise RuntimeError(f"dependency proxy launcher is missing: {launcher}")
-    result = subprocess.run(
-        [
-            "/bin/bash", "-c",
-            'eval "$("$1" env)"; env -0',
-            "published-components-proxy-env", str(launcher),
-        ],
-        check=True,
-        capture_output=True,
-        env={
-            **os.environ,
-            "DEPENDENCY_PROXY_CLIENT_HOST": os.environ.get(
-                "DEPENDENCY_PROXY_HOST", "localhost"
-            ),
-        },
-    )
-    for entry in result.stdout.split(b"\0"):
-        if not entry or b"=" not in entry:
-            continue
-        name, value = entry.split(b"=", 1)
-        os.environ[name.decode()] = value.decode()
+    """Keep the published runner on the common standalone proxy contract."""
+    standalone.load_dependency_proxy_environment(root)
 
 
 def build_services(

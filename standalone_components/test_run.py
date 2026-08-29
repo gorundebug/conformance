@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,38 @@ from standalone_components import run
 
 
 class StandaloneComponentTest(unittest.TestCase):
+    def test_direct_runner_loads_generated_proxy_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            launcher = (
+                root / "goexample" / "scripts" /
+                "dependency-cache.generated.sh"
+            )
+            launcher.parent.mkdir(parents=True)
+            launcher.write_text("#!/usr/bin/env bash\n")
+            completed = subprocess.CompletedProcess(
+                args=[], returncode=0,
+                stdout=(
+                    b"DEPENDENCY_PROXY_DIR=/cache\0"
+                    b"DEPENDENCY_GITHUB_RAW_URL="
+                    b"http://localhost:18081/repository/github-raw\0"
+                ),
+                stderr=b"",
+            )
+            with mock.patch.dict(
+                run.os.environ,
+                {"DEPENDENCY_PROXY_DIR": "/cache"},
+                clear=True,
+            ), mock.patch.object(
+                run.subprocess, "run", return_value=completed
+            ) as invoke:
+                run.load_dependency_proxy_environment(root)
+                self.assertEqual(
+                    run.os.environ["DEPENDENCY_GITHUB_RAW_URL"],
+                    "http://localhost:18081/repository/github-raw",
+                )
+            self.assertEqual(invoke.call_count, 1)
+
     def test_docker_images_use_proxy_registry_only_when_enabled(self) -> None:
         with mock.patch.dict(run.os.environ, {}, clear=True):
             self.assertEqual(
