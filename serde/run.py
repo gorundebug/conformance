@@ -19,7 +19,7 @@ import typescript_toolchain
 
 
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "serde" / "summary.json"
 CANONICAL = ROOT / "cppservicelib"
 BOOST = ROOT / "cppboostservicelib"
@@ -169,7 +169,7 @@ def docker_image_exists(name: str) -> bool:
 
 def python_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict[str, object]]]:
     setup_runs: list[dict[str, object]] = []
-    if not docker_image_exists("example-python:latest"):
+    if not docker_image_exists("example-python:local"):
         setup_runs.append(
             execute(
                 "python-serde-runtime-image",
@@ -191,7 +191,7 @@ def python_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict
             "--volume", f"{CONFORMANCE_DIR}:/workspace/conformance:ro",
             "--workdir", "/workspace/.pyservicelib",
             "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
-            "example-python:latest",
+            "example-python:local",
             "/workspace/.venv/bin/python",
             "/workspace/conformance/serde/python_probe.py",
         ],
@@ -202,7 +202,7 @@ def python_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict
 
 def rust_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict[str, object]]]:
     setup_runs: list[dict[str, object]] = []
-    image = "rustservicelib-toolchain:latest"
+    image = "rustservicelib-toolchain:local"
     if not docker_image_exists(image):
         setup_runs.append(
             execute(
@@ -405,7 +405,7 @@ def main() -> int:
         ),
         "-w",
         "/workspace",
-        "cppboostservicelib-build:latest",
+        "cppboostservicelib-build:local",
         "/bin/bash",
         "-lc",
         boost_script,
@@ -507,7 +507,7 @@ def main() -> int:
                 "run",
                 "--rm",
                 *repository_mounts(),
-                "cppboostservicelib-build:latest",
+                "cppboostservicelib-build:local",
                 "/bin/bash",
                 "-lc",
                 f"c++ -std=c++20 -I{include_dir} /repo/conformance/serde/cpp_probe.cpp -o {binary} && {binary}",
@@ -543,7 +543,7 @@ def main() -> int:
         "run",
         "--rm",
         *repository_mounts(),
-        "cppboostservicelib-build:latest",
+        "cppboostservicelib-build:local",
         "/bin/bash",
         "-lc",
         "c++ -std=c++20 -DSERVICELIB_CUSTOM_SERDE_BOOST=1 "

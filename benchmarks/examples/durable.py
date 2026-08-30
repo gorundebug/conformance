@@ -20,7 +20,7 @@ import tooling_lock
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(
-    os.environ.get("BENCHMARK_DEPENDENCIES_DIR", HERE.parent / ".dependencies")
+    os.environ.get("DEPENDENCIES_DIR", HERE.parent / ".dependencies")
 ).expanduser().resolve()
 ARTIFACTS = HERE / ".artifacts" / "durable"
 SCHEDULE_ID = "example-automation-schedule"

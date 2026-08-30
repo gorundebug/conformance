@@ -20,7 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CONFORMANCE_DIR = HERE.parent
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 OUTPUT = CONFORMANCE_DIR / ".artifacts" / "signatures" / "summary.json"
 TOKEN = re.compile(
     r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|'

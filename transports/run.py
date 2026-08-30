@@ -19,7 +19,7 @@ import typescript_toolchain
 
 
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "transports" / "summary.json"
 CANONICAL = ROOT / "cppservicelib"
 BOOST = ROOT / "cppboostservicelib"
@@ -508,10 +508,10 @@ def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[st
     if prepare_source_cache:
         cpp_source_cache.configure_environment(environment, BOOST)
     else:
-        environment["SERVICEGEN_CPPBOOST_SOURCE_CACHE_DIR"] = str(
+        environment["CPPBOOST_SOURCE_CACHE_DIR"] = str(
             cpp_source_cache.source_dir(BOOST)
         )
-        environment["SERVICEGEN_CPPBOOST_BUILD_VOLUME"] = (
+        environment["CPPBOOST_BUILD_VOLUME"] = (
             cpp_source_cache.build_volume_name(BOOST)
         )
     environment["GOCACHE"] = "/tmp/servicegen-go-build"
@@ -570,7 +570,7 @@ def boost_command(build_dir: str, sanitizer: bool,
         *cpp_source_cache.build_volume_mount_args(
             BOOST, "cppboostservicelib-transports"
         ), "-w",
-        "/workspace", "cppboostservicelib-build:latest", "/bin/bash", "-lc",
+        "/workspace", "cppboostservicelib-build:local", "/bin/bash", "-lc",
         run,
     ]
 
@@ -609,7 +609,7 @@ def boost_kafka_command(build_dir: str, sanitizer: bool,
         *cpp_source_cache.build_volume_mount_args(
             BOOST, "cppboostservicelib-transports"
         ), "-w",
-        "/workspace", "cppboostservicelib-build:latest", "/bin/bash", "-lc",
+        "/workspace", "cppboostservicelib-build:local", "/bin/bash", "-lc",
         run,
     ]
 
@@ -636,7 +636,7 @@ def boost_http_custom_command(skip_build: bool) -> list[str]:
         *cpp_source_cache.build_volume_mount_args(
             BOOST, "cppboostservicelib-transports"
         ), "-w",
-        "/workspace", "cppboostservicelib-build:latest", "/bin/bash", "-lc",
+        "/workspace", "cppboostservicelib-build:local", "/bin/bash", "-lc",
         run,
     ]
 
@@ -648,17 +648,17 @@ def main() -> int:
 
     source_matrix = verify_sources()
     runs: list[dict[str, object]] = []
-    if not docker_image_exists("example-python:latest"):
+    if not docker_image_exists("example-python:local"):
         command, environment = python_image_build()
         runs.append(execute(
             "python-runtime-image", command, ROOT / "pyexample", environment,
         ))
-    if not docker_image_exists("rustservicelib-toolchain:latest"):
+    if not docker_image_exists("rustservicelib-toolchain:local"):
         runs.append(execute(
             "rust-toolchain-image",
             [
                 "docker", "build", "--target", "toolchain", "--tag",
-                "rustservicelib-toolchain:latest", ".",
+                "rustservicelib-toolchain:local", ".",
             ],
             RUST,
         ))
@@ -685,7 +685,7 @@ def main() -> int:
             "--volume", f"{PYTHON}:/workspace/.pyservicelib:ro",
             "--workdir", "/workspace/.pyservicelib",
             "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
-            "example-python:latest", "/workspace/.venv/bin/python", "-m",
+            "example-python:local", "/workspace/.venv/bin/python", "-m",
             "pytest", "-q", "-p", "no:cacheprovider",
             "tests/test_transportmetrics.py",
         ],
@@ -708,7 +708,7 @@ def main() -> int:
                 "/cargo-target"
             ),
             "--env", "CARGO_TARGET_DIR=/cargo-target",
-            "--workdir", "/workspace", "rustservicelib-toolchain:latest",
+            "--workdir", "/workspace", "rustservicelib-toolchain:local",
             "cargo", "test", "--test", "http_sink",
         ],
         RUST,

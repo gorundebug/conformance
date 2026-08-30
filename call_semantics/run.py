@@ -21,7 +21,7 @@ import go_toolchain
 HERE = Path(__file__).resolve().parent
 CONFORMANCE_DIR = HERE.parent
 ROOT = Path(
-    os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)
+    os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)
 ).expanduser().resolve()
 ARTIFACTS = CONFORMANCE_DIR / ".artifacts" / "call-semantics"
 SERVICEGEN = ROOT / "servicegen"
@@ -114,7 +114,7 @@ def generate_archives(archive_dir: Path) -> str:
     env.update(
         {
             "SERVICEGEN_EXAMPLE_ARCHIVE_DIR": str(archive_dir),
-            "SERVICEGEN_EXAMPLE_PROFILE": "current",
+            "EXAMPLE_PROFILE": "current",
             "GOCACHE": os.environ.get("GOCACHE", "/tmp/servicegen-go-build"),
             "GOWORK": str(local_go_work),
         }
@@ -237,7 +237,7 @@ def execute_scenarios(
     runtime_artifacts.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.update({
-        "CONFORMANCE_DEPENDENCIES_DIR": str(workspace),
+        "DEPENDENCIES_DIR": str(workspace),
         "SERVICELIB_SCENARIO_ARTIFACTS_DIR": str(runtime_artifacts),
         "SERVICELIB_SCENARIO_PROJECT_SUFFIX": f"-{profile}",
         "SERVICELIB_SCENARIO_REQUIRE_POOLS": "1" if profile == "current" else "0",
@@ -293,7 +293,7 @@ def main() -> int:
     if not SERVICEGEN.is_dir():
         raise RuntimeError(f"missing servicegen source: {SERVICEGEN}")
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    active_profile = os.environ.get("CONFORMANCE_EXAMPLE_PROFILE", "")
+    active_profile = os.environ.get("EXAMPLE_PROFILE", "")
     if active_profile in {"function-call", "current"}:
         started = time.monotonic()
         summary: dict[str, object] = {

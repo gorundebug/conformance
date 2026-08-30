@@ -22,7 +22,7 @@ import go_toolchain  # noqa: E402
 
 
 ROOT = Path(
-    os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)
+    os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)
 ).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "kubernetes"
 SUMMARY = ARTIFACTS / "summary.json"

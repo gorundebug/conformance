@@ -32,8 +32,7 @@ from standalone_components import run as standalone  # noqa: E402
 
 
 DEFAULT_ROOT = Path(
-    os.environ.get("CONFORMANCE_PUBLISHED_COMPONENTS_ROOT")
-    or os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)
+    os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)
 ).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "published-components"
 SUMMARY = ARTIFACTS / "summary.json"
@@ -607,7 +606,7 @@ def published_context_arguments(
         })
     elif language_name == "cppboost":
         contexts.update({
-            "CPPBOOSTSERVICELIB_SOURCE_CONTEXT": source("cppboostservicelib"),
+            "SERVICELIB_SOURCE_CONTEXT": source("cppboostservicelib"),
             "MODULE_MODEL_CPP_SOURCE_CONTEXT": source(
                 project_repository, "model_cpp"
             ),

@@ -21,7 +21,7 @@ from typing import Any
 
 CONFORMANCE = Path(__file__).resolve().parents[1]
 ROOT = (
-    Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent))
+    Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent))
     .expanduser()
     .resolve()
 )
@@ -589,7 +589,7 @@ def verify_temporal_metric_sources(
 
 def verify_workflow_pool_metrics(text: str) -> dict[str, object]:
     """Prove that the selected graph profile used its declared Workflow callers."""
-    profile = os.environ.get("CONFORMANCE_EXAMPLE_PROFILE", "function-call")
+    profile = os.environ.get("EXAMPLE_PROFILE", "function-call")
     task_total = metric_sum(text, "task_pool_tasks_total", {})
     priority_total = metric_sum(text, "priority_task_pool_tasks_total", {})
     if profile == "current":
@@ -1285,7 +1285,7 @@ def replay_workflow_histories(
             )
 
     if language.name == "go":
-        image = "servicelib-temporal-conformance-go-replayer:latest"
+        image = "servicelib-temporal-conformance-go-replayer:local"
         build = [
             "docker",
             "build",

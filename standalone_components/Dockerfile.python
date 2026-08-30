@@ -8,4 +8,4 @@ ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN --mount=type=cache,id=standalone-python-pip,target=/root/.cache/pip,sharing=locked \
-    python -m pip install uv
+    python -m pip install uv==0.12.7

@@ -409,7 +409,7 @@ class StandaloneComponentTest(unittest.TestCase):
     def test_cpp_toolchain_uses_the_generated_neutral_fetch_switch(self) -> None:
         source = Path(run.__file__).read_text()
         self.assertIn('"FETCH_CPP_DEPENDENCIES": "OFF"', source)
-        self.assertNotIn("SERVICEGEN_FETCH_CPP_DEPENDENCIES", source)
+        self.assertNotIn("FETCH_CPP_DEPENDENCIES", source)
 
     def test_cpp_component_build_uses_conan_cmake_protoc_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

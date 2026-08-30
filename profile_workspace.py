@@ -116,7 +116,7 @@ def generate_archives(source_root: Path, archive_dir: Path, profile: str) -> str
     env.update(
         {
             "SERVICEGEN_EXAMPLE_ARCHIVE_DIR": str(archive_dir),
-            "SERVICEGEN_EXAMPLE_PROFILE": profile,
+            "EXAMPLE_PROFILE": profile,
             "GOCACHE": os.environ.get("GOCACHE", "/tmp/servicegen-go-build"),
             # The selected profile is generated from the local source matrix.
             # Depending on the last published servicelib tag here makes a

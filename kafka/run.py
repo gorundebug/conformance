@@ -22,7 +22,7 @@ sys.path.insert(0, str(CONFORMANCE))
 import cpp_source_cache
 
 ROOT = Path(
-    os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)
+    os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)
 ).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "kafka"
 COMMON_COMPOSE = Path(__file__).with_name("compose.common.yml")
@@ -76,9 +76,6 @@ def language_env(language: Language) -> dict[str, str]:
         env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     elif language.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
-        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
-            ROOT / "cppboostservicelib"
-        )
         env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
         cpp_source_cache.configure_environment(
             env, ROOT / "cppboostservicelib"

@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "config-schema" / "summary.json"
 GO_FILES = (
     "config.go",

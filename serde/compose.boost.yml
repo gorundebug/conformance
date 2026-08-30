@@ -1,6 +1,6 @@
 services:
   cpp-build:
-    image: servicelib-conformance-boost-cpp-example-build:latest
+    image: servicelib-conformance-boost-cpp-example-build:local
     volumes:
       - canonical-cpp-conan2:/conan
 

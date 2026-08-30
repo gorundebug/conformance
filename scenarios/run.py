@@ -21,7 +21,7 @@ import go_toolchain
 
 HERE = Path(__file__).resolve().parent
 CONFORMANCE_DIR = HERE.parent
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACTS = Path(
     os.environ.get(
         "SERVICELIB_SCENARIO_ARTIFACTS_DIR",
@@ -124,10 +124,10 @@ def command(implementation: Implementation, *args: str) -> list[str]:
 
 def environment(implementation: Implementation) -> dict[str, str]:
     env = os.environ.copy()
-    env["SERVICELIB_CONFORMANCE_DEPENDENCIES_DIR"] = str(ROOT)
+    env["DEPENDENCIES_DIR"] = str(ROOT)
     env["SERVICELIB_CONFORMANCE_DIR"] = str(CONFORMANCE_DIR)
     env["SERVICELIB_SCENARIO_ARTIFACTS_DIR"] = str(ARTIFACTS)
-    env["SERVICEGEN_GO_TOOLCHAIN_IMAGE"] = go_toolchain.docker_image(ROOT)
+    env["GO_TOOLCHAIN_IMAGE"] = go_toolchain.docker_image(ROOT)
     # The C++ framework examples include the Go Temporal fallback service.
     env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     if implementation.name == "cpp":
@@ -143,20 +143,17 @@ def environment(implementation: Implementation) -> dict[str, str]:
         env["USERVER_LTO"] = "ON"
     elif implementation.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
-        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
-            ROOT / "cppboostservicelib"
-        )
         # The generated build compose and the runtime overlay must mount the
         # same build volume.  Keep the pooled profile isolated from the normal
         # scenario profile because both contain generated graph semantics in
         # the compiled service binaries.
-        env["SERVICEGEN_CPPBOOST_BUILD_VOLUME"] = (
+        env["CPPBOOST_BUILD_VOLUME"] = (
             f"servicelib-scenario-conformance-cppboost{PROJECT_SUFFIX}-build"
         )
     elif implementation.name == "cppboost-native" and NATIVE_SOURCE_CONTEXTS:
         grpc_source, asio_grpc_source = NATIVE_SOURCE_CONTEXTS
-        env["SERVICEGEN_GRPC_SOURCE_CONTEXT"] = str(grpc_source)
-        env["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"] = str(asio_grpc_source)
+        env["GRPC_SOURCE_CONTEXT"] = str(grpc_source)
+        env["ASIO_GRPC_SOURCE_CONTEXT"] = str(asio_grpc_source)
     elif implementation.name == "typescript":
         env["TSSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "tsservicelib")
     elif implementation.name == "python":
@@ -340,7 +337,7 @@ def build_cppboost(implementation: Implementation, override: Path) -> None:
         "--file", str(implementation.example / "docker-compose.cmake.generated.yml"),
         "--file", str(override),
         "run", "--build", "--rm",
-        "-e", "SERVICEGEN_CPP_CMAKE_PRESET=docker-release",
+        "-e", "CPP_CMAKE_PRESET=docker-release",
         "cpp-build", "/bin/bash", "-lc",
         "source scripts/configure-git-auth.generated.sh && "
         "./scripts/conan-install.generated.sh Release "
@@ -349,7 +346,7 @@ def build_cppboost(implementation: Implementation, override: Path) -> None:
         "cmake --fresh --preset docker-release "
         "-DCMAKE_TOOLCHAIN_FILE=\"$conan_toolchain\" "
         "-C /workspace/conformance/conformance-source-cache.generated.cmake "
-        "-DSERVICEGEN_FETCH_CPP_DEPENDENCIES=OFF && "
+        "-DFETCH_CPP_DEPENDENCIES=OFF && "
         "cmake --build --preset docker-release --parallel",
     ]
     print("+", " ".join(cmd), flush=True)

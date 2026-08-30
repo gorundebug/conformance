@@ -1,3 +1,3 @@
 services:
   cpp-build:
-    image: servicelib-conformance-canonical-cpp-example-build:latest
+    image: servicelib-conformance-canonical-cpp-example-build:local

@@ -29,15 +29,15 @@ endif
 
 LOCAL_DEPENDENCIES_DIR := $(abspath .dependencies)
 ifneq ($(wildcard $(LOCAL_DEPENDENCIES_DIR)/.),)
-CONFORMANCE_DEPENDENCIES_DIR ?= $(LOCAL_DEPENDENCIES_DIR)
-export CONFORMANCE_DEPENDENCIES_DIR
+DEPENDENCIES_DIR ?= $(LOCAL_DEPENDENCIES_DIR)
+export DEPENDENCIES_DIR
 endif
 
 .PHONY: test-paths dependency-manifests tooling structure signatures config config-core config-schema \
 	config-runtime config-runtime-core config-runtime-go \
 	config-runtime-typescript dependencies pools operators serde transports \
 	kafka temporal tracing metrics dashboards dashboards-core logging scenarios \
-	call-semantics standalone-components published-components kubernetes \
+	call-semantics sanitizers standalone-components published-components kubernetes \
 	generation profiling profiling-all profiling-tests \
 	profiling-durable profiling-durable-quick \
 	benchmarks benchmark benchmarks-quick benchmarks-durable benchmarks-durable-quick benchmarks-tests \
@@ -51,7 +51,7 @@ endif
 MANIFEST_GATED_TARGETS := tooling structure signatures config-core config-schema \
 	config-runtime-core config-runtime-go config-runtime-typescript dependencies \
 	standalone-components published-components pools operators serde transports kafka temporal tracing \
-	metrics dashboards-core logging scenarios call-semantics generation kubernetes profiling
+	metrics dashboards-core logging scenarios call-semantics sanitizers generation kubernetes profiling
 $(MANIFEST_GATED_TARGETS): dependency-manifests
 
 test-paths:
@@ -73,7 +73,7 @@ release: fast integration profiling
 
 fast: dependency-manifests tooling structure signatures config pools operators serde
 
-integration: config-runtime dependencies standalone-components published-components transports kafka temporal tracing metrics dashboards logging scenarios call-semantics generation kubernetes
+integration: config-runtime dependencies standalone-components published-components transports kafka temporal tracing metrics dashboards logging scenarios call-semantics sanitizers generation kubernetes
 
 resume:
 	python3 resume.py
@@ -150,6 +150,9 @@ scenarios:
 call-semantics:
 	python3 run_suite.py call-semantics python3 call_semantics/run.py
 
+sanitizers:
+	python3 run_suite.py sanitizers python3 sanitizers/run.py
+
 generation:
 	python3 run_suite.py generation python3 generation/run.py
 
@@ -161,16 +164,14 @@ profiling:
 
 profiling-all:
 	python3 profiling/examples/run.py \
-		--graph-profile "$${CONFORMANCE_EXAMPLE_PROFILE:-function-call}" \
+		--graph-profile "$${EXAMPLE_PROFILE:-function-call}" \
 		$(PROFILING_ARGS)
 
 profiling-durable:
-	PROFILING_DEPENDENCIES_DIR="$(CONFORMANCE_DEPENDENCIES_DIR)" \
-		python3 profiling/examples/durable.py $(PROFILING_ARGS)
+	python3 profiling/examples/durable.py $(PROFILING_ARGS)
 
 profiling-durable-quick:
-	PROFILING_DEPENDENCIES_DIR="$(CONFORMANCE_DEPENDENCIES_DIR)" \
-		python3 profiling/examples/durable.py --skip-build --duration 5 --jobs 100 \
+	python3 profiling/examples/durable.py --skip-build --duration 5 --jobs 100 \
 		$(PROFILING_ARGS)
 
 profiling-tests:
@@ -184,12 +185,10 @@ benchmarks-quick:
 		--skip-build --vus 256 --duration 5s --warmup 2s --runs 1
 
 benchmarks-durable:
-	BENCHMARK_DEPENDENCIES_DIR="$(CONFORMANCE_DEPENDENCIES_DIR)" \
-		python3 benchmarks/examples/durable.py $(BENCHMARK_ARGS)
+	python3 benchmarks/examples/durable.py $(BENCHMARK_ARGS)
 
 benchmarks-durable-quick:
-	BENCHMARK_DEPENDENCIES_DIR="$(CONFORMANCE_DEPENDENCIES_DIR)" \
-		python3 benchmarks/examples/durable.py --skip-build --jobs 10 \
+	python3 benchmarks/examples/durable.py --skip-build --jobs 10 \
 		--warmup-jobs 1 --runs 1 $(BENCHMARK_ARGS)
 
 benchmarks-tests:

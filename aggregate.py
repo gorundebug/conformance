@@ -18,7 +18,7 @@ SUITES = (
     "dependencies", "standalone-components", "published-components", "pools",
     "operators", "serde", "transports", "kafka", "temporal", "tracing", "metrics",
     "dashboards", "logging",
-    "scenarios", "call-semantics", "generation", "kubernetes", "profiling",
+    "scenarios", "call-semantics", "sanitizers", "generation", "kubernetes", "profiling",
 )
 LANGUAGE_SUITES = {
     "standalone-components": {
@@ -50,6 +50,7 @@ LANGUAGE_SUITES = {
     "call-semantics": {
         "go", "cpp", "cppboost", "python", "rust", "typescript",
     },
+    "sanitizers": {"cpp-asan", "cpp-tsan", "cppboost-asan", "cppboost-tsan"},
     "kubernetes": {
         "go", "cpp", "cppboost", "python", "rust", "typescript",
     },
@@ -145,7 +146,7 @@ def main() -> int:
     aggregate = {
         "status": "pass" if not failures else "fail",
         "example_profile": os.environ.get(
-            "CONFORMANCE_EXAMPLE_PROFILE", "function-call"
+            "EXAMPLE_PROFILE", "function-call"
         ),
         "suite_count": len(SUITES),
         "matrix": matrix,

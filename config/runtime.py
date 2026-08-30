@@ -20,7 +20,7 @@ from runtime_fixture import valid_override
 
 HERE = Path(__file__).resolve().parent
 CONFORMANCE_DIR = HERE.parent
-DEFAULT_ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+DEFAULT_ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 DEFAULT_ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "config-runtime" / "summary.json"
 PROJECT = "servicelib-config-conformance"
 PORT = 19091
@@ -104,8 +104,7 @@ def main() -> int:
     compose = artifact / "compose.yml"
     env = os.environ.copy()
     env["SERVICELIB_SOURCE_CONTEXT"] = str(framework)
-    env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(framework)
-    env["SERVICEGEN_CPPBOOST_BUILD_VOLUME"] = (
+    env["CPPBOOST_BUILD_VOLUME"] = (
         cpp_source_cache.build_volume_name(framework)
     )
     override.write_text(valid_override(1000))
@@ -119,7 +118,7 @@ def main() -> int:
 volumes:
   cpp-cmake-build:
     external: true
-    name: {env["SERVICEGEN_CPPBOOST_BUILD_VOLUME"]}
+    name: {env["CPPBOOST_BUILD_VOLUME"]}
 """
     )
 

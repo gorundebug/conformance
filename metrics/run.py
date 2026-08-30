@@ -22,7 +22,7 @@ CONFORMANCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE))
 import cpp_source_cache
 
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "metrics"
 ORDER_URL = "http://localhost:9091/v1/processorder"
 SERVICE_URLS = {
@@ -171,9 +171,6 @@ def language_env(language: Any) -> dict[str, str]:
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
     elif language.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
-        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
-            ROOT / "cppboostservicelib"
-        )
         cpp_source_cache.configure_environment(
             env, ROOT / "cppboostservicelib"
         )

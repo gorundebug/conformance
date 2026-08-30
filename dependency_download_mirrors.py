@@ -15,7 +15,7 @@ ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)=(.+)$")
 
 def catalog_path() -> Path:
     dependencies = Path(
-        os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE / ".dependencies")
+        os.environ.get("DEPENDENCIES_DIR", CONFORMANCE / ".dependencies")
     )
     return dependencies / "servicegen" / "dependency-download-mirrors.generated.env"
 

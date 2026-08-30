@@ -15,7 +15,7 @@ CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE_DIR))
 import cpp_source_cache
 
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 PROFILING_ROOT = CONFORMANCE_DIR / "profiling"
 PROFILING_RUNNER = PROFILING_ROOT / "examples" / "run.py"
 PROFILE_ARTIFACTS = PROFILING_ROOT / "examples" / ".artifacts"
@@ -38,7 +38,7 @@ def prepare_cpp_source_contexts() -> tuple[Path, Path]:
         subprocess.run(
             [
                 "docker", "build", "-f", "Dockerfile.cmake", "-t",
-                "cppboostservicelib-build:latest", ".",
+                "cppboostservicelib-build:local", ".",
             ],
             cwd=framework,
             check=True,
@@ -575,7 +575,7 @@ def main() -> int:
         sys.executable,
         str(PROFILING_RUNNER),
         "--graph-profile",
-        os.environ.get("CONFORMANCE_EXAMPLE_PROFILE", "function-call"),
+        os.environ.get("EXAMPLE_PROFILE", "function-call"),
         "--language", "cppboost",
         "--language", "cppboost-native",
         "--cores", str(args.cores),
@@ -592,9 +592,9 @@ def main() -> int:
         grpc_source, asio_grpc_source = prepare_cpp_source_contexts()
         print("+", " ".join(command), flush=True)
         env = os.environ.copy()
-        env["PROFILING_DEPENDENCIES_DIR"] = str(ROOT)
-        env["SERVICEGEN_GRPC_SOURCE_CONTEXT"] = str(grpc_source)
-        env["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"] = str(asio_grpc_source)
+        env["DEPENDENCIES_DIR"] = str(ROOT)
+        env["GRPC_SOURCE_CONTEXT"] = str(grpc_source)
+        env["ASIO_GRPC_SOURCE_CONTEXT"] = str(asio_grpc_source)
         subprocess.run(command, cwd=PROFILING_ROOT, env=env, check=True)
 
     results = validate_artifacts(args)
@@ -603,7 +603,7 @@ def main() -> int:
         "workload": {
             "scenario": "process_order_out_of_stock",
             "graph_profile": os.environ.get(
-                "CONFORMANCE_EXAMPLE_PROFILE", "function-call"
+                "EXAMPLE_PROFILE", "function-call"
             ),
             "build_type": "Release",
             "cores": args.cores,

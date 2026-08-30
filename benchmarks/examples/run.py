@@ -26,11 +26,7 @@ BENCHMARK_DIR = Path(__file__).resolve().parent
 BENCHMARK_ROOT = BENCHMARK_DIR.parent
 ROOT = Path(
     os.environ.get(
-        "BENCHMARK_DEPENDENCIES_DIR",
-        os.environ.get(
-            "CONFORMANCE_DEPENDENCIES_DIR",
-            str(BENCHMARK_ROOT.parent.parent),
-        ),
+        "DEPENDENCIES_DIR", str(BENCHMARK_ROOT.parent.parent),
     )
 ).expanduser().resolve()
 NATIVE_ROOT = Path(
@@ -158,7 +154,7 @@ def ensure_example(language: Language, env: dict[str, str]) -> None:
             language.repository is not None
             and language.revision is not None
             and (
-                env.get("BENCHMARK_UPDATE_MANAGED_DEPENDENCIES") == "1"
+                env.get("UPDATE_MANAGED_DEPENDENCIES") == "1"
                 or language.example.parent == NATIVE_ROOT
             )
         ):
@@ -329,8 +325,8 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
                 "http://orderservice:9091/v1/processorder",
             ),
             "BENCHMARK_VUS": str(args.vus),
-            "SERVICEGEN_DOCKER_TARGET": "runtime",
-            "SERVICEGEN_EXAMPLE_PROFILE": getattr(
+            "DOCKER_TARGET": "runtime",
+            "EXAMPLE_PROFILE": getattr(
                 args, "graph_profile", "function-call"
             ),
         }
@@ -359,9 +355,6 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
     elif language.name == "cpp-boost":
         env["COMPOSE_PROJECT_NAME"] = "cppboostexample"
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
-        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
-            ROOT / "cppboostservicelib"
-        )
 
     if language.name in {"cpp-boost", "cpp-boost-native"}:
         # docker-compose.cmake.generated.yml must never fall back to `.` for
@@ -370,12 +363,12 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
         # example itself as /servicegen-grpc-source and CMake configures the
         # wrong project.  Explicit remote contexts are pinned to the same
         # versions as cppboostservicelib and remain cached by BuildKit.
-        if "SERVICEGEN_GRPC_SOURCE_CONTEXT" not in env:
-            env["SERVICEGEN_GRPC_SOURCE_CONTEXT"] = (
+        if "GRPC_SOURCE_CONTEXT" not in env:
+            env["GRPC_SOURCE_CONTEXT"] = (
                 cppboost_dependency_context("grpc")
             )
-        if "SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT" not in env:
-            env["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"] = (
+        if "ASIO_GRPC_SOURCE_CONTEXT" not in env:
+            env["ASIO_GRPC_SOURCE_CONTEXT"] = (
                 cppboost_dependency_context("asio-grpc")
             )
     elif language.name == "python":

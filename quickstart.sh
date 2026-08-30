@@ -21,6 +21,7 @@ set -euo pipefail
 #   ./quickstart.sh -- temporal                      # Temporal Schedule/Task Queue/DurableCall
 #   ./quickstart.sh -- scenarios                     # framework/native scenarios
 #   ./quickstart.sh -- call-semantics                # FunctionCall graph (default)
+#   ./quickstart.sh -- sanitizers                    # lifecycle/race/sanitizer gates for every language
 #   ./quickstart.sh --profile current -- call-semantics  # pooled graph
 #   ./quickstart.sh -- standalone-components         # isolated local builds
 #   ./quickstart.sh -- published-components          # isolated repository builds
@@ -36,9 +37,13 @@ set -euo pipefail
 
 ORG="https://github.com/gorundebug"
 CONFORMANCE_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-DEPENDENCIES_DIR="$CONFORMANCE_ROOT/.dependencies"
-MANAGED_DEPENDENCIES=1
-EXAMPLE_PROFILE="function-call"
+if [ -n "${DEPENDENCIES_DIR:-}" ]; then
+  MANAGED_DEPENDENCIES=0
+else
+  DEPENDENCIES_DIR="$CONFORMANCE_ROOT/.dependencies"
+  MANAGED_DEPENDENCIES=1
+fi
+EXAMPLE_PROFILE="${EXAMPLE_PROFILE:-function-call}"
 
 REPOS=(goexample gonativeexample cppexample cppnativeexample cppboostexample cppboostnativeexample pyexample pynativeexample rustexample rustnativeexample tsexample tsnativeexample servicegen servicelib cppservicelib cppboostservicelib pyservicelib rustservicelib tsservicelib)
 
@@ -100,7 +105,7 @@ esac
 
 mkdir -p "$DEPENDENCIES_DIR"
 DEPENDENCIES_DIR="$(CDPATH= cd -- "$DEPENDENCIES_DIR" && pwd)"
-export CONFORMANCE_DEPENDENCIES_DIR="$DEPENDENCIES_DIR"
+export DEPENDENCIES_DIR
 # Framework examples may later switch to a disposable generated workspace.
 # Performance baselines must stay in one persistent, tag-pinned cache shared
 # by benchmark and profiling runs.
@@ -259,8 +264,8 @@ if [ -d "$CONFORMANCE_ROOT/.artifacts" ] && [ "$PREVIOUS_PROFILE" != "$EXAMPLE_P
 fi
 mkdir -p "$CONFORMANCE_ROOT/.artifacts"
 printf '%s\n' "$EXAMPLE_PROFILE" > "$PROFILE_MARKER"
-export CONFORMANCE_EXAMPLE_PROFILE="$EXAMPLE_PROFILE"
-export SERVICEGEN_EXAMPLE_PROFILE="$EXAMPLE_PROFILE"
+export EXAMPLE_PROFILE="$EXAMPLE_PROFILE"
+export EXAMPLE_PROFILE="$EXAMPLE_PROFILE"
 
 if [ "$EXAMPLE_PROFILE" = "current" ]; then
   PROFILE_TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/servicelib-conformance-current.XXXXXX")"
@@ -271,7 +276,7 @@ if [ "$EXAMPLE_PROFILE" = "current" ]; then
     --workspace "$PROFILE_WORKSPACE" \
     --profile "$EXAMPLE_PROFILE"
   DEPENDENCIES_DIR="$PROFILE_WORKSPACE"
-  export CONFORMANCE_DEPENDENCIES_DIR="$DEPENDENCIES_DIR"
+  export DEPENDENCIES_DIR
 fi
 
 LOCK_DIR="${TMPDIR:-/tmp}/servicelib-tooling.lock"

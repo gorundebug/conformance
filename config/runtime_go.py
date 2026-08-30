@@ -19,7 +19,7 @@ from runtime_fixture import valid_override
 
 HERE = Path(__file__).resolve().parent
 CONFORMANCE_DIR = HERE.parent
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 OUTPUT = CONFORMANCE_DIR / ".artifacts" / "config-runtime-go" / "summary.json"
 PROJECT = "servicelib-config-conformance-go"
 PORT = 19092

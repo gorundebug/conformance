@@ -20,7 +20,7 @@ sys.path.insert(0, str(CONFORMANCE_DIR))
 import cpp_source_cache
 import cpp_userver
 
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "logging" / "summary.json"
 GO = ROOT / "servicelib"
 CANONICAL = ROOT / "cppservicelib"
@@ -131,7 +131,7 @@ def python_test_command() -> list[str]:
         "--volume", f"{PYTHON}:/workspace/.pyservicelib:ro",
         "--workdir", "/workspace/.pyservicelib",
         "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
-        "example-python:latest",
+        "example-python:local",
         "/workspace/.venv/bin/python", "-m", "pytest", "-q",
         "-p", "no:cacheprovider",
         "tests/test_structured_log_contract.py",
@@ -185,7 +185,7 @@ def main() -> int:
             "rust-structured-logging-toolchain",
             [
                 "docker", "build", "--target", "toolchain", "--tag",
-                "rustservicelib-toolchain:latest", ".",
+                "rustservicelib-toolchain:local", ".",
             ],
             RUST,
         )
@@ -230,7 +230,7 @@ def main() -> int:
              *cpp_source_cache.build_volume_mount_args(
                  BOOST, "cppboostservicelib-logging"
              ),
-             "-w", "/workspace", "cppboostservicelib-build:latest", "/bin/bash",
+             "-w", "/workspace", "cppboostservicelib-build:local", "/bin/bash",
              "-lc", boost_script],
             BOOST,
         ),
@@ -245,7 +245,7 @@ def main() -> int:
              "-v", "servicelib-conformance-rust-cargo-registry:/usr/local/cargo/registry",
              "-v", "servicelib-conformance-rust-logging-target:/workspace/target",
              "-w",
-             "/workspace", "rustservicelib-toolchain:latest", "cargo", "test",
+             "/workspace", "rustservicelib-toolchain:local", "cargo", "test",
              "--test", "telemetry",
              "structured_log_level_and_typed_field_contract", "--", "--nocapture"],
             RUST,

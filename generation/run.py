@@ -23,7 +23,7 @@ import go_toolchain
 
 
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 SERVICEGEN = ROOT / "servicegen"
 CANONICAL = ROOT / "cppboostexample"
 FRAMEWORK = ROOT / "cppboostservicelib"
@@ -51,7 +51,7 @@ SUPPORTED_EXAMPLE_PROFILES = {"function-call", "current"}
 
 def active_example_profile() -> str:
     profile = os.environ.get(
-        "CONFORMANCE_EXAMPLE_PROFILE", "function-call"
+        "EXAMPLE_PROFILE", "function-call"
     )
     if profile not in SUPPORTED_EXAMPLE_PROFILES:
         raise RuntimeError(f"unsupported conformance example profile: {profile}")
@@ -66,7 +66,7 @@ def write_local_go_work(path: Path, modules: tuple[Path, ...]) -> None:
 
 def generator_preflight_environment(environment: dict[str, str]) -> dict[str, str]:
     clean = environment.copy()
-    clean.pop("SERVICEGEN_EXAMPLE_PROFILE", None)
+    clean.pop("EXAMPLE_PROFILE", None)
     return clean
 
 # These are generator-owned or generator-published artifact families, not a
@@ -187,7 +187,7 @@ def isolate_compose_volumes(project: Path) -> None:
     fixed_name_prefixes = (
         "cppboostexample_cpp-cmake-build",
         "cppboostexample_cpp-ccache",
-        "${SERVICEGEN_CPPBOOST_BUILD_VOLUME:-cppboostexample_cpp-cmake-build",
+        "${CPPBOOST_BUILD_VOLUME:-cppboostexample_cpp-cmake-build",
     )
     for name in (
         "docker-compose.yml",
@@ -253,7 +253,7 @@ def attach_boost_source_cache(project: Path, source_cache: Path) -> None:
         "services": {
             "cpp-build": {
                 "environment": {
-                    "SERVICEGEN_CPPBOOST_SOURCE_CACHE": "1",
+                    "CPPBOOST_SOURCE_CACHE": "1",
                 },
                 "volumes": [f"{source_cache}:{container_cache}:ro"],
             },
@@ -277,8 +277,8 @@ def attach_boost_source_cache(project: Path, source_cache: Path) -> None:
             raise RuntimeError(f"cannot attach source cache to {relative}")
         if relative != "scripts/integration-test.generated.sh":
             replaced = replaced.replace(
-                'cmake --preset "$SERVICEGEN_CPP_CMAKE_PRESET"',
-                'cmake --preset "$SERVICEGEN_CPP_CMAKE_PRESET" '
+                'cmake --preset "$CPP_CMAKE_PRESET"',
+                'cmake --preset "$CPP_CMAKE_PRESET" '
                 '-C /workspace/conformance-source-cache.generated.cmake',
             )
         else:
@@ -716,7 +716,7 @@ def main() -> int:
         generation_env = os.environ.copy()
         generation_env.update({
             "SERVICEGEN_EXAMPLE_ARCHIVE_DIR": str(archive_dir),
-            "SERVICEGEN_EXAMPLE_PROFILE": profile,
+            "EXAMPLE_PROFILE": profile,
             # A checkout may have had its history squashed while a process-wide
             # Go build cache still contains actions for the old source tree.
             # Generation parity is a release gate, so compile the generator in
@@ -805,7 +805,7 @@ def main() -> int:
             docker_env.update({
                 "COMPOSE_PROJECT_NAME": project,
                 "SERVICELIB_SOURCE_CONTEXT": str(FRAMEWORK),
-                "SERVICEGEN_FETCH_CPP_DEPENDENCIES": "OFF",
+                "FETCH_CPP_DEPENDENCIES": "OFF",
             })
             down = ["docker", "compose", "-f",
                     "docker-compose.cmake.generated.yml", "down",

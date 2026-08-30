@@ -29,4 +29,4 @@ services:
 volumes:
   cpp-cmake-build:
     external: true
-    name: ${SERVICEGEN_CPPBOOST_BUILD_VOLUME}
+    name: ${CPPBOOST_BUILD_VOLUME}

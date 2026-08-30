@@ -2,7 +2,7 @@
 set -eu
 
 conformance_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-dependencies_dir=${CONFORMANCE_DEPENDENCIES_DIR:-$conformance_root/.dependencies}
+dependencies_dir=${DEPENDENCIES_DIR:-$conformance_root/.dependencies}
 wrapper=$dependencies_dir/cppexample/scripts/docker-dependency-proxy.generated.sh
 if [ ! -x "$wrapper" ]; then
   echo "generated Docker dependency proxy wrapper is missing: $wrapper" >&2

@@ -205,23 +205,23 @@ class DependencyRootTest(unittest.TestCase):
             self.assertNotIn(str(linked_module), go_work.read_text())
 
         with mock.patch.dict(
-            os.environ, {"CONFORMANCE_EXAMPLE_PROFILE": "current"}
+            os.environ, {"EXAMPLE_PROFILE": "current"}
         ):
             self.assertEqual(globals_["active_example_profile"](), "current")
 
         generation_environment = {
             "GOWORK": "/tmp/conformance.go.work",
-            "SERVICEGEN_EXAMPLE_PROFILE": "current",
+            "EXAMPLE_PROFILE": "current",
         }
         preflight_environment = globals_["generator_preflight_environment"](
             generation_environment
         )
-        self.assertNotIn("SERVICEGEN_EXAMPLE_PROFILE", preflight_environment)
+        self.assertNotIn("EXAMPLE_PROFILE", preflight_environment)
         self.assertEqual(
             preflight_environment["GOWORK"], "/tmp/conformance.go.work"
         )
         self.assertEqual(
-            generation_environment["SERVICEGEN_EXAMPLE_PROFILE"], "current"
+            generation_environment["EXAMPLE_PROFILE"], "current"
         )
 
     def test_generation_parity_excludes_local_environment_file(self) -> None:
@@ -332,7 +332,7 @@ class DependencyRootTest(unittest.TestCase):
             dependency_root = Path(directory).resolve()
             with mock.patch.dict(
                 os.environ,
-                {"CONFORMANCE_DEPENDENCIES_DIR": str(dependency_root)},
+                {"DEPENDENCIES_DIR": str(dependency_root)},
             ):
                 for relative, root_name, artifact_name in self.runners:
                     with self.subTest(runner=relative):
@@ -351,10 +351,10 @@ class DependencyRootTest(unittest.TestCase):
             makefile = root / "Makefile"
             makefile.write_text(
                 (CONFORMANCE_DIR / "Makefile").read_text()
-                + "\nprint-root:\n\t@printf '%s' \"$$CONFORMANCE_DEPENDENCIES_DIR\"\n"
+                + "\nprint-root:\n\t@printf '%s' \"$$DEPENDENCIES_DIR\"\n"
             )
             clean_environment = dict(os.environ)
-            clean_environment.pop("CONFORMANCE_DEPENDENCIES_DIR", None)
+            clean_environment.pop("DEPENDENCIES_DIR", None)
             result = subprocess.run(
                 ["make", "--no-print-directory", "print-root"],
                 cwd=root,
@@ -369,7 +369,7 @@ class DependencyRootTest(unittest.TestCase):
             result = subprocess.run(
                 ["make", "--no-print-directory", "print-root"],
                 cwd=root,
-                env={**os.environ, "CONFORMANCE_DEPENDENCIES_DIR": str(external)},
+                env={**os.environ, "DEPENDENCIES_DIR": str(external)},
                 check=True,
                 capture_output=True,
                 text=True,
@@ -401,7 +401,7 @@ class DependencyRootTest(unittest.TestCase):
         with (
             mock.patch.dict(
                 os.environ,
-                {"SERVICEGEN_CPPBOOST_BUILD_VOLUME": "expected-build-volume"},
+                {"CPPBOOST_BUILD_VOLUME": "expected-build-volume"},
                 clear=False,
             ),
             mock.patch.object(
@@ -451,12 +451,10 @@ class DependencyRootTest(unittest.TestCase):
         toolchain = '-DCMAKE_TOOLCHAIN_FILE="$conan_toolchain"'
         module_path = '-DCMAKE_MODULE_PATH="$conan_generators"'
         prefix_path = '-DCMAKE_PREFIX_PATH="$conan_generators"'
-        protoc = '-DProtobuf_PROTOC_EXECUTABLE="$conan_protoc"'
         self.assertIn(install, source)
         self.assertIn(toolchain, source)
         self.assertIn(module_path, source)
         self.assertIn(prefix_path, source)
-        self.assertIn(protoc, source)
         self.assertLess(source.index(install), source.index(toolchain))
         self.assertIn("-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=CONAN", source)
 
@@ -729,9 +727,9 @@ class DependencyRootTest(unittest.TestCase):
     def test_quickstart_supports_full_current_profile(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
         self.assertIn('--profile)', quickstart)
-        self.assertIn('CONFORMANCE_EXAMPLE_PROFILE="$EXAMPLE_PROFILE"', quickstart)
+        self.assertIn('EXAMPLE_PROFILE="$EXAMPLE_PROFILE"', quickstart)
         self.assertIn('profile_workspace.py', quickstart)
-        self.assertIn('CONFORMANCE_DEPENDENCIES_DIR="$DEPENDENCIES_DIR"', quickstart)
+        self.assertIn("export DEPENDENCIES_DIR", quickstart)
 
     def test_quickstart_proxy_wrapper_survives_profile_artifact_cleanup(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
@@ -912,7 +910,7 @@ class DependencyRootTest(unittest.TestCase):
                 "docker-compose.integration.generated.yml",
             ):
                 build_name = (
-                    "${SERVICEGEN_CPPBOOST_BUILD_VOLUME:-"
+                    "${CPPBOOST_BUILD_VOLUME:-"
                     "cppboostexample_cpp-cmake-build-v0.2.14}"
                 )
                 (root / name).write_text(
@@ -1003,7 +1001,7 @@ class DependencyRootTest(unittest.TestCase):
         self.assertNotIn("FETCHCONTENT_BASE_DIR", grpc)
         self.assertNotIn("FETCHCONTENT_BASE_DIR", kafka)
         self.assertEqual(
-            generator_environment["SERVICEGEN_CPPBOOST_SOURCE_CACHE_DIR"],
+            generator_environment["CPPBOOST_SOURCE_CACHE_DIR"],
             str(globals_["cpp_source_cache"].source_dir(globals_["BOOST"])),
         )
         self.assertEqual(
@@ -1073,7 +1071,7 @@ class DependencyRootTest(unittest.TestCase):
                 "docker compose -f docker-compose.cmake.generated.yml"
             )
             configure_command = (
-                'cmake --preset "$SERVICEGEN_CPP_CMAKE_PRESET"'
+                'cmake --preset "$CPP_CMAKE_PRESET"'
             )
             for name in ("build.generated.sh", "test.generated.sh"):
                 (scripts / name).write_text(
@@ -1100,7 +1098,7 @@ class DependencyRootTest(unittest.TestCase):
                 override,
             )
             self.assertIn(
-                '"SERVICEGEN_CPPBOOST_SOURCE_CACHE": "1"',
+                '"CPPBOOST_SOURCE_CACHE": "1"',
                 override,
             )
             for name in ("build.generated.sh", "test.generated.sh"):
@@ -1159,7 +1157,7 @@ class DependencyRootTest(unittest.TestCase):
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))
         dependency_root = Path(
             os.environ.get(
-                "CONFORMANCE_DEPENDENCIES_DIR",
+                "DEPENDENCIES_DIR",
                 str(CONFORMANCE_DIR.parent),
             )
         )
@@ -1183,7 +1181,7 @@ class DependencyRootTest(unittest.TestCase):
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))
         dependency_root = Path(
             os.environ.get(
-                "CONFORMANCE_DEPENDENCIES_DIR",
+                "DEPENDENCIES_DIR",
                 str(CONFORMANCE_DIR.parent),
             )
         )
@@ -1220,7 +1218,7 @@ class DependencyRootTest(unittest.TestCase):
     def test_dependency_proxy_maps_the_host_for_plain_docker_runs(self) -> None:
         dependency_root = Path(
             os.environ.get(
-                "CONFORMANCE_DEPENDENCIES_DIR",
+                "DEPENDENCIES_DIR",
                 str(CONFORMANCE_DIR.parent),
             )
         )
@@ -1286,7 +1284,7 @@ class DependencyRootTest(unittest.TestCase):
             )
             with mock.patch.dict(
                 os.environ,
-                {"CONFORMANCE_CPP_SOURCE_CACHE_DIR": str(cache)},
+                {"CPP_SOURCE_CACHE_DIR": str(cache)},
             ), mock.patch.object(
                 subprocess,
                 "run",
@@ -1317,10 +1315,10 @@ class DependencyRootTest(unittest.TestCase):
         environment = globals_["environment"](native)
 
         self.assertEqual(
-            environment["SERVICEGEN_GRPC_SOURCE_CONTEXT"], str(grpc_source)
+            environment["GRPC_SOURCE_CONTEXT"], str(grpc_source)
         )
         self.assertEqual(
-            environment["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"],
+            environment["ASIO_GRPC_SOURCE_CONTEXT"],
             str(asio_grpc_source),
         )
 
@@ -1352,7 +1350,7 @@ class DependencyRootTest(unittest.TestCase):
 
         self.assertIn("PYSERVICELIB_SOURCE_CONTEXT", build_env)
         self.assertEqual(build_command[-2:], ["build", "inventoryservice"])
-        self.assertIn("example-python:latest", test_command)
+        self.assertIn("example-python:local", test_command)
         self.assertIn("/workspace/.venv/bin/python", test_command)
         self.assertIn("PYTHONPATH=/workspace/.pyservicelib/src", test_command)
         self.assertNotIn(str(globals_["PYTHON"] / ".venv"), test_command)

@@ -249,7 +249,7 @@ class NativeExampleFetchTest(unittest.TestCase):
             with patch.object(benchmark, "run", side_effect=fake_run):
                 benchmark.ensure_example(
                     language,
-                    {"BENCHMARK_UPDATE_MANAGED_DEPENDENCIES": "1"},
+                    {"UPDATE_MANAGED_DEPENDENCIES": "1"},
                 )
 
             self.assertIn(
@@ -358,11 +358,11 @@ class CleanCheckoutContextTest(unittest.TestCase):
                     env = benchmark.environment(self.args(), language)
 
                 self.assertEqual(
-                    env["SERVICEGEN_GRPC_SOURCE_CONTEXT"],
+                    env["GRPC_SOURCE_CONTEXT"],
                     "https://github.com/grpc/grpc.git#v1.2.3",
                 )
                 self.assertEqual(
-                    env["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"],
+                    env["ASIO_GRPC_SOURCE_CONTEXT"],
                     "https://github.com/Tradias/asio-grpc.git#v4.5.6",
                 )
 
@@ -371,15 +371,15 @@ class CleanCheckoutContextTest(unittest.TestCase):
             item for item in benchmark.LANGUAGES if item.name == "cpp-boost"
         )
         explicit = {
-            "SERVICEGEN_GRPC_SOURCE_CONTEXT": "/cache/grpc-src",
-            "SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT": "/cache/asio-grpc-src",
+            "GRPC_SOURCE_CONTEXT": "/cache/grpc-src",
+            "ASIO_GRPC_SOURCE_CONTEXT": "/cache/asio-grpc-src",
         }
         with patch.dict(environ, explicit, clear=True):
             env = benchmark.environment(self.args(), language)
 
-        self.assertEqual(env["SERVICEGEN_GRPC_SOURCE_CONTEXT"], "/cache/grpc-src")
+        self.assertEqual(env["GRPC_SOURCE_CONTEXT"], "/cache/grpc-src")
         self.assertEqual(
-            env["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"],
+            env["ASIO_GRPC_SOURCE_CONTEXT"],
             "/cache/asio-grpc-src",
         )
 

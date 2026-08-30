@@ -19,7 +19,7 @@ import cpp_source_cache
 import cpp_userver
 import typescript_toolchain
 
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "operators" / "summary.json"
 GO = ROOT / "servicelib"
 CANONICAL = ROOT / "cppservicelib"
@@ -550,7 +550,7 @@ def main() -> int:
                 ),
                 "-w",
                 "/workspace",
-                "cppboostservicelib-build:latest",
+                "cppboostservicelib-build:local",
                 "ctest",
                 "--test-dir",
                 "build/docker",
@@ -569,7 +569,7 @@ def main() -> int:
                 *cpp_source_cache.build_volume_mount_args(
                     BOOST, "cppboostservicelib-operators"
                 ),
-                "-w", "/workspace", "cppboostservicelib-build:latest",
+                "-w", "/workspace", "cppboostservicelib-build:local",
                 "ctest", "--test-dir", "build/docker", "--output-on-failure",
                 "-R",
                 "cppboostservicelib_(serviceapp|status)_test",

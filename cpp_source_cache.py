@@ -34,7 +34,7 @@ REQUIRED_SOURCE_DIRECTORIES = tuple(dict.fromkeys(SOURCE_DIRECTORIES.values())) 
 
 def cache_root() -> Path:
     return Path(os.environ.get(
-        "CONFORMANCE_CPP_SOURCE_CACHE_DIR",
+        "CPP_SOURCE_CACHE_DIR",
         CONFORMANCE_DIR / ".cpp-source-cache",
     )).expanduser().resolve()
 
@@ -43,8 +43,7 @@ def docker_url(url: str) -> tuple[str, str | None]:
     """Translate a host-local proxy URL for use inside a Docker container."""
     parsed = urlsplit(url)
     docker_host = os.environ.get(
-        "DEPENDENCY_PROXY_DOCKER_HOST",
-        os.environ.get("DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"),
+        "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
     )
     if parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
         rendered_host = (
@@ -164,16 +163,16 @@ def configure_environment(
     project: str = "cppboostexample",
 ) -> Path:
     sources = ensure(framework)
-    environment["SERVICEGEN_CPPBOOST_SOURCE_CACHE_DIR"] = str(sources)
-    environment["SERVICEGEN_CPPBOOST_BUILD_VOLUME"] = build_volume_name(
+    environment["CPPBOOST_SOURCE_CACHE_DIR"] = str(sources)
+    environment["CPPBOOST_BUILD_VOLUME"] = build_volume_name(
         framework, project
     )
     # Runtime-image builds consume gRPC and asio-grpc through BuildKit named
     # contexts rather than the development container's bind mount. Point both
     # contexts at the same validated, versioned source cache so a stale CMake
     # cache cannot fall back to the example repository itself.
-    environment["SERVICEGEN_GRPC_SOURCE_CONTEXT"] = str(sources / "grpc-src")
-    environment["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"] = str(
+    environment["GRPC_SOURCE_CONTEXT"] = str(sources / "grpc-src")
+    environment["ASIO_GRPC_SOURCE_CONTEXT"] = str(
         sources / "asio-grpc-src"
     )
     return sources
@@ -270,7 +269,7 @@ def prepare_command(framework: Path) -> list[str]:
             command.extend(["--add-host", add_host])
         command.extend(["--env", f"DEPENDENCY_GITHUB_RAW_URL={github_raw_url}"])
     command.extend([
-        "cppboostservicelib-build:latest", "/bin/bash", "-lc", run,
+        "cppboostservicelib-build:local", "/bin/bash", "-lc", run,
     ])
     return command
 
@@ -297,7 +296,7 @@ def ensure(framework: Path) -> Path:
             [
                 "docker", "build", *build_proxy_args,
                 "-f", "Dockerfile.cmake", "-t",
-                "cppboostservicelib-build:latest", ".",
+                "cppboostservicelib-build:local", ".",
             ],
             cwd=framework,
             check=True,

@@ -18,7 +18,7 @@ CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE_DIR))
 import cpp_source_cache
 
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT_DIR = CONFORMANCE_DIR / ".artifacts" / "dependencies"
 SOURCE_ROOTS = (
     ROOT / "cppboostservicelib",
@@ -40,11 +40,11 @@ BINARIES = {
 }
 NATIVE_BINARIES = {
     "orderservice-native": (
-        "cppboostnativeexample-orderservice:latest",
+        "cppboostnativeexample-orderservice:local",
         "/usr/local/bin/orderservice",
     ),
     "inventoryservice-native": (
-        "cppboostnativeexample-inventoryservice:latest",
+        "cppboostnativeexample-inventoryservice:local",
         "/usr/local/bin/inventoryservice",
     ),
 }
@@ -221,24 +221,21 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
     native_example = ROOT / "cppboostnativeexample"
     framework_env = os.environ.copy()
     framework_env.setdefault(
-        "SERVICEGEN_CPPBOOST_BUILD_VOLUME",
+        "CPPBOOST_BUILD_VOLUME",
         cpp_source_cache.build_volume_name(ROOT / "cppboostservicelib"),
     )
     if not skip_build:
         framework_env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
-        framework_env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
-            ROOT / "cppboostservicelib"
-        )
         source_cache = cpp_source_cache.configure_environment(
             framework_env, ROOT / "cppboostservicelib"
         )
         # Keep the subsequent Compose inspection on the exact build volume
         # selected by scripts/build.generated.sh. Environment exported inside
         # that script cannot propagate back into this Python process.
-        framework_env["SERVICEGEN_GRPC_SOURCE_CONTEXT"] = str(
+        framework_env["GRPC_SOURCE_CONTEXT"] = str(
             source_cache / "grpc-src"
         )
-        framework_env["SERVICEGEN_ASIO_GRPC_SOURCE_CONTEXT"] = str(
+        framework_env["ASIO_GRPC_SOURCE_CONTEXT"] = str(
             source_cache / "asio-grpc-src"
         )
         command(
@@ -253,7 +250,7 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
         )
 
     results: dict[str, dict[str, object]] = {}
-    build_volume = framework_env["SERVICEGEN_CPPBOOST_BUILD_VOLUME"]
+    build_volume = framework_env["CPPBOOST_BUILD_VOLUME"]
     for service, binary in BINARIES.items():
         output = command(
             [

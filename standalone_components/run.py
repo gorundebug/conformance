@@ -35,8 +35,7 @@ import go_toolchain  # noqa: E402
 
 
 DEFAULT_ROOT = Path(
-    os.environ.get("CONFORMANCE_STANDALONE_COMPONENTS_ROOT")
-    or os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)
+    os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)
 ).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "standalone-components"
 SUMMARY = ARTIFACTS / "summary.json"
@@ -114,6 +113,7 @@ def docker_process_environment(overrides: dict[str, str] | None = None) -> dict[
     result = dict(overrides or {})
     if not os.environ.get("DEPENDENCY_PROXY_DIR"):
         return result
+    result["DEPENDENCY_DOCKER_REGISTRY"] = dependency_docker_registry()
     for name in DOCKER_PROXY_URL_VARIABLES:
         if value := os.environ.get(name):
             result[name] = docker_build_environment_value(name) or value
@@ -815,7 +815,7 @@ def build_service_with_make(
         "go": ("GOSERVICELIB_SOURCE_CONTEXT", root / "servicelib"),
         "cpp": ("SERVICELIB_SOURCE_CONTEXT", root / "cppservicelib"),
         "cppboost": (
-            "CPPBOOSTSERVICELIB_SOURCE_CONTEXT",
+            "SERVICELIB_SOURCE_CONTEXT",
             root / "cppboostservicelib",
         ),
         "rust": ("RUSTSERVICELIB_SOURCE_CONTEXT", root / "rustservicelib"),
@@ -986,7 +986,7 @@ def build_cpp(
         ])
     else:
         definitions.extend([
-            "-DCPPBOOSTSERVICELIB_SOURCE_DIR=/opt/servicelib",
+            "-DSERVICELIB_SOURCE_DIR=/opt/servicelib",
             "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=CONAN",
         ])
     service_targets = {

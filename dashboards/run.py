@@ -13,7 +13,7 @@ from pathlib import Path
 
 CONFORMANCE = Path(__file__).resolve().parents[1]
 ROOT = Path(
-    os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)
+    os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)
 ).expanduser().resolve()
 METRICS_ARTIFACTS = CONFORMANCE / ".artifacts" / "metrics"
 KAFKA_ARTIFACTS = CONFORMANCE / ".artifacts" / "kafka"

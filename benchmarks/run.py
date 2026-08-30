@@ -16,7 +16,7 @@ from typing import Any
 CONFORMANCE = Path(__file__).resolve().parents[1]
 ROOT = Path(
     os.environ.get(
-        "CONFORMANCE_DEPENDENCIES_DIR",
+        "DEPENDENCIES_DIR",
         str(CONFORMANCE.parent),
     )
 ).expanduser().resolve()
@@ -48,7 +48,7 @@ def read_results() -> dict[str, Any]:
 
 
 def validate(results: dict[str, Any], args: argparse.Namespace) -> None:
-    profile = os.environ.get("CONFORMANCE_EXAMPLE_PROFILE", "function-call")
+    profile = os.environ.get("EXAMPLE_PROFILE", "function-call")
     require(results.get("graph_profile") == profile, "benchmark graph profile differs")
     parameters = results.get("parameters")
     require(isinstance(parameters, dict), "benchmark parameters are missing")
@@ -99,7 +99,7 @@ def main() -> int:
     command = [
         sys.executable, str(RUNNER),
         "--graph-profile",
-        os.environ.get("CONFORMANCE_EXAMPLE_PROFILE", "function-call"),
+        os.environ.get("EXAMPLE_PROFILE", "function-call"),
         "--cores", str(args.cores),
         "--loadgen-cores", str(args.loadgen_cores),
         "--grpc-connections", str(args.grpc_connections or args.cores),

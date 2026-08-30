@@ -15,11 +15,7 @@ HERE = Path(__file__).resolve().parent
 BENCHMARK_ROOT = HERE.parent
 DEPENDENCIES = Path(
     os.environ.get(
-        "BENCHMARK_DEPENDENCIES_DIR",
-        os.environ.get(
-            "CONFORMANCE_DEPENDENCIES_DIR",
-            str(BENCHMARK_ROOT.parent.parent),
-        ),
+        "DEPENDENCIES_DIR", str(BENCHMARK_ROOT.parent.parent),
     )
 ).expanduser().resolve()
 EXAMPLE = DEPENDENCIES / "tsexample"

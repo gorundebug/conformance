@@ -18,7 +18,7 @@ import typescript_toolchain
 
 
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "pools" / "summary.json"
 
 GO = ROOT / "servicelib"
@@ -303,7 +303,7 @@ def main() -> int:
                 *cpp_source_cache.build_volume_mount_args(
                     BOOST, "cppboostservicelib-pools"
                 ),
-                "cppboostservicelib-build:latest", "/bin/bash", "-lc",
+                "cppboostservicelib-build:local", "/bin/bash", "-lc",
                 boost_framework_build_script(),
             ],
             BOOST,
@@ -324,7 +324,7 @@ def main() -> int:
                 ),
                 "-w",
                 "/workspace",
-                "cppboostservicelib-build:latest",
+                "cppboostservicelib-build:local",
                 "ctest",
                 "--test-dir",
                 "build/docker",

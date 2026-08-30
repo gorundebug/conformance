@@ -14,7 +14,7 @@ from pathlib import Path
 
 CONFORMANCE_ROOT = Path(__file__).resolve().parents[1]
 ROOT = Path(
-    os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_ROOT.parent)
+    os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_ROOT.parent)
 ).expanduser().resolve()
 ARTIFACT = CONFORMANCE_ROOT / ".artifacts" / "dependency-manifests" / "summary.json"
 GO_PROJECT_MODULES = {
@@ -48,7 +48,7 @@ RUST_PROJECTS = {
     ),
 }
 RUST_TOOLCHAIN_IMAGE = os.environ.get(
-    "SERVICEGEN_RUST_TOOLCHAIN_IMAGE", "rust:1.97-bookworm"
+    "RUST_TOOLCHAIN_IMAGE", "rust:1.97-bookworm"
 )
 PYTHON_PROJECTS = ("pyservicelib", "pyexample")
 TYPESCRIPT_PROJECTS = ("tsservicelib", "tsnativeexample", "tsexample")

@@ -31,6 +31,7 @@ one suite by forwarding it after `--`:
 ./quickstart.sh -- metrics
 ./quickstart.sh -- standalone-components
 ./quickstart.sh -- kubernetes
+./quickstart.sh -- sanitizers
 ```
 
 Use `./quickstart.sh --clone-only` to fetch the repositories without running
@@ -94,7 +95,7 @@ make dependency-source-cache-invalidate
 This keeps compiler ccache and Nexus downloads. The next build configures a
 fresh dependency tree from the cached archives.
 
-The runners read the same path from `CONFORMANCE_DEPENDENCIES_DIR`; when it is
+The runners read the same path from `DEPENDENCIES_DIR`; when it is
 unset, direct `make` and `python3 .../run.py` commands remain compatible with
 the development workspace where repositories sit next to `conformance`.
 For diagnosing a single language, call a runner directly (see below), e.g.
@@ -254,7 +255,7 @@ The same targets are available from a clean checkout through quickstart:
 ./quickstart.sh -- resume
 ```
 
-After every suite passes, `make release` writes a single 27-suite result matrix to
+After every suite passes, `make release` writes a single 28-suite result matrix to
 `.artifacts/summary.json`. The aggregate step also rejects a partial
 Go/C++/Python/Rust metrics, tracing or logging run. It prints the complete
 PASS/FAIL suite matrix, the final passed count and the report path to the
@@ -326,8 +327,7 @@ python3 standalone_components/run.py \
   --language rust --component orderservice
 ```
 
-`CONFORMANCE_STANDALONE_COMPONENTS_ROOT` provides the same local-root setting.
-When it is absent, the runner uses `CONFORMANCE_DEPENDENCIES_DIR`, including
+The runner uses `DEPENDENCIES_DIR`, including
 the directory selected by `quickstart.sh --dependencies-dir`. Results are
 written to `.artifacts/standalone-components/summary.json`. A filtered
 language/component invocation is diagnostic and writes
@@ -490,6 +490,41 @@ must be invalidated with `make dependency-source-cache-invalidate` whenever a
 pinned dependency or its population setup changes. The generated streaming and Kafka recovery fixtures receive the same
 cache as a read-only mount, so their disposable Docker build volumes do not
 trigger another dependency download.
+
+## Lifecycle, race and sanitizer conformance
+
+The `sanitizers` leaf suite applies the same lifecycle contract to every
+generated language project. Go runs under the standard race detector, userver
+and Boost C++ run under both ASan+UBSan and TSan, and Python, Rust and
+TypeScript run as ordinary runtime lifecycle gates. Each variant first performs
+three independent early-lifecycle checks: it starts every generated service and
+shared Kafka/Temporal infrastructure, waits for all runtime graphs, completes
+one order, and immediately shuts the whole project down. It then starts a fresh
+project, sends concurrent order traffic for 15 seconds, and proves that
+Analytics Service consumed the Kafka result. Finally it keeps clients active
+for 20 seconds while stopping all services after 10 seconds. Application
+services must stop within five seconds, without a race/sanitizer report,
+unhandled runtime failure, non-zero exit, or hung client.
+
+```bash
+make sanitizers
+python3 sanitizers/run.py --language cpp --sanitizer asan
+python3 sanitizers/run.py --language go --sanitizer race
+python3 sanitizers/run.py --language rust --sanitizer runtime
+```
+
+Because `sanitizers` is part of `make all`, the complete clean runs execute this
+entire matrix once against the `function-call` profile and once against the
+disposable generated `current` profile workspace.
+
+The load duration is deliberately bounded to 10–20 seconds (`15` by default):
+this is a correctness/race gate, not a benchmark. The complete statically
+linked dependency graph uses optimized `Release` builds with explicit debug
+symbols and frame pointers; sanitizer binaries are never stripped. ASan+UBSan
+and TSan instrument the complete graph through standard Conan/compiler settings
+and upstream-supported build options, without patching third-party sources.
+Results are written to
+`.artifacts/sanitizers/summary.json`.
 
 ## Profiling conformance and profiling toolkit
 

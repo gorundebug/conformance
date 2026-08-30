@@ -119,8 +119,8 @@ bash ./quickstart.sh --dependencies-dir /path/to/repos -- profiling-all \
   PROFILING_ARGS="--language cppboost"
 ```
 
-A direct runner invocation may use `CONFORMANCE_DEPENDENCIES_DIR` or
-`PROFILING_DEPENDENCIES_DIR` to select an existing dependency workspace.
+A direct runner invocation may use `DEPENDENCIES_DIR` or
+`DEPENDENCIES_DIR` to select an existing dependency workspace.
 
 ## Usage
 

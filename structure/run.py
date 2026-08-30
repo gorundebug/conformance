@@ -13,7 +13,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 CONFORMANCE_DIR = HERE.parent
-DEFAULT_ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
+DEFAULT_ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 DEFAULT_ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "structure" / "summary.json"
 
 

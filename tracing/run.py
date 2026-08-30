@@ -23,7 +23,7 @@ CONFORMANCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE))
 import cpp_source_cache
 
-ROOT = Path(os.environ.get("CONFORMANCE_DEPENDENCIES_DIR", CONFORMANCE.parent)).expanduser().resolve()
+ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "tracing"
 COMMON_COMPOSE = Path(__file__).with_name("compose.common.yml")
 JAEGER_URL = "http://localhost:16686"
@@ -128,7 +128,7 @@ def compose_command(language: Language, *args: str) -> list[str]:
         str(language.example / "docker-compose.yml"),
     ]
     # Canonical C++ tracing is compiled into the development build volume with
-    # SERVICEGEN_ENABLE_OTLP_TRACING=ON. Its published runtime image is the
+    # ENABLE_OTLP_TRACING=ON. Its published runtime image is the
     # normal telemetry-disabled build, so layering that image here would hide
     # the instrumented binary that this suite has just built.
     if language.name != "cpp":
@@ -151,7 +151,7 @@ def build(language: Language, env: dict[str, str]) -> None:
         run(
             ["./scripts/build.generated.sh", "docker-release"],
             cwd=language.example,
-            env={**env, "SERVICEGEN_ENABLE_OTLP_TRACING": "ON"},
+            env={**env, "ENABLE_OTLP_TRACING": "ON"},
         )
     elif language.name == "cppboost":
         run(
@@ -443,7 +443,7 @@ def assert_unique_grpc_request_stream_ids(trace: dict[str, Any]) -> None:
         raise RuntimeError(
             f"unary requests reused stream_id: {stream_ids!r}"
         )
-    if os.environ.get("CONFORMANCE_EXAMPLE_PROFILE") == "function-call":
+    if os.environ.get("EXAMPLE_PROFILE") == "function-call":
         ordered = sorted(requests, key=lambda request: request[1])
         if ordered[1][1] < ordered[0][2]:
             raise RuntimeError(
@@ -751,12 +751,9 @@ def language_env(language: Language) -> dict[str, str]:
     env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     if language.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
-        env["SERVICEGEN_ENABLE_OTLP_TRACING"] = "ON"
+        env["ENABLE_OTLP_TRACING"] = "ON"
     elif language.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
-        env["CPPBOOSTSERVICELIB_SOURCE_CONTEXT"] = str(
-            ROOT / "cppboostservicelib"
-        )
         cpp_source_cache.configure_environment(
             env, ROOT / "cppboostservicelib"
         )
