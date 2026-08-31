@@ -16,6 +16,7 @@ import copy
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -735,6 +736,19 @@ def build_python(target: Path, component: str) -> None:
         )
 
 
+def rust_cargo_arguments() -> list[str]:
+    cargo = ["cargo"]
+    if os.environ.get("DEPENDENCY_PROXY_DIR"):
+        registry = docker_process_environment()[
+            "CARGO_REGISTRIES_CRATES_IO_INDEX"
+        ]
+        cargo.extend([
+            "--config", 'source.crates-io.replace-with="dependency-proxy"',
+            "--config", f'source.dependency-proxy.registry="{registry}"',
+        ])
+    return cargo
+
+
 def build_rust(target: Path, component: str) -> None:
     component_dir = component_directory("rust", component)
     package = component_package_name("rust", target / component_dir)
@@ -750,18 +764,11 @@ def build_rust(target: Path, component: str) -> None:
         f"make -C /workspace/{item} generate"
         for item in generation_targets
     )
-    cargo = ["cargo"]
-    if os.environ.get("DEPENDENCY_PROXY_DIR"):
-        registry = docker_process_environment()[
-            "CARGO_REGISTRIES_CRATES_IO_INDEX"
-        ]
-        cargo.extend([
-            "--config", 'source.crates-io.replace-with="dependency-proxy"',
-            "--config", f'source.dependency-proxy.registry="{registry}"',
-        ])
     phases = [
         generation,
-        " ".join([*cargo, "test", "-p", package, "--all-targets"]),
+        shlex.join([
+            *rust_cargo_arguments(), "test", "-p", package, "--all-targets",
+        ]),
     ]
     script = " && ".join(phase for phase in phases if phase)
     name = container_name("rust", component)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -104,6 +105,24 @@ class StandaloneComponentTest(unittest.TestCase):
         )
         self.assertIn("host.docker.internal:18084", environment["GIT_CONFIG_KEY_0"])
         self.assertEqual(environment["PIP_TRUSTED_HOST"], "host.docker.internal")
+
+    def test_rust_proxy_arguments_survive_shell_command(self) -> None:
+        registry = "sparse+http://host.docker.internal:18081/repository/cargo/"
+        with mock.patch.dict(
+            run.os.environ,
+            {"DEPENDENCY_PROXY_DIR": "/cache"},
+            clear=True,
+        ), mock.patch.object(
+            run,
+            "docker_process_environment",
+            return_value={"CARGO_REGISTRIES_CRATES_IO_INDEX": registry},
+        ):
+            arguments = run.rust_cargo_arguments()
+
+        self.assertEqual(shlex.split(shlex.join(arguments)), arguments)
+        self.assertIn(
+            'source.crates-io.replace-with="dependency-proxy"', arguments
+        )
 
     def test_declared_module_matrix_is_complete(self) -> None:
         self.assertEqual(set(run.DECLARED_MODULES), set(run.COMPONENTS))
