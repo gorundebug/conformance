@@ -267,8 +267,11 @@ def prepare_cpp() -> None:
     output = ARTIFACTS / "cpp"
     output.mkdir(parents=True, exist_ok=True)
     source = ROOT / "cppexample" / "orderservice" / "config"
-    overrides = (source / "overrides.integration.generated.yaml").read_text()
+    overrides = (source / "overrides.yaml").read_text()
     overrides = overrides.replace(
+        "address: dns:///localhost:9202",
+        "address: dns:///inventoryservice:9202",
+    ).replace(
         "  orderProcessed:\n    enabled: true",
         "  orderProcessed:\n    enabled: false",
     )
