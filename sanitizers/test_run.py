@@ -62,6 +62,32 @@ class SanitizerConformanceTest(unittest.TestCase):
         self.assertEqual(RUN.sanitizer_stop_command_timeout(7.0), 30.0)
         self.assertGreater(RUN.sanitizer_stop_command_timeout(30.0), 30.0)
 
+    def test_every_framework_adapter_uses_the_shared_contract(self) -> None:
+        RUN.validate_adapter_coverage()
+        contract = RUN.LIFECYCLE_CONTRACT
+        self.assertEqual(contract.modes, RUN.MODES)
+        self.assertEqual(
+            set(RUN.IMPLEMENTATIONS), set(RUN.IMPLEMENTATION_LANGUAGES)
+        )
+        self.assertEqual(
+            set(RUN.IMPLEMENTATIONS), set(RUN.IMPLEMENTATION_SANITIZERS)
+        )
+        for language, sanitizers in RUN.IMPLEMENTATION_SANITIZERS.items():
+            for sanitizer in sanitizers:
+                self.assertTrue(RUN.target_name(language, sanitizer))
+        self.assertEqual(
+            RUN.lifecycle_contract_summary(),
+            {
+                "single_request_runs": 3,
+                "load_duration_seconds": 15.0,
+                "shutdown_load_duration_seconds": 20.0,
+                "shutdown_after_seconds": 10.0,
+                "shutdown_timeout_seconds": 7.0,
+                "workers": 4,
+                "modes": ["single-request", "load", "shutdown-load"],
+            },
+        )
+
     def test_local_framework_context_is_explicit(self) -> None:
         previous = os.environ.pop("USE_LOCAL_MODULES", None)
         previous_source = os.environ.get("SERVICELIB_SOURCE_CONTEXT")

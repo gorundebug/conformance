@@ -59,6 +59,22 @@ SANITIZERS = tuple(
     )
 )
 MODES = ("single-request", "load", "shutdown-load")
+
+
+@dataclass(frozen=True)
+class LifecycleContract:
+    """One observable lifecycle scenario shared by every framework adapter."""
+
+    single_request_runs: int = 3
+    load_duration_seconds: float = 15.0
+    shutdown_load_duration_seconds: float = 20.0
+    shutdown_after_seconds: float = 10.0
+    shutdown_timeout_seconds: float = 7.0
+    workers: int = 4
+    modes: tuple[str, ...] = MODES
+
+
+LIFECYCLE_CONTRACT = LifecycleContract()
 REQUEST_BODY = json.dumps(
     {
         "customer_id": "sanitizer-conformance",
@@ -474,6 +490,48 @@ def target_name(language: str, sanitizer: str) -> str:
     return f"cpp-{sanitizer}"
 
 
+def validate_adapter_coverage() -> None:
+    """Fail before builds when a framework adapter escapes the common contract."""
+    languages = set(IMPLEMENTATIONS)
+    if set(IMPLEMENTATION_LANGUAGES) != languages:
+        raise RuntimeError("lifecycle language-name adapters are incomplete")
+    if set(IMPLEMENTATION_SANITIZERS) != languages:
+        raise RuntimeError("lifecycle sanitizer adapters are incomplete")
+    runtime_languages = {
+        language
+        for language, sanitizers in IMPLEMENTATION_SANITIZERS.items()
+        if "runtime" in sanitizers
+    }
+    if not runtime_languages.issubset(RUNTIME_FAILURE_MARKERS):
+        missing = sorted(runtime_languages - set(RUNTIME_FAILURE_MARKERS))
+        raise RuntimeError(
+            "lifecycle runtime failure markers are missing for: "
+            + ", ".join(missing)
+        )
+    if LIFECYCLE_CONTRACT.modes != MODES:
+        raise RuntimeError("lifecycle modes diverge from the canonical contract")
+    for language, sanitizers in IMPLEMENTATION_SANITIZERS.items():
+        if not sanitizers:
+            raise RuntimeError(f"lifecycle adapter {language} has no execution mode")
+        for sanitizer in sanitizers:
+            target_name(language, sanitizer)
+
+
+def lifecycle_contract_summary() -> dict[str, Any]:
+    contract = LIFECYCLE_CONTRACT
+    return {
+        "single_request_runs": contract.single_request_runs,
+        "load_duration_seconds": contract.load_duration_seconds,
+        "shutdown_load_duration_seconds": (
+            contract.shutdown_load_duration_seconds
+        ),
+        "shutdown_after_seconds": contract.shutdown_after_seconds,
+        "shutdown_timeout_seconds": contract.shutdown_timeout_seconds,
+        "workers": contract.workers,
+        "modes": list(contract.modes),
+    }
+
+
 def fetch_graph(url: str, timeout: float = 3) -> dict[str, Any]:
     with urllib.request.urlopen(url, timeout=timeout) as response:
         if response.status != 200:
@@ -882,18 +940,35 @@ def exercise(
 
 
 def parse_args() -> argparse.Namespace:
+    contract = LIFECYCLE_CONTRACT
     parser = argparse.ArgumentParser()
-    parser.add_argument("--duration", type=float, default=15.0)
-    parser.add_argument("--shutdown-load-duration", type=float, default=20.0)
-    parser.add_argument("--shutdown-after", type=float, default=10.0)
-    parser.add_argument("--shutdown-timeout", type=float, default=7.0)
-    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument(
+        "--duration", type=float, default=contract.load_duration_seconds
+    )
+    parser.add_argument(
+        "--shutdown-load-duration",
+        type=float,
+        default=contract.shutdown_load_duration_seconds,
+    )
+    parser.add_argument(
+        "--shutdown-after", type=float, default=contract.shutdown_after_seconds
+    )
+    parser.add_argument(
+        "--shutdown-timeout",
+        type=float,
+        default=contract.shutdown_timeout_seconds,
+    )
+    parser.add_argument("--workers", type=int, default=contract.workers)
     parser.add_argument(
         "--single-request",
         action="store_true",
         help="run only the short start/one-request/immediate-stop checks",
     )
-    parser.add_argument("--single-request-runs", type=int, default=3)
+    parser.add_argument(
+        "--single-request-runs",
+        type=int,
+        default=contract.single_request_runs,
+    )
     parser.add_argument("--mode", action="append", choices=MODES)
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--language", action="append", choices=tuple(IMPLEMENTATIONS))
@@ -915,6 +990,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    validate_adapter_coverage()
     args = parse_args()
     languages = args.language or list(IMPLEMENTATIONS)
     modes = ["single-request"] if args.single_request else (args.mode or list(MODES))
@@ -972,6 +1048,7 @@ def main() -> int:
                 results[key] = mode_results
         summary = {
             "status": "pass",
+            "contract": lifecycle_contract_summary(),
             "languages": languages,
             "sanitizers": args.sanitizer or "implementation-defaults",
             "implementations": results,
@@ -981,6 +1058,7 @@ def main() -> int:
     except BaseException as error:
         summary = {
             "status": "fail",
+            "contract": lifecycle_contract_summary(),
             "languages": languages,
             "sanitizers": args.sanitizer or "implementation-defaults",
             "implementations": results,
