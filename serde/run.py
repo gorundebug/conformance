@@ -191,6 +191,7 @@ def python_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict
             "--volume", f"{CONFORMANCE_DIR}:/workspace/conformance:ro",
             "--workdir", "/workspace/.pyservicelib",
             "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
+            "--entrypoint", "",
             "inventoryservice-python:local",
             "/workspace/.venv/bin/python",
             "/workspace/conformance/serde/python_probe.py",

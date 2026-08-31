@@ -131,6 +131,7 @@ def python_test_command() -> list[str]:
         "--volume", f"{PYTHON}:/workspace/.pyservicelib:ro",
         "--workdir", "/workspace/.pyservicelib",
         "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
+        "--entrypoint", "",
         "inventoryservice-python:local",
         "/workspace/.venv/bin/python", "-m", "pytest", "-q",
         "-p", "no:cacheprovider",

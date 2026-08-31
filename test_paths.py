@@ -1351,6 +1351,7 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn("PYSERVICELIB_SOURCE_CONTEXT", build_env)
         self.assertEqual(build_command[-2:], ["build", "inventoryservice"])
         self.assertIn("inventoryservice-python:local", test_command)
+        self.assertIn("--entrypoint", test_command)
         self.assertIn("/workspace/.venv/bin/python", test_command)
         self.assertIn("PYTHONPATH=/workspace/.pyservicelib/src", test_command)
         self.assertNotIn(str(globals_["PYTHON"] / ".venv"), test_command)

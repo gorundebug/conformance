@@ -685,6 +685,7 @@ def main() -> int:
             "--volume", f"{PYTHON}:/workspace/.pyservicelib:ro",
             "--workdir", "/workspace/.pyservicelib",
             "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
+            "--entrypoint", "",
             "inventoryservice-python:local", "/workspace/.venv/bin/python", "-m",
             "pytest", "-q", "-p", "no:cacheprovider",
             "tests/test_transportmetrics.py",
