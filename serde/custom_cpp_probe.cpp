@@ -1,11 +1,11 @@
 #if defined(SERVICELIB_CUSTOM_SERDE_BOOST)
-#include <model/include/example/model/serdes/order_item_result_serde.hpp>
-#include <model/include/example/model/serdes/order_item_serde.hpp>
+#include <model_cpp/include/example/model/serdes/order_item_result_serde.hpp>
+#include <model_cpp/include/example/model/serdes/order_item_serde.hpp>
 #include <orderservice/internal/serdes/order_serde.hpp>
 #include <orderservice/internal/serdes/order_state_serde.hpp>
 #elif defined(SERVICELIB_CUSTOM_SERDE_CANONICAL)
-#include <model/include/example/model/serdes/order_item_result_serde.hpp>
-#include <model/include/example/model/serdes/order_item_serde.hpp>
+#include <model_cpp/include/example/model/serdes/order_item_result_serde.hpp>
+#include <model_cpp/include/example/model/serdes/order_item_serde.hpp>
 #include <orderservice/internal/serdes/order_serde.hpp>
 #include <orderservice/internal/serdes/order_state_serde.hpp>
 #else

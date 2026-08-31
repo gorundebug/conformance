@@ -19,6 +19,11 @@ CONFORMANCE_DIR = Path(__file__).resolve().parent
 
 
 class DependencyRootTest(unittest.TestCase):
+    def test_custom_cpp_serde_probe_uses_language_suffixed_model_module(self) -> None:
+        probe = (CONFORMANCE_DIR / "serde/custom_cpp_probe.cpp").read_text()
+        self.assertIn("<model_cpp/include/example/model/", probe)
+        self.assertNotIn("<model/include/example/model/", probe)
+
     def test_typescript_installs_enforce_proxy_and_binary_mirror(self) -> None:
         import dependency_download_mirrors
         import typescript_toolchain
