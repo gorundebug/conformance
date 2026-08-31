@@ -61,6 +61,15 @@ class Language:
     def project(self) -> str:
         return f"servicelib-temporal-conformance-{self.name}"
 
+    @property
+    def automation_config(self) -> Path:
+        return self.example / "automationservice" / "config" / "config.yaml"
+
+    @property
+    def automation_overrides(self) -> Path:
+        filename = "overrides.yaml" if self.name == "go" else "docker_overrides.yaml"
+        return self.example / "automationservice" / "config" / filename
+
 
 LANGUAGES = {
     language.name: language
@@ -122,71 +131,101 @@ def run(
     )
 
 
-def write_overrides(path: Path, *, production: bool) -> None:
-    environment_name = "production" if production else ""
-    path.write_text(
-        f"""dataConnectors:
-  temporal:
-    address: temporal:7233
-endpoints:
-  activityJob:
-    enabled: true
-  fanOutActivityA:
-    enabled: true
-  fanOutActivityB:
-    enabled: true
-  fanOutActivityC:
-    enabled: true
-  fanOutWorkflowJob:
-    enabled: true
-  localSchedule:
-    enabled: true
-    schedule: "* * * * *"
-  sequentialActivityA:
-    enabled: true
-  sequentialActivityB:
-    enabled: true
-  temporalActivitySchedule:
-    enabled: true
-    schedule: "* * * * *"
-    overlapPolicy: Allow
-    tracingEnabled: true
-  temporalWorkflowSchedule:
-    enabled: true
-    schedule: "* * * * *"
-    overlapPolicy: Allow
-    tracingEnabled: true
-  workflowJob:
-    enabled: true
-pools:
-  defaultPool:
-    executorsCount: 2
-services:
-  automationService:
-    defaultGrpcTimeout: 0
-    environment: "{environment_name}"
-    grpcHost: 0.0.0.0
-    grpcPort: 9204
-    httpHost: 0.0.0.0
-    httpPort: 9094
-streams:
-  activityPause:
-    duration: 250
-  scheduledActivityPause:
-    duration: 250
-  scheduledWorkflowPause:
-    duration: 250
-  workflowPause:
-    duration: 250
-"""
-    )
+def yaml_entries(text: str) -> list[tuple[int, int, tuple[str, ...], str | None]]:
+    """Read paths from the generated, mapping-only configuration YAML subset."""
+    entries: list[tuple[int, int, tuple[str, ...], str | None]] = []
+    parents: list[tuple[int, str]] = []
+    for index, line in enumerate(text.splitlines()):
+        match = re.match(r"^( *)([^:#][^:]*):(?: (.*))?$", line)
+        if match is None:
+            continue
+        indent = len(match.group(1))
+        key = match.group(2).strip()
+        while parents and parents[-1][0] >= indent:
+            parents.pop()
+        path = tuple(key for _, key in parents) + (key,)
+        value = match.group(3)
+        entries.append((index, indent, path, value))
+        if value is None:
+            parents.append((indent, key))
+    return entries
+
+
+def validate_override_completeness(language: Language, overrides: str) -> None:
+    config = language.automation_config.read_text()
+    required = {
+        path
+        for _, _, path, value in yaml_entries(config)
+        if value is not None and value.strip().startswith("$")
+    }
+    supplied = {
+        path
+        for _, _, path, value in yaml_entries(overrides)
+        if value is not None
+    }
+    missing = sorted(".".join(path) for path in required - supplied)
+    if missing:
+        raise RuntimeError(
+            f"{language.name} canonical automation override does not supply generated "
+            f"configuration placeholders: {', '.join(missing)}"
+        )
+
+
+def set_yaml_scalar(text: str, path: tuple[str, ...], value: str) -> str:
+    lines = text.splitlines()
+    entries = yaml_entries(text)
+    for index, indent, entry_path, old_value in entries:
+        if entry_path == path:
+            if old_value is None:
+                raise RuntimeError(f"YAML path {'.'.join(path)} is not a scalar")
+            lines[index] = f"{' ' * indent}{path[-1]}: {value}"
+            return "\n".join(lines) + "\n"
+
+    parent = path[:-1]
+    for index, indent, entry_path, old_value in entries:
+        if entry_path != parent:
+            continue
+        if old_value is not None:
+            raise RuntimeError(f"YAML parent {'.'.join(parent)} is not a mapping")
+        insert_at = len(lines)
+        for next_index in range(index + 1, len(lines)):
+            next_line = lines[next_index]
+            if not next_line.strip() or next_line.lstrip().startswith("#"):
+                continue
+            next_indent = len(next_line) - len(next_line.lstrip(" "))
+            if next_indent <= indent:
+                insert_at = next_index
+                break
+        lines.insert(insert_at, f"{' ' * (indent + 2)}{path[-1]}: {value}")
+        return "\n".join(lines) + "\n"
+    raise RuntimeError(f"YAML parent {'.'.join(parent)} does not exist")
+
+
+def write_overrides(language: Language, path: Path, *, production: bool) -> None:
+    overrides = language.automation_overrides.read_text()
+    validate_override_completeness(language, overrides)
+    changes = {
+        ("endpoints", "localSchedule", "schedule"): '"* * * * *"',
+        ("endpoints", "temporalActivitySchedule", "schedule"): '"* * * * *"',
+        ("endpoints", "temporalActivitySchedule", "overlapPolicy"): "Allow",
+        ("endpoints", "temporalActivitySchedule", "tracingEnabled"): "true",
+        ("endpoints", "temporalWorkflowSchedule", "schedule"): '"* * * * *"',
+        ("endpoints", "temporalWorkflowSchedule", "overlapPolicy"): "Allow",
+        ("endpoints", "temporalWorkflowSchedule", "tracingEnabled"): "true",
+        ("services", "automationService", "environment"): (
+            '"production"' if production else '""'
+        ),
+    }
+    for field_path, value in changes.items():
+        overrides = set_yaml_scalar(overrides, field_path, value)
+    path.write_text(overrides)
 
 
 def prepare_files(language: Language) -> tuple[Path, Path]:
     directory = ARTIFACTS / language.name
     directory.mkdir(parents=True, exist_ok=True)
     overrides = directory / "automationservice.overrides.yaml"
-    write_overrides(overrides, production=False)
+    write_overrides(language, overrides, production=False)
     otlp_endpoint = (
         "otel-collector:4317"
         if language.name == "python"
@@ -1924,7 +1963,7 @@ def verify_tracing(
         cwd=language.example,
         env=env,
     )
-    write_overrides(overrides, production=True)
+    write_overrides(language, overrides, production=True)
     run(
         compose_command(
             language,
