@@ -189,6 +189,42 @@ class DependencyRootTest(unittest.TestCase):
                 (destination / "tools" / "protoc").read_text(), "cached\n"
             )
 
+    def test_profile_workspace_preserves_release_tags_on_generated_snapshot(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            generated = root / "generated"
+            source.mkdir()
+            generated.mkdir()
+            (source / "value").write_text("source\n")
+            (generated / "value").write_text("generated\n")
+            subprocess.run(["git", "init", "-q", str(source)], check=True)
+            subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+            subprocess.run(
+                [
+                    "git", "-C", str(source),
+                    "-c", "user.name=Test", "-c", "user.email=test@localhost",
+                    "commit", "-q", "-m", "source",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(source), "tag", "v0.2.45"], check=True,
+            )
+
+            tags = globals_["release_tags_at_head"](source)
+            globals_["initialize_git_snapshot"](generated, "current", tags)
+
+            self.assertEqual(tags, ["v0.2.45"])
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "-C", str(generated), "tag", "--points-at", "HEAD"],
+                    check=True, capture_output=True, text=True,
+                ).stdout.strip(),
+                "v0.2.45",
+            )
+
     def test_profile_workspace_attaches_tools_for_every_generated_language(self) -> None:
         profile = (CONFORMANCE_DIR / "profile_workspace.py").read_text()
         self.assertIn("attach_persistent_tools(source, destination)", profile)

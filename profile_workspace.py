@@ -193,8 +193,16 @@ def verify_current_graph(example: Path) -> dict[str, int]:
     return actual
 
 
-def initialize_git_snapshot(example: Path, profile: str) -> None:
-    """Give read-only conformance checks an isolated tracked-file index."""
+def release_tags_at_head(repository: Path) -> list[str]:
+    """Return release identities that the generated profile must preserve."""
+    result = run(["git", "tag", "--points-at", "HEAD"], cwd=repository)
+    return sorted(tag for tag in result.stdout.splitlines() if tag)
+
+
+def initialize_git_snapshot(
+    example: Path, profile: str, release_tags: list[str] | None = None,
+) -> None:
+    """Give checks an isolated index with the source release identities."""
     run(["git", "init", "--quiet"], cwd=example)
     run(["git", "add", "--force", "."], cwd=example)
     run(
@@ -206,6 +214,8 @@ def initialize_git_snapshot(example: Path, profile: str) -> None:
         ],
         cwd=example,
     )
+    for tag in release_tags or []:
+        run(["git", "tag", tag], cwd=example)
 
 
 def attach_persistent_tools(source: Path, destination: Path) -> None:
@@ -255,6 +265,7 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
             raise RuntimeError(f"missing canonical example: {source}")
         if not archive.is_file() or archive.stat().st_size == 0:
             raise RuntimeError(f"missing generated profile archive: {archive}")
+        release_tags = release_tags_at_head(source)
         copy_example(source, destination)
         merged = run(
             merge_generated_command(archive),
@@ -262,7 +273,7 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
         )
         (profile_artifacts / f"merge-{language}.log").write_text(merged.stdout)
         generated[language] = verify_current_graph(destination)
-        initialize_git_snapshot(destination, profile)
+        initialize_git_snapshot(destination, profile, release_tags)
         # Every canonical language can still own Go-generated protobuf/OpenAPI
         # modules.  Consequently cppexample, cppboostexample, rustexample and
         # the other mixed-language workspaces use the same host-side tools as
