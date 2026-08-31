@@ -1,0 +1,5 @@
+services:
+  inventoryservice:
+    image: pyexample-development:local
+    build:
+      target: development

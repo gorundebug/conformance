@@ -120,6 +120,7 @@ def python_image_build() -> tuple[list[str], dict[str, str]]:
         "--project-name", "servicelib-logging-conformance-python",
         "--project-directory", str(PYTHON_EXAMPLE),
         "--file", str(PYTHON_EXAMPLE / "docker-compose.yml"),
+        "--file", str(CONFORMANCE_DIR / "logging" / "compose.python.yml"),
         "build", "inventoryservice",
     ]
     return command, env
@@ -132,7 +133,7 @@ def python_test_command() -> list[str]:
         "--workdir", "/workspace/.pyservicelib",
         "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
         "--entrypoint", "",
-        "inventoryservice-python:local",
+        "pyexample-development:local",
         "/workspace/.venv/bin/python", "-m", "pytest", "-q",
         "-p", "no:cacheprovider",
         "tests/test_structured_log_contract.py",
