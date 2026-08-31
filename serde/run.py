@@ -615,7 +615,7 @@ def main() -> int:
         "-DCMAKE_PROJECT_INCLUDE=/repo/conformance/serde/protobuf_probe.cmake && "
         "cmake --build --preset docker-release --parallel --target "
         "servicelib_protobuf_wire_probe && "
-        "./build/servicelib_protobuf_wire_probe",
+        "/workspace/build/servicelib_protobuf_wire_probe",
     ])
     canonical_protobuf, canonical_protobuf_run = fixture_probe(
         "canonical-cpp-generated-protobuf-wire", canonical_protobuf_compose,
@@ -642,7 +642,7 @@ def main() -> int:
         "-DCMAKE_PROJECT_INCLUDE=/repo/conformance/serde/protobuf_probe.cmake && "
         "cmake --build --preset docker-release --parallel --target "
         "servicelib_protobuf_wire_probe && "
-        "./build/servicelib_protobuf_wire_probe",
+        "/workspace/build/servicelib_protobuf_wire_probe",
     ])
     boost_protobuf, boost_protobuf_run = fixture_probe(
         "boost-cpp-generated-protobuf-wire", boost_protobuf_compose,
