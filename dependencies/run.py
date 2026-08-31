@@ -72,6 +72,21 @@ USERVER_CONAN_SNAPSHOT = {
     "userver-opentelemetry-proto",
     "yaml-cpp",
 }
+SHARED_NATIVE_CONAN_PACKAGES = (
+    (
+        "cppservicelib",
+        "cppnativeexample",
+        {
+            "userver": "@gorundebug/userver#",
+            "librdkafka": "@gorundebug/userver#",
+        },
+    ),
+    (
+        "cppboostservicelib",
+        "cppboostnativeexample",
+        {"grpc": "@gorundebug/boost#"},
+    ),
+)
 
 
 def command(args: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> str:
@@ -216,6 +231,70 @@ def native_jemalloc_contract_errors() -> list[str]:
     return errors
 
 
+def shared_native_conan_contract_errors() -> list[str]:
+    """Require every supported profile to reuse framework recipe revisions."""
+    def recipe_identity(reference: str) -> str:
+        # Conan appends a local cache timestamp after ``%``.  Independently
+        # exporting byte-identical recipes may therefore produce different
+        # timestamps while retaining the same immutable recipe revision.
+        return reference.split("%", 1)[0]
+
+    errors: list[str] = []
+    for framework_name, native_name, packages in SHARED_NATIVE_CONAN_PACKAGES:
+        framework_locks = ROOT / framework_name / "conan" / "locks"
+        native_locks = ROOT / native_name / "conan" / "locks"
+        for framework_lock in sorted(framework_locks.glob("*.lock")):
+            native_lock = native_locks / framework_lock.name
+            if not native_lock.is_file():
+                errors.append(
+                    f"{native_lock.relative_to(ROOT)} is missing for framework lock"
+                )
+                continue
+            framework = json.loads(framework_lock.read_text(encoding="utf-8"))
+            native = json.loads(native_lock.read_text(encoding="utf-8"))
+            for package, required_marker in packages.items():
+                prefix = f"{package}/"
+                native_found = False
+                for section in ("requires", "build_requires"):
+                    framework_refs = [
+                        value for value in framework.get(section, [])
+                        if value.startswith(prefix)
+                    ]
+                    native_refs = [
+                        value for value in native.get(section, [])
+                        if value.startswith(prefix)
+                    ]
+                    native_found = native_found or bool(native_refs)
+                    if framework_refs and any(
+                        required_marker not in value for value in framework_refs
+                    ):
+                        errors.append(
+                            f"{framework_lock.relative_to(ROOT)} uses a non-framework "
+                            f"{package} recipe in {section}: {framework_refs!r}"
+                        )
+                    if native_refs and [
+                        recipe_identity(value) for value in native_refs
+                    ] != [recipe_identity(value) for value in framework_refs]:
+                        errors.append(
+                            f"{native_lock.relative_to(ROOT)} does not reuse the exact "
+                            f"{framework_name} {package} recipe revision in {section}: "
+                            f"framework={framework_refs!r}, native={native_refs!r}"
+                        )
+                if not any(
+                    value.startswith(prefix)
+                    for section in ("requires", "build_requires")
+                    for value in framework.get(section, [])
+                ):
+                    errors.append(
+                        f"{framework_lock.relative_to(ROOT)} does not lock {package}"
+                    )
+                if not native_found:
+                    errors.append(
+                        f"{native_lock.relative_to(ROOT)} does not lock {package}"
+                    )
+    return errors
+
+
 def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
     example = ROOT / "cppboostexample"
     native_example = ROOT / "cppboostnativeexample"
@@ -316,6 +395,7 @@ def main() -> int:
     errors: list[str] = []
     snapshot_errors = dependency_snapshot_errors()
     native_contract_errors = native_jemalloc_contract_errors()
+    shared_native_contract_errors = shared_native_conan_contract_errors()
     if findings:
         errors.append(f"{len(findings)} forbidden userver build declaration(s)")
     if linked_userver:
@@ -324,6 +404,7 @@ def main() -> int:
         errors.append(f"jemalloc missing from: {', '.join(sorted(missing_jemalloc))}")
     errors.extend(snapshot_errors)
     errors.extend(native_contract_errors)
+    errors.extend(shared_native_contract_errors)
 
     summary = {
         "status": "pass" if not errors else "fail",
@@ -331,6 +412,7 @@ def main() -> int:
         "static_findings": findings,
         "dependency_snapshot_errors": snapshot_errors,
         "native_jemalloc_contract_errors": native_contract_errors,
+        "shared_native_conan_contract_errors": shared_native_contract_errors,
         "runtime_checked": not args.static_only,
         "binaries": runtime,
         "errors": errors,

@@ -253,7 +253,16 @@ def prepare_cppboost() -> None:
     output.mkdir(parents=True, exist_ok=True)
     for service in ("inventoryservice", "orderservice"):
         source = ROOT / "cppboostexample" / service / "config" / "overrides.yaml"
-        (output / f"{service}.overrides.yaml").write_text(source.read_text())
+        overrides = source.read_text()
+        if service == "orderservice":
+            overrides = overrides.replace(
+                "address: dns:///localhost:9202",
+                "address: dns:///inventoryservice:9202",
+            ).replace(
+                "  orderProcessed:\n    enabled: true",
+                "  orderProcessed:\n    enabled: false",
+            )
+        (output / f"{service}.overrides.yaml").write_text(overrides)
 
 
 def prepare_cpp() -> None:
@@ -290,6 +299,12 @@ def prepare_python() -> None:
     overrides = source.read_text().replace(
         "  orderProcessed:\n    enabled: true",
         "  orderProcessed:\n    enabled: false",
+    ).replace(
+        "    defaultGrpcTimeout: 0",
+        "    defaultGrpcTimeout: 5000",
+    ).replace(
+        "  softDeadline:\n    duration: 0",
+        "  softDeadline:\n    duration: 1000",
     )
     (output / "orderservice.overrides.yaml").write_text(overrides)
 
