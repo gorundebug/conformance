@@ -100,35 +100,35 @@
   },
   "required_tracked_example_paths": {
     "goexample": [
-      "model/pkg/serdes/orderprocessed.go",
-      "model/pkg/types/orderprocessed.go",
+      "model_go/pkg/serdes/orderprocessed.go",
+      "model_go/pkg/types/orderprocessed.go",
       "orderservice/internal/functions/endpoint/orderprocessedendpointsink.go"
     ],
     "cppexample": [
-      "model/include/example/model/serdes/order_processed_serde.hpp",
-      "model/include/example/model/types/order_processed.hpp",
+      "model_cpp/include/example/model/serdes/order_processed_serde.hpp",
+      "model_cpp/include/example/model/types/order_processed.hpp",
       "orderservice/internal/functions/endpoint/order_processed_endpoint_sink.hpp",
       "orderservice/internal/functions/endpoint/order_processed_endpoint_sink_test.cpp",
       "orderservice/internal/serdes/unknown_type_serde.hpp",
       "orderservice/internal/types/unknown_type.hpp"
     ],
     "cppboostexample": [
-      "model/include/example/model/serdes/order_processed_serde.hpp",
-      "model/include/example/model/types/order_processed.hpp",
+      "model_cpp/include/example/model/serdes/order_processed_serde.hpp",
+      "model_cpp/include/example/model/types/order_processed.hpp",
       "orderservice/internal/functions/endpoint/order_processed_endpoint_sink.hpp",
       "orderservice/internal/functions/endpoint/order_processed_endpoint_sink_test.cpp",
       "orderservice/internal/serdes/unknown_type_serde.hpp",
       "orderservice/internal/types/unknown_type.hpp"
     ],
     "pyexample": [
-      "model/src/model/models/order_processed.py",
+      "model_python/src/model/models/order_processed.py",
       "orderservice/src/order_service/internal/functions/endpoint/order_processed_endpoint_sink.py",
       "orderservice/src/order_service/models/unknown_type.py",
       "orderservice/tests/functions/endpoint/test_order_processed_endpoint_sink.py"
     ],
     "rustexample": [
       "inventoryservice/src/lib.rs",
-      "model/src/types/order_processed.rs",
+      "model_rust/src/types/order_processed.rs",
       "orderservice/src/internal/functions/endpoint/process_order_source.rs",
       "orderservice/src/internal/functions/endpoint/order_processed_endpoint_sink.rs",
       "orderservice/src/internal/types/mod.rs",
@@ -137,16 +137,16 @@
       "orderservice/src/lib.rs"
     ],
     "tsexample": [
-      "analyticsservice/Dockerfile.standalone.generated",
+      "analyticsservice/Dockerfile",
       "analyticsservice/docker-compose.standalone.generated.yml",
-      "analyticsservice/package.standalone.generated.json",
-      "inventoryservice/Dockerfile.standalone.generated",
+      "analyticsservice/package.json",
+      "inventoryservice/Dockerfile",
       "inventoryservice/docker-compose.standalone.generated.yml",
-      "inventoryservice/package.standalone.generated.json",
-      "model/src/types/order-processed.ts",
-      "orderservice/Dockerfile.standalone.generated",
+      "inventoryservice/package.json",
+      "model_ts/src/types/order-processed.ts",
+      "orderservice/Dockerfile",
       "orderservice/docker-compose.standalone.generated.yml",
-      "orderservice/package.standalone.generated.json",
+      "orderservice/package.json",
       "orderservice/src/internal/functions/endpoint/order-processed-endpoint-sink.ts",
       "orderservice/src/internal/functions/endpoint/process-order-source.ts",
       "orderservice/src/internal/types/order-state.ts",
@@ -159,22 +159,31 @@
       "analyticsservice/config/config_vars.integration.yaml",
       "analyticsservice/config/config_vars.yaml",
       "analyticsservice/static_config.yaml",
+      "analyticsservice/docker/userver-packages.txt",
+      "analyticsservice/docker/userver-tsan-ignorelist.generated.txt",
       "docker-compose.cpp-runtime.generated.yml",
-      "docker/userver-packages-ubuntu-24.04.txt",
+      "docker/userver-packages.txt",
+      "docker/userver-tsan-ignorelist.generated.txt",
       "inventoryservice/config/config_vars.integration.yaml",
       "inventoryservice/config/config_vars.yaml",
       "inventoryservice/static_config.yaml",
+      "inventoryservice/docker/userver-packages.txt",
+      "inventoryservice/docker/userver-tsan-ignorelist.generated.txt",
       "orderservice/config/config_vars.integration.yaml",
       "orderservice/config/config_vars.yaml",
-      "orderservice/static_config.yaml"
+      "orderservice/static_config.yaml",
+      "orderservice/docker/userver-packages.txt",
+      "orderservice/docker/userver-tsan-ignorelist.generated.txt"
     ],
     "boost_boundary_replacements": [
+      "analyticsservice/docker/cppboost-packages.txt",
       "docker-compose.cppboost-runtime.generated.yml",
-      "docker/cppboost-packages-ubuntu-24.04.txt",
+      "docker/cppboost-packages.txt",
+      "inventoryservice/docker/cppboost-packages.txt",
       "order_service_api/include/handlers/order_service_api/processorder/requests.hpp",
       "order_service_api/include/handlers/order_service_api/processorder/responses.hpp",
-      "scripts/quickstart.generated.sh",
-      "scripts/sanitizer-integration.generated.sh"
+      "orderservice/docker/cppboost-packages.txt",
+      "scripts/quickstart.generated.sh"
     ],
     "changed_interface_boundaries": [
       "analyticsservice/internal/functions/endpoint/order_processed_endpoint_source.hpp",
