@@ -509,7 +509,7 @@ one order, and immediately shuts the whole project down. It then starts a fresh
 project, sends concurrent order traffic for 15 seconds, and proves that
 Analytics Service consumed the Kafka result. Finally it keeps clients active
 for 20 seconds while stopping all services after 10 seconds. Application
-services must stop within five seconds, without a race/sanitizer report,
+services must stop within seven seconds, without a race/sanitizer report,
 unhandled runtime failure, non-zero exit, or hung client.
 
 ```bash
