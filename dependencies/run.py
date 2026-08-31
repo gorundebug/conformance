@@ -211,7 +211,7 @@ def native_jemalloc_contract_errors() -> list[str]:
     cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
     errors: list[str] = []
     for marker in (
-        'self.options["jemalloc"].shared = False',
+        'self.options["jemalloc"].shared = True',
         'self.requires(f"jemalloc/{VERSIONS[\'jemalloc\']}")',
     ):
         if marker not in conanfile:
@@ -223,7 +223,7 @@ def native_jemalloc_contract_errors() -> list[str]:
             cmake,
         ):
             errors.append(
-                f"cppboostnativeexample does not statically link jemalloc into {target}"
+                f"cppboostnativeexample does not link jemalloc into {target}"
             )
     for lockfile in sorted((root / "conan" / "locks").glob("*.lock")):
         if '"jemalloc/' not in lockfile.read_text(encoding="utf-8"):
@@ -367,7 +367,7 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
             "libraries": libraries,
             "userver_libraries": userver,
             "jemalloc_libraries": [line for line in libraries if "jemalloc" in line.casefold()],
-            "jemalloc_linkage": "static-conan",
+            "jemalloc_linkage": "shared-runtime",
         }
     return results
 
