@@ -114,7 +114,7 @@ def main() -> int:
     ports: !override
       - "{PORT}:9091"
     volumes:
-      - {override}:/workspace/orderservice/config/overrides.yaml:ro
+      - {override}:/app/config/overrides.yaml:ro
 volumes:
   cpp-cmake-build:
     external: true
