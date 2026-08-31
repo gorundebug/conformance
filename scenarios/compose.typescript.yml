@@ -3,6 +3,13 @@ services:
     restart: "no"
   orderservice:
     restart: "no"
-    environment:
-      ORDER_PROCESSED_ENABLED: "false"
+    command:
+      - --config
+      - /app/config/config.yaml
+      - --values
+      - /app/config/overrides.yaml
+      - --overrides
+      - /scenario/orderservice.overrides.yaml
+    volumes:
+      - ${SERVICELIB_SCENARIO_ARTIFACTS_DIR}/typescript:/scenario:ro
     depends_on: [inventoryservice]

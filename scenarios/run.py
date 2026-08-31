@@ -309,6 +309,29 @@ def prepare_python() -> None:
     (output / "orderservice.overrides.yaml").write_text(overrides)
 
 
+def prepare_typescript() -> None:
+    output = ARTIFACTS / "typescript"
+    output.mkdir(parents=True, exist_ok=True)
+    source = (
+        ROOT
+        / "tsexample"
+        / "orderservice"
+        / "config"
+        / "docker_overrides.yaml"
+    )
+    overrides = source.read_text().replace(
+        "  orderProcessed:\n    enabled: true",
+        "  orderProcessed:\n    enabled: false",
+    ).replace(
+        "    defaultGrpcTimeout: 0",
+        "    defaultGrpcTimeout: 5000",
+    ).replace(
+        "  softDeadline:\n    duration: 0",
+        "  softDeadline:\n    duration: 1000",
+    )
+    (output / "orderservice.overrides.yaml").write_text(overrides)
+
+
 def wait_ready(implementation: Implementation) -> None:
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
@@ -806,6 +829,8 @@ def main() -> int:
         prepare_cppboost()
     if "python" in selected_names:
         prepare_python()
+    if "typescript" in selected_names:
+        prepare_typescript()
     if not args.skip_build and any(
         value.name == "cppboost-native" for value in selected
     ):
