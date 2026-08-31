@@ -15,6 +15,20 @@ SPEC.loader.exec_module(RUN)
 
 
 class OverrideCoverageTest(unittest.TestCase):
+    def test_normalizes_typed_go_schedule_policies(self) -> None:
+        self.assertEqual(
+            RUN.normalize_snapshot(
+                "api.ScheduleOverlapPolicySkip", "overlapPolicy"
+            ),
+            "Skip",
+        )
+        self.assertEqual(
+            RUN.normalize_snapshot(
+                "api.ScheduleMissedRunPolicyFireOnce", "missedRunPolicy"
+            ),
+            "FireOnce",
+        )
+
     def test_reports_only_generated_variables_missing_from_override(self) -> None:
         config = """\
 pools:

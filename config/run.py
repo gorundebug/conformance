@@ -350,6 +350,14 @@ def normalize_snapshot(value: Any, key: str = "") -> Any:
         marker = "api.HTTPMethodType"
         if value.startswith(marker):
             return value[len(marker):]
+    if key == "overlapPolicy" and isinstance(value, str):
+        marker = "api.ScheduleOverlapPolicy"
+        if value.startswith(marker):
+            return value[len(marker):]
+    if key == "missedRunPolicy" and isinstance(value, str):
+        marker = "api.ScheduleMissedRunPolicy"
+        if value.startswith(marker):
+            return value[len(marker):]
     return value
 
 
