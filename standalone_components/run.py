@@ -750,9 +750,18 @@ def build_rust(target: Path, component: str) -> None:
         f"make -C /workspace/{item} generate"
         for item in generation_targets
     )
+    cargo = ["cargo"]
+    if os.environ.get("DEPENDENCY_PROXY_DIR"):
+        registry = docker_process_environment()[
+            "CARGO_REGISTRIES_CRATES_IO_INDEX"
+        ]
+        cargo.extend([
+            "--config", 'source.crates-io.replace-with="dependency-proxy"',
+            "--config", f'source.dependency-proxy.registry="{registry}"',
+        ])
     phases = [
         generation,
-        " ".join(["cargo", "test", "-p", package, "--all-targets"]),
+        " ".join([*cargo, "test", "-p", package, "--all-targets"]),
     ]
     script = " && ".join(phase for phase in phases if phase)
     name = container_name("rust", component)
