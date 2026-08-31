@@ -423,6 +423,11 @@ def cleanup_sanitizer_stack(
         raise RuntimeError(f"{target} infrastructure cleanup exited {cleaned.returncode}")
 
 
+def sanitizer_stop_command_timeout(service_timeout: float) -> float:
+    """Bound orchestration without weakening the generated service deadline."""
+    return max(30.0, service_timeout + 5.0)
+
+
 def implementation_env(language: str) -> dict[str, str]:
     env = os.environ.copy()
     # This gate always invokes generated Make targets with
@@ -787,9 +792,11 @@ def exercise(
                         check=False,
                         env=env,
                         # The generated target enforces the exact shared
-                        # service deadline. Allow a small process/verification
-                        # margin so Python does not kill that enforcement path.
-                        timeout=args.shutdown_timeout + 5,
+                        # service deadline itself. This outer timeout also
+                        # covers sanitizer log inspection and container removal.
+                        timeout=sanitizer_stop_command_timeout(
+                            args.shutdown_timeout
+                        ),
                     )
                     shutdown_elapsed = time.monotonic() - stop_started
                     completed_returncode = completed.returncode
@@ -833,20 +840,26 @@ def exercise(
                     if failure is None:
                         failure = error
             else:
-                stop_started = time.monotonic()
-                completed = run(
-                    down,
-                    cwd=example,
-                    check=False,
-                    env=env,
-                    timeout=args.shutdown_timeout + 5,
-                )
-                shutdown_elapsed = time.monotonic() - stop_started
-                if completed.returncode != 0 and failure is None:
-                    failure = RuntimeError(
-                        f"{language} {sanitizer} shutdown/log sanitizer gate failed "
-                        f"with exit {completed.returncode}"
+                try:
+                    stop_started = time.monotonic()
+                    completed = run(
+                        down,
+                        cwd=example,
+                        check=False,
+                        env=env,
+                        timeout=sanitizer_stop_command_timeout(
+                            args.shutdown_timeout
+                        ),
                     )
+                    shutdown_elapsed = time.monotonic() - stop_started
+                    if completed.returncode != 0 and failure is None:
+                        failure = RuntimeError(
+                            f"{language} {sanitizer} shutdown/log sanitizer gate "
+                            f"failed with exit {completed.returncode}"
+                        )
+                except BaseException as error:
+                    if failure is None:
+                        failure = error
         if sanitizer == "runtime":
             try:
                 cleanup_runtime_stack(language, env, args.shutdown_timeout)

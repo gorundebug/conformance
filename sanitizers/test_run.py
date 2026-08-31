@@ -59,6 +59,8 @@ class SanitizerConformanceTest(unittest.TestCase):
         self.assertEqual(args.shutdown_load_duration, 20.0)
         self.assertEqual(args.shutdown_after, 10.0)
         self.assertEqual(args.shutdown_timeout, 7.0)
+        self.assertEqual(RUN.sanitizer_stop_command_timeout(7.0), 30.0)
+        self.assertGreater(RUN.sanitizer_stop_command_timeout(30.0), 30.0)
 
     def test_local_framework_context_is_explicit(self) -> None:
         previous = os.environ.pop("USE_LOCAL_MODULES", None)
