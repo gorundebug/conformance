@@ -169,7 +169,7 @@ def docker_image_exists(name: str) -> bool:
 
 def python_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict[str, object]]]:
     setup_runs: list[dict[str, object]] = []
-    if not docker_image_exists("example-python:local"):
+    if not docker_image_exists("inventoryservice-python:local"):
         setup_runs.append(
             execute(
                 "python-serde-runtime-image",
@@ -191,7 +191,7 @@ def python_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict
             "--volume", f"{CONFORMANCE_DIR}:/workspace/conformance:ro",
             "--workdir", "/workspace/.pyservicelib",
             "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
-            "example-python:local",
+            "inventoryservice-python:local",
             "/workspace/.venv/bin/python",
             "/workspace/conformance/serde/python_probe.py",
         ],

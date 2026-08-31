@@ -648,7 +648,7 @@ def main() -> int:
 
     source_matrix = verify_sources()
     runs: list[dict[str, object]] = []
-    if not docker_image_exists("example-python:local"):
+    if not docker_image_exists("inventoryservice-python:local"):
         command, environment = python_image_build()
         runs.append(execute(
             "python-runtime-image", command, ROOT / "pyexample", environment,
@@ -685,7 +685,7 @@ def main() -> int:
             "--volume", f"{PYTHON}:/workspace/.pyservicelib:ro",
             "--workdir", "/workspace/.pyservicelib",
             "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
-            "example-python:local", "/workspace/.venv/bin/python", "-m",
+            "inventoryservice-python:local", "/workspace/.venv/bin/python", "-m",
             "pytest", "-q", "-p", "no:cacheprovider",
             "tests/test_transportmetrics.py",
         ],
