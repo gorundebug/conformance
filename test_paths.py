@@ -1110,11 +1110,39 @@ class DependencyRootTest(unittest.TestCase):
             source = (CONFORMANCE_DIR / relative).read_text()
             self.assertIn("import cpp_userver", source, relative)
             self.assertNotIn('"cmake --preset docker && "', source, relative)
-        scenarios = (CONFORMANCE_DIR / "scenarios/run.py").read_text()
-        self.assertIn(
-            "./scripts/conan-install.generated.sh Release", scenarios
-        )
-        self.assertIn("cmake --fresh --preset docker-release", scenarios)
+        scenarios = runpy.run_path(str(CONFORMANCE_DIR / "scenarios/run.py"))
+        build_implementation = scenarios["build_implementation"]
+        implementation = scenarios["Implementation"]
+        function_globals = build_implementation.__globals__
+        function_globals["environment"] = mock.Mock(return_value={})
+
+        with mock.patch.object(subprocess, "run") as subprocess_run:
+            build_implementation(
+                implementation("cpp", CONFORMANCE_DIR, Path("compose.cpp.yml"))
+            )
+            subprocess_run.assert_called_once_with(
+                ["make", "docker-build", "RUNTIME_IMAGE=1"],
+                cwd=CONFORMANCE_DIR,
+                env={},
+                check=True,
+            )
+
+        with mock.patch.object(subprocess, "run") as subprocess_run:
+            build_implementation(
+                implementation(
+                    "cppboost", CONFORMANCE_DIR, Path("compose.cppboost.yml")
+                )
+            )
+            self.assertEqual(
+                [call.args[0] for call in subprocess_run.call_args_list],
+                [
+                    [
+                        "make", "-C", service, "docker-build",
+                        "USE_LOCAL_MODULES=1",
+                    ]
+                    for service in ("inventoryservice", "orderservice")
+                ],
+            )
 
     def test_generation_uses_the_transport_versioned_source_cache(self) -> None:
         transports = runpy.run_path(
@@ -1414,7 +1442,7 @@ class DependencyRootTest(unittest.TestCase):
 
         self.assertIn("PYSERVICELIB_SOURCE_CONTEXT", build_env)
         self.assertEqual(build_command[-2:], ["build", "inventoryservice"])
-        self.assertIn("inventoryservice-python:local", test_command)
+        self.assertIn("pyexample-development:local", test_command)
         self.assertIn("--entrypoint", test_command)
         self.assertIn("/workspace/.venv/bin/python", test_command)
         self.assertIn("PYTHONPATH=/workspace/.pyservicelib/src", test_command)
