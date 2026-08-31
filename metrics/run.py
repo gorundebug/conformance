@@ -6,6 +6,7 @@ import argparse
 import difflib
 import importlib.util
 import json
+import math
 import os
 import re
 import shutil
@@ -119,10 +120,18 @@ def compose_command(language: Any, *args: str) -> list[str]:
         "--file",
         str(language.example / "docker-compose.yml"),
     ]
-    for runtime_overlay in sorted(
-        language.example.glob("docker-compose.*-runtime.generated.yml")
-    ):
-        command.extend(["--file", str(runtime_overlay)])
+    if language.name == "cpp":
+        command.extend(
+            [
+                "--file",
+                str(language.example / "docker-compose.integration.generated.yml"),
+            ]
+        )
+    else:
+        for runtime_overlay in sorted(
+            language.example.glob("docker-compose.*-runtime.generated.yml")
+        ):
+            command.extend(["--file", str(runtime_overlay)])
     command.extend(["--file", str(language.compose), *args])
     return command
 
@@ -141,7 +150,13 @@ def build(language: Any, env: dict[str, str]) -> None:
             cwd=language.example,
             env=env,
         )
-    elif language.name in {"cpp", "cppboost"}:
+    elif language.name == "cpp":
+        run(
+            ["./scripts/build.generated.sh", "docker-release"],
+            cwd=language.example,
+            env=env,
+        )
+    elif language.name == "cppboost":
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
@@ -510,7 +525,7 @@ def normalize_runtime_graphs(raw_by_service: dict[str, str]) -> dict[str, Any]:
             # Numeric topology IDs are runtime implementation details. Keep
             # every observable node field and use its complete display label
             # as the stable cross-language identity.
-            normalized_node = dict(node)
+            normalized_node = canonicalize_json_numbers(dict(node))
             normalized_node.pop("id")
             normalized_nodes.append(normalized_node)
 
@@ -548,7 +563,7 @@ def normalize_runtime_graphs(raw_by_service: dict[str, str]) -> dict[str, Any]:
                 raise RuntimeError(
                     f"{service} /status/data has invalid call count: {label!r}"
                 ) from error
-            normalized_edge = dict(edge)
+            normalized_edge = canonicalize_json_numbers(dict(edge))
             normalized_edge.pop("from")
             normalized_edge.pop("to")
             normalized_edge.pop("label")
@@ -579,6 +594,19 @@ def normalize_runtime_graphs(raw_by_service: dict[str, str]) -> dict[str, Any]:
         )
         normalized[service] = graph
     return normalized
+
+
+def canonicalize_json_numbers(value: Any) -> Any:
+    """Normalize JSON numbers without discarding observable graph fields."""
+    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        return int(value)
+    if isinstance(value, list):
+        return [canonicalize_json_numbers(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: canonicalize_json_numbers(item) for key, item in value.items()
+        }
+    return value
 
 
 def print_failure_logs(language: Any, env: dict[str, str]) -> None:
