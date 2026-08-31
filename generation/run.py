@@ -835,7 +835,7 @@ def main() -> int:
                 cwd=merged, env=docker_env,
             )
             (ARTIFACTS / "integration.log").write_text(integration_output)
-            if "cppboost generated integration scenario: PASS" not in integration_output:
+            if "generated Boost C++ integration lifecycle: PASS" not in integration_output:
                 raise RuntimeError(
                     "generated integration run did not execute the live scenario"
                 )
