@@ -255,7 +255,13 @@ def attach_boost_source_cache(project: Path, source_cache: Path) -> None:
                 "environment": {
                     "CPPBOOST_SOURCE_CACHE": "1",
                 },
-                "volumes": [f"{source_cache}:{container_cache}:ro"],
+                "volumes": [
+                    f"{source_cache}:{container_cache}:ro",
+                    (
+                        f"{cmake_cache}:"
+                        "/workspace/conformance-source-cache.generated.cmake:ro"
+                    ),
+                ],
             },
         },
     })
