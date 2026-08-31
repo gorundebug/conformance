@@ -2,9 +2,8 @@ services:
   inventoryservice:
     restart: "no"
     command:
-      - /workspace/build/inventoryservice/example_inventory_service
       - --config
-      - /workspace/inventoryservice/config/config.yaml
+      - /app/config/config.yaml
       - --values
       - /workspace/conformance/inventoryservice.overrides.yaml
       - --workers
@@ -16,9 +15,8 @@ services:
     environment:
       - ORDER_PROCESSED_ENABLED=false
     command:
-      - /workspace/build/orderservice/example_order_service
       - --config
-      - /workspace/orderservice/config/config.yaml
+      - /app/config/config.yaml
       - --values
       - /workspace/conformance/orderservice.overrides.yaml
       - --workers
@@ -26,7 +24,3 @@ services:
     volumes:
       - ${SERVICELIB_SCENARIO_ARTIFACTS_DIR}/cppboost:/workspace/conformance:ro
     depends_on: [inventoryservice]
-volumes:
-  cpp-cmake-build:
-    external: true
-    name: ${CPPBOOST_BUILD_VOLUME}

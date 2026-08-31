@@ -143,13 +143,6 @@ def environment(implementation: Implementation) -> dict[str, str]:
         env["USERVER_LTO"] = "ON"
     elif implementation.name == "cppboost":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
-        # The generated build compose and the runtime overlay must mount the
-        # same build volume.  Keep the pooled profile isolated from the normal
-        # scenario profile because both contain generated graph semantics in
-        # the compiled service binaries.
-        env["CPPBOOST_BUILD_VOLUME"] = (
-            f"servicelib-scenario-conformance-cppboost{PROJECT_SUFFIX}-build"
-        )
     elif implementation.name == "cppboost-native" and NATIVE_SOURCE_CONTEXTS:
         grpc_source, asio_grpc_source = NATIVE_SOURCE_CONTEXTS
         env["GRPC_SOURCE_CONTEXT"] = str(grpc_source)
@@ -299,66 +292,6 @@ def prepare_python() -> None:
         "  orderProcessed:\n    enabled: false",
     )
     (output / "orderservice.overrides.yaml").write_text(overrides)
-
-
-def prepare_cppboost_build_cache() -> Path:
-    framework = ROOT / "cppboostservicelib"
-    subprocess.run(
-        ["docker", "build", "-f", "Dockerfile.cmake", "-t",
-         "cppboostservicelib-build", "."],
-        cwd=framework,
-        check=True,
-    )
-    subprocess.run(
-        cpp_source_cache.prepare_command(framework),
-        cwd=framework,
-        check=True,
-    )
-    source_dir = cpp_source_cache.source_dir(framework)
-    output = ARTIFACTS / "cppboost"
-    cmake_cache = output / "conformance-source-cache.generated.cmake"
-    cmake_cache.write_text(cpp_source_cache.cmake_cache_contents())
-    override = output / "compose.source-cache.generated.yml"
-    override.write_text(json.dumps({
-        "services": {
-            "cpp-build": {
-                "volumes": [
-                    f"{source_dir}:{cpp_source_cache.CONTAINER_SOURCE_DIR}:ro",
-                    f"{output}:/workspace/conformance:ro",
-                ],
-            },
-        },
-    }, indent=2) + "\n")
-    return override
-
-
-def build_cppboost(implementation: Implementation, override: Path) -> None:
-    cmd = [
-        "docker", "compose", "--project-name",
-        f"servicelib-scenario-conformance-{implementation.name}{PROJECT_SUFFIX}",
-        "--project-directory", str(implementation.example),
-        "--file", str(implementation.example / "docker-compose.cmake.generated.yml"),
-        "--file", str(override),
-        "run", "--build", "--rm",
-        "-e", "CPP_CMAKE_PRESET=docker-release",
-        "cpp-build", "/bin/bash", "-lc",
-        "source scripts/configure-git-auth.generated.sh && "
-        "./scripts/conan-install.generated.sh Release "
-        "/workspace/build/conan-release && "
-        "conan_toolchain=$(cat /workspace/build/conan-release/toolchain.path) && "
-        "cmake --fresh --preset docker-release "
-        "-DCMAKE_TOOLCHAIN_FILE=\"$conan_toolchain\" "
-        "-C /workspace/conformance/conformance-source-cache.generated.cmake "
-        "-DFETCH_CPP_DEPENDENCIES=OFF && "
-        "cmake --build --preset docker-release --parallel",
-    ]
-    print("+", " ".join(cmd), flush=True)
-    subprocess.run(
-        cmd,
-        cwd=implementation.example,
-        env=environment(implementation),
-        check=True,
-    )
 
 
 def wait_ready(implementation: Implementation) -> None:
@@ -808,10 +741,7 @@ def semantic_result(result: dict[str, Any]) -> dict[str, Any]:
     return {"http": http, "grpc": grpc}
 
 
-def build_implementation(
-    implementation: Implementation,
-    cppboost_cache_override: Path | None,
-) -> None:
+def build_implementation(implementation: Implementation) -> None:
     if implementation.name == "go":
         print("+ make docker-build", flush=True)
         subprocess.run(
@@ -821,9 +751,17 @@ def build_implementation(
             check=True,
         )
     elif implementation.name == "cppboost":
-        if cppboost_cache_override is None:
-            raise RuntimeError("Boost source-cache override was not prepared")
-        build_cppboost(implementation, cppboost_cache_override)
+        for service in ("inventoryservice", "orderservice"):
+            print(
+                f"+ make -C {service} docker-build USE_LOCAL_MODULES=1",
+                flush=True,
+            )
+            subprocess.run(
+                ["make", "-C", service, "docker-build", "USE_LOCAL_MODULES=1"],
+                cwd=implementation.example,
+                env=environment(implementation),
+                check=True,
+            )
     elif implementation.name in {"cpp", "typescript"}:
         subprocess.run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
@@ -853,11 +791,6 @@ def main() -> int:
         prepare_cppboost()
     if "python" in selected_names:
         prepare_python()
-    cppboost_cache_override: Path | None = None
-    if not args.skip_build and any(
-        value.name == "cppboost" for value in selected
-    ):
-        cppboost_cache_override = prepare_cppboost_build_cache()
     if not args.skip_build and any(
         value.name == "cppboost-native" for value in selected
     ):
@@ -868,7 +801,7 @@ def main() -> int:
         )
     if not args.skip_build:
         for implementation in selected:
-            build_implementation(implementation, cppboost_cache_override)
+            build_implementation(implementation)
 
     summary: dict[str, Any] = {"status": "passed", "implementations": {}}
     reference: dict[str, Any] | None = None
