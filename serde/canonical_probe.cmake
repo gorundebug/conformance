@@ -7,7 +7,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     target_include_directories(servicelib_custom_serde_probe PRIVATE
         /repo/cppexample)
     target_link_libraries(servicelib_custom_serde_probe PRIVATE
-        servicelib userver-core)
+        servicelib userver::core)
   endfunction()
   cmake_language(DEFER CALL servicelib_add_custom_serde_probe)
 endif()
