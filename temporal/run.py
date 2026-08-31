@@ -1325,22 +1325,39 @@ def replay_workflow_histories(
 
     if language.name == "go":
         image = "servicelib-temporal-conformance-go-replayer:local"
-        build = [
-            "docker",
-            "build",
-            "--target",
-            "temporal-replay",
-            "--tag",
-            image,
-            "--build-context",
-            f"servicelib-source={language.runtime}",
-            "--build-arg",
-            "SERVICE_DIR=automationservice",
-            "--file",
-            "automationservice/Dockerfile",
-            ".",
-        ]
-        run(build, cwd=language.example, env=env, timeout=300)
+        service = language.example / "automationservice"
+        replay_overlay = output / "go-replay.compose.yml"
+        replay_overlay.write_text(
+            "services:\n"
+            "  automationservice:\n"
+            f"    image: {image}\n"
+            "    build:\n"
+            "      target: temporal-replay\n"
+        )
+        # Keep replay on the generated service build boundary.  In particular,
+        # its framework and module additional_contexts, dependency proxy setup,
+        # retries and copied-source contract must be identical to docker-build.
+        compose = " ".join(
+            (
+                "docker compose",
+                f"--project-name {language.project}-replay",
+                f"--project-directory {service}",
+                f"--file {service / 'docker-compose.generated.yml'}",
+                f"--file {replay_overlay}",
+            )
+        )
+        run(
+            [
+                "make",
+                "-C",
+                "automationservice",
+                "docker-build",
+                f"COMPOSE={compose}",
+            ],
+            cwd=language.example,
+            env=env,
+            timeout=300,
+        )
         for filename, workflow_id in histories:
             replay(
                 [
