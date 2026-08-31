@@ -24,6 +24,8 @@ def main() -> int:
         [sys.executable, "-m", "unittest", "discover", "-s",
          "dependency_manifests", "-p", "test_*.py", "-v"],
         [sys.executable, "-m", "unittest", "discover", "-s",
+         "tracing", "-p", "test_*.py", "-v"],
+        [sys.executable, "-m", "unittest", "discover", "-s",
          "profiling/examples", "-p", "test_*.py", "-v"],
         [sys.executable, "-m", "unittest", "discover", "-s",
          "benchmarks/examples", "-p", "test_*.py", "-v"],

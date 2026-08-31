@@ -127,11 +127,18 @@ def compose_command(language: Language, *args: str) -> list[str]:
         "--file",
         str(language.example / "docker-compose.yml"),
     ]
-    # Canonical C++ tracing is compiled into the development build volume with
-    # ENABLE_OTLP_TRACING=ON. Its published runtime image is the
-    # normal telemetry-disabled build, so layering that image here would hide
-    # the instrumented binary that this suite has just built.
-    if language.name != "cpp":
+    # Canonical C++ tracing is compiled into the workspace build volume with
+    # ENABLE_OTLP_TRACING=ON. Run that exact binary through the generated
+    # integration overlay; the normal runtime image is telemetry-disabled and
+    # its fixed entrypoint cannot execute a path from the build volume.
+    if language.name == "cpp":
+        command.extend(
+            [
+                "--file",
+                str(language.example / "docker-compose.integration.generated.yml"),
+            ]
+        )
+    else:
         for runtime_overlay in sorted(
             language.example.glob("docker-compose.*-runtime.generated.yml")
         ):
@@ -631,6 +638,57 @@ def validate_pipeline(language: str, trace: dict[str, Any]) -> None:
         )
 
 
+def inject_cpp_otlp_config(
+    text: str,
+    *,
+    source: Path,
+    otlp_variable: str,
+    service: str,
+) -> str:
+    if "    grpc-blocking-task-processor:\n" not in text:
+        marker = "\n  default_task_processor: main-task-processor\n"
+        processor = (
+            "    grpc-blocking-task-processor:\n"
+            "      worker_threads: 1\n"
+            "      thread_name: grpc-worker\n"
+        )
+        if marker not in text:
+            raise RuntimeError(f"cannot inject gRPC task processor into {source}")
+        text = text.replace(marker, processor + marker, 1)
+    if "grpc-otlp-factory:" not in text:
+        marker = "    servicelib-runtime:\n"
+        grpc_common = ""
+        if "    grpc-client-common:\n" not in text:
+            grpc_common = (
+                "    grpc-client-common:\n"
+                "      blocking-task-processor: grpc-blocking-task-processor\n"
+            )
+        otlp = (
+            "    grpc-otlp-factory:\n"
+            "      disable-all-pipeline-middlewares: true\n"
+            "      channel-args: {}\n"
+            "      middlewares:\n"
+            "        grpc-client-logging:\n"
+            "          enabled: false\n"
+            "    otlp-logger:\n"
+            f"      logs-endpoint: ${otlp_variable}\n"
+            f"      tracing-endpoint: ${otlp_variable}\n"
+            "      client-factory-name: grpc-otlp-factory\n"
+            f"      service-name: {service}\n"
+            "      log-level: info\n"
+            "      sinks:\n"
+            "        logs: default\n"
+            "        tracing: otlp\n"
+        )
+        if marker not in text:
+            raise RuntimeError(f"cannot inject OTLP config into {source}")
+        # OTLP-only generated services append userver's gRPC client
+        # MinimalComponentList alongside the named OTLP factory. That list
+        # registers the default grpc-client-common component as well.
+        text = text.replace(marker, grpc_common + otlp + marker, 1)
+    return text
+
+
 def prepare_cpp_configs() -> None:
     output = ARTIFACTS / "cpp"
     output.mkdir(parents=True, exist_ok=True)
@@ -658,45 +716,12 @@ def prepare_cpp_configs() -> None:
             else "analyticsServiceOtlpEndpoint"
         )
         source = ROOT / "cppexample" / service / "static_config.yaml"
-        text = source.read_text()
-        if "    grpc-blocking-task-processor:\n" not in text:
-            marker = "\n  default_task_processor: main-task-processor\n"
-            processor = (
-                "    grpc-blocking-task-processor:\n"
-                "      worker_threads: 1\n"
-                "      thread_name: grpc-worker\n"
-            )
-            if marker not in text:
-                raise RuntimeError(f"cannot inject gRPC task processor into {source}")
-            text = text.replace(marker, processor + marker, 1)
-        if "grpc-otlp-factory:" not in text:
-            marker = "    servicelib-runtime:\n"
-            grpc_common = ""
-            if "    grpc-client-common:\n" not in text:
-                grpc_common = (
-                    "    grpc-client-common:\n"
-                    "      blocking-task-processor: grpc-blocking-task-processor\n"
-                )
-            otlp = (
-                "    grpc-otlp-factory:\n"
-                "      disable-all-pipeline-middlewares: true\n"
-                "      channel-args: {}\n"
-                "      middlewares:\n"
-                "        grpc-client-logging:\n"
-                "          enabled: false\n"
-                "    otlp-logger:\n"
-                f"      logs-endpoint: ${otlp_variable}\n"
-                f"      tracing-endpoint: ${otlp_variable}\n"
-                "      client-factory-name: grpc-otlp-factory\n"
-                f"      service-name: {service}\n"
-                "      log-level: info\n"
-                "      sinks:\n"
-                "        logs: default\n"
-                "        tracing: otlp\n"
-            )
-            if marker not in text:
-                raise RuntimeError(f"cannot inject OTLP config into {source}")
-            text = text.replace(marker, grpc_common + otlp + marker, 1)
+        text = inject_cpp_otlp_config(
+            source.read_text(),
+            source=source,
+            otlp_variable=otlp_variable,
+            service=service,
+        )
         (output / f"{service}.static_config.yaml").write_text(text)
         override = (
             ROOT
