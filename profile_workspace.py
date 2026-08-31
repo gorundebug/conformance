@@ -92,6 +92,10 @@ def copy_framework(source: Path, destination: Path) -> None:
             "__pycache__",
         ),
     )
+
+
+def attach_framework_caches(source: Path, destination: Path) -> None:
+    """Attach ignored caches only after the framework Git snapshot exists."""
     for name in CACHE_DIRECTORIES:
         cache = source / name
         if cache.exists():
@@ -295,7 +299,10 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
         if destination.exists() or destination.is_symlink():
             continue
         if source.name in FRAMEWORK_REPOSITORIES:
+            release_tags = release_tags_at_head(source)
             copy_framework(source, destination)
+            initialize_git_snapshot(destination, profile, release_tags)
+            attach_framework_caches(source, destination)
         else:
             destination.symlink_to(source, target_is_directory=source.is_dir())
 

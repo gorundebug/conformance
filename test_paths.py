@@ -225,6 +225,29 @@ class DependencyRootTest(unittest.TestCase):
                 "v0.2.45",
             )
 
+    def test_profile_workspace_attaches_framework_caches_after_snapshot(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "framework"
+            snapshot = root / "snapshot"
+            source.mkdir()
+            (source / "tracked.txt").write_text("framework\n")
+            (source / "build").mkdir()
+            (source / "build" / "cached.txt").write_text("cached\n")
+
+            globals_["copy_framework"](source, snapshot)
+            self.assertFalse((snapshot / "build").exists())
+            globals_["initialize_git_snapshot"](snapshot, "current")
+            globals_["attach_framework_caches"](source, snapshot)
+
+            self.assertTrue((snapshot / "build").is_symlink())
+            tracked = subprocess.run(
+                ["git", "-C", str(snapshot), "ls-files"],
+                check=True, capture_output=True, text=True,
+            ).stdout.splitlines()
+            self.assertEqual(tracked, ["tracked.txt"])
+
     def test_profile_workspace_attaches_tools_for_every_generated_language(self) -> None:
         profile = (CONFORMANCE_DIR / "profile_workspace.py").read_text()
         self.assertIn("attach_persistent_tools(source, destination)", profile)
