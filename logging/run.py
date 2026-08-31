@@ -145,7 +145,7 @@ def main() -> int:
     args = parser.parse_args()
     source_matrix = verify_sources()
 
-    canonical_script = "./build/servicelib_telemetry_test"
+    canonical_script = "/workspace/build/servicelib_telemetry_test"
     boost_script = (
         "ctest --test-dir build/docker --output-on-failure "
         "-R '^cppboostservicelib_telemetry_test$'"

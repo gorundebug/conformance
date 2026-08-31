@@ -374,11 +374,11 @@ def main() -> int:
     cpp_source_cache.ensure(BOOST)
     source_matrix = verify_sources()
     canonical_script = (
-        "./build/servicelib_serde_test"
+        "/workspace/build/servicelib_serde_test"
         if args.skip_build
         else cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
-        "servicelib_serde_test && ./build/servicelib_serde_test"
+        "servicelib_serde_test && /workspace/build/servicelib_serde_test"
     )
     canonical_command = [
         "docker",
@@ -537,7 +537,7 @@ def main() -> int:
             )
         ) + " && "
         "cmake --build --preset docker --parallel --target "
-        "servicelib_custom_serde_probe && ./build/servicelib_custom_serde_probe",
+        "servicelib_custom_serde_probe && /workspace/build/servicelib_custom_serde_probe",
     ]
     boost_custom_command = [
         "docker",

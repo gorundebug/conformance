@@ -484,11 +484,11 @@ def main() -> int:
     )
 
     canonical_script = (
-        "./build/servicelib_operators_test"
+        "/workspace/build/servicelib_operators_test"
         if args.skip_build
         else cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
-        "servicelib_operators_test && ./build/servicelib_operators_test"
+        "servicelib_operators_test && /workspace/build/servicelib_operators_test"
     )
     canonical_command = [
         "docker",
@@ -504,8 +504,8 @@ def main() -> int:
     )
     runs.append(execute("canonical-cpp-operators", canonical_command, CANONICAL))
     canonical_runtime_script = (
-        "./build/servicelib_serviceapp_test && "
-        "./build/servicelib_status_test"
+        "/workspace/build/servicelib_serviceapp_test && "
+        "/workspace/build/servicelib_status_test"
     )
     runs.append(
         execute(

@@ -438,12 +438,12 @@ def previous_successful_run(name: str) -> dict[str, object]:
 
 def canonical_command(skip_build: bool) -> list[str]:
     script = (
-        "./build/servicelib_grpc_endpoints_test"
+        "/workspace/build/servicelib_grpc_endpoints_test"
         if skip_build
         else cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_grpc_endpoints_test && "
-        "./build/servicelib_grpc_endpoints_test"
+        "/workspace/build/servicelib_grpc_endpoints_test"
     )
     command = [
         "docker", "compose", "-f", "docker-compose.cmake.yml", "run"
@@ -456,12 +456,12 @@ def canonical_command(skip_build: bool) -> list[str]:
 
 def canonical_kafka_command(skip_build: bool) -> list[str]:
     script = (
-        "./build/servicelib_custom_kafka_endpoints_test"
+        "/workspace/build/servicelib_custom_kafka_endpoints_test"
         if skip_build
         else cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_custom_kafka_endpoints_test && "
-        "./build/servicelib_custom_kafka_endpoints_test"
+        "/workspace/build/servicelib_custom_kafka_endpoints_test"
     )
     command = [
         "docker", "compose", "-f", "docker-compose.cmake.yml", "run"
@@ -474,12 +474,12 @@ def canonical_kafka_command(skip_build: bool) -> list[str]:
 
 def canonical_http_command(skip_build: bool) -> list[str]:
     script = (
-        "./build/servicelib_http_endpoints_test"
+        "/workspace/build/servicelib_http_endpoints_test"
         if skip_build
         else cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_http_endpoints_test && "
-        "./build/servicelib_http_endpoints_test"
+        "/workspace/build/servicelib_http_endpoints_test"
     )
     command = [
         "docker", "compose", "-f", "docker-compose.cmake.yml", "run"

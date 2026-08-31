@@ -181,7 +181,7 @@ def boost_framework_build_script() -> str:
         "cmake --fresh -S tests/consumer -B build/consumer -G Ninja "
         "-DCMAKE_PREFIX_PATH=/workspace/build/docker-install && "
         "cmake --build build/consumer --parallel && "
-        "./build/consumer/cppboostservicelib_consumer"
+        "/workspace/build/consumer/cppboostservicelib_consumer"
     )
 
 
@@ -256,13 +256,13 @@ def main() -> int:
         cpp_userver.configure_script() + " && "
         "cmake --build --preset docker --parallel --target "
         "servicelib_taskpool_test servicelib_other_pools_test && "
-        "./build/servicelib_taskpool_test && "
-        "./build/servicelib_other_pools_test"
+        "/workspace/build/servicelib_taskpool_test && "
+        "/workspace/build/servicelib_other_pools_test"
     )
     if args.skip_build:
         canonical_script = (
-            "./build/servicelib_taskpool_test && "
-            "./build/servicelib_other_pools_test"
+            "/workspace/build/servicelib_taskpool_test && "
+            "/workspace/build/servicelib_other_pools_test"
         )
     canonical_command = [
         "docker",
