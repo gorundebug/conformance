@@ -178,12 +178,6 @@ if [ -n "${DEPENDENCY_PROXY_DIR:-}" ]; then
   fi
   export DEPENDENCY_PROXY_CLIENT_HOST="${DEPENDENCY_PROXY_HOST:-localhost}"
   eval "$("$proxy_script" env)"
-  proxy_resolver="$DEPENDENCIES_DIR/cppexample/scripts/dependency-proxy-env.generated.sh"
-  if [ ! -f "$proxy_resolver" ]; then
-    echo "Shared dependency proxy requested, but $proxy_resolver is missing" >&2
-    exit 1
-  fi
-  source "$proxy_resolver"
   export DEPENDENCY_REAL_DOCKER="$(command -v docker)"
   # Keep the wrapper outside .artifacts. A profile switch deliberately clears
   # that directory before the suite starts; placing the wrapper there made

@@ -425,6 +425,11 @@ def cleanup_sanitizer_stack(
 
 def implementation_env(language: str) -> dict[str, str]:
     env = os.environ.copy()
+    # This gate always invokes generated Make targets with
+    # USE_LOCAL_MODULES=1. Reflect that contract in the subprocess environment
+    # as well, so a framework context inherited by the top-level harness can
+    # never leak from one language implementation into the next one.
+    env["USE_LOCAL_MODULES"] = "1"
     # A completed request may legitimately reach the canonical soft deadline
     # just below five seconds when its downstream gRPC service stops first.
     # Keep a two-second transport/response margin while remaining far below
@@ -434,8 +439,6 @@ def implementation_env(language: str) -> dict[str, str]:
     env.setdefault("SANITIZER_STOP_TIMEOUT", "7")
     env.setdefault("RACE_STOP_TIMEOUT", "7")
     env.setdefault("LIFECYCLE_STOP_TIMEOUT", "7")
-    if env.get("USE_LOCAL_MODULES") != "1":
-        return env
     if language == "go":
         env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     elif language == "cpp":

@@ -67,10 +67,10 @@ class SanitizerConformanceTest(unittest.TestCase):
             os.environ["SERVICELIB_SOURCE_CONTEXT"] = "published-context"
             self.assertEqual(
                 RUN.implementation_env("cppboost")["SERVICELIB_SOURCE_CONTEXT"],
-                "published-context",
+                str(RUN.ROOT / "cppboostservicelib"),
             )
-            os.environ["USE_LOCAL_MODULES"] = "1"
             cpp_env = RUN.implementation_env("cpp")
+            self.assertEqual(cpp_env["USE_LOCAL_MODULES"], "1")
             self.assertEqual(
                 cpp_env["SERVICELIB_SOURCE_CONTEXT"],
                 str(RUN.ROOT / "cppservicelib"),

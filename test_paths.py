@@ -801,6 +801,10 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn('export PATH="$PROXY_BIN_DIR:$PATH"', quickstart)
         self.assertIn('shutil.rmtree(sys.argv[1], ignore_errors=True)', quickstart)
         self.assertNotIn('.artifacts/dependency-proxy-bin', quickstart)
+        self.assertNotIn('source "$proxy_resolver"', quickstart)
+        self.assertNotIn(
+            'cppexample/scripts/dependency-proxy-env.generated.sh', quickstart
+        )
 
     def test_profile_switch_discards_only_incompatible_cpp_build_trees(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
