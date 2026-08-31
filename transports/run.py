@@ -406,14 +406,10 @@ def docker_image_exists(name: str) -> bool:
 
 
 def python_image_build() -> tuple[list[str], dict[str, str]]:
-    example = ROOT / "pyexample"
     return (
         [
-            "docker", "compose",
-            "--project-name", "servicelib-transports-conformance-python",
-            "--project-directory", str(example),
-            "--file", str(example / "docker-compose.yml"),
-            "build", "inventoryservice",
+            "make", "-C", "inventoryservice", "docker-build-dev",
+            "USE_LOCAL_MODULES=1",
         ],
         {**os.environ, "PYSERVICELIB_SOURCE_CONTEXT": str(PYTHON)},
     )
@@ -648,10 +644,10 @@ def main() -> int:
 
     source_matrix = verify_sources()
     runs: list[dict[str, object]] = []
-    if not docker_image_exists("inventoryservice-python:local"):
+    if not docker_image_exists("inventoryservice-python-development:local"):
         command, environment = python_image_build()
         runs.append(execute(
-            "python-runtime-image", command, ROOT / "pyexample", environment,
+            "python-development-image", command, ROOT / "pyexample", environment,
         ))
     if not docker_image_exists("rustservicelib-toolchain:local"):
         runs.append(execute(
@@ -686,7 +682,8 @@ def main() -> int:
             "--workdir", "/workspace/.pyservicelib",
             "--env", "PYTHONPATH=/workspace/.pyservicelib/src",
             "--entrypoint", "",
-            "inventoryservice-python:local", "/workspace/.venv/bin/python", "-m",
+            "inventoryservice-python-development:local",
+            "/workspace/.venv/bin/python", "-m",
             "pytest", "-q", "-p", "no:cacheprovider",
             "tests/test_transportmetrics.py",
         ],
