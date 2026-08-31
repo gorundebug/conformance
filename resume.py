@@ -15,6 +15,7 @@ SUITE_TARGETS = {
     "config": "config-core",
     "config-runtime": "config-runtime-core",
     "dashboards": "dashboards-core",
+    "standalone-components": "standalone-components-resume",
 }
 
 

@@ -109,6 +109,9 @@ dependencies:
 standalone-components:
 	python3 run_suite.py standalone-components python3 standalone_components/run.py
 
+standalone-components-resume:
+	python3 standalone_components/run.py --resume-failed
+
 published-components:
 	python3 run_suite.py published-components python3 published_components/run.py
 

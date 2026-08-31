@@ -321,6 +321,7 @@ dedicated integration suites.
 
 ```bash
 make standalone-components
+make standalone-components-resume  # retry only failed/missing matrix leaves
 python3 standalone_components/run.py \
   --local-root /path/to/local/repositories
 python3 standalone_components/run.py \
@@ -333,6 +334,11 @@ written to `.artifacts/standalone-components/summary.json`. A filtered
 language/component invocation is diagnostic and writes
 `.artifacts/standalone-components/diagnostic-summary.json`, so it cannot
 replace the last authoritative full-matrix result.
+
+After an interrupted or transiently failed full matrix, `make resume` uses
+`standalone-components-resume`: it rebuilds only failed or missing leaves and
+merges passing retries into the existing authoritative summary. If no prior
+authoritative summary exists, the same target runs the complete matrix.
 
 ## Published component builds
 

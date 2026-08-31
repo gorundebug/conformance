@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import atexit
 from collections import deque
+import copy
 import json
 import os
 import re
@@ -1073,6 +1074,36 @@ def write_summary(value: dict[str, object], destination: Path = SUMMARY) -> None
     destination.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
+def authoritative_summary_for_resume(
+    path: Path = SUMMARY,
+) -> dict[str, object] | None:
+    if not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(value, dict) or value.get("authoritative") is not True:
+        return None
+    return value
+
+
+def failed_matrix_pairs(summary: dict[str, object]) -> set[tuple[str, str]]:
+    matrix = summary.get("matrix")
+    if not isinstance(matrix, dict):
+        matrix = {}
+    result: set[tuple[str, str]] = set()
+    for language in LANGUAGES:
+        language_results = matrix.get(language)
+        if not isinstance(language_results, dict):
+            language_results = {}
+        for component in COMPONENTS:
+            item = language_results.get(component)
+            if not isinstance(item, dict) or item.get("status") != "pass":
+                result.add((language, component))
+    return result
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--local-root", type=Path, default=DEFAULT_ROOT)
@@ -1084,18 +1115,37 @@ def parse_args() -> argparse.Namespace:
         help="materialize and validate isolated no-Git trees without compiling",
     )
     parser.add_argument("--keep-workspaces", action="store_true")
+    parser.add_argument(
+        "--resume-failed",
+        action="store_true",
+        help=(
+            "rerun only failed or missing leaves from the last authoritative "
+            "matrix and merge their results; run the full matrix if none exists"
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     global GO_VERSION, GO_TOOLCHAIN_IMAGE
     args = parse_args()
+    if args.resume_failed and (args.language or args.component or args.prepare_only):
+        raise RuntimeError(
+            "--resume-failed cannot be combined with filtered or prepare-only runs"
+        )
     root = args.local_root.expanduser().resolve()
     load_dependency_proxy_environment(root)
     GO_VERSION = go_toolchain.example_version(root)
     GO_TOOLCHAIN_IMAGE = f"servicelib-standalone-go:{GO_VERSION}"
+    baseline = authoritative_summary_for_resume() if args.resume_failed else None
+    retry_pairs = failed_matrix_pairs(baseline) if baseline is not None else None
     languages = selected(args.language, LANGUAGES)
     components = selected(args.component, COMPONENTS)
+    selected_pairs = (
+        retry_pairs
+        if retry_pairs is not None
+        else {(language, component) for language in languages for component in components}
+    )
     if not root.is_dir():
         raise RuntimeError(f"local component repository root is missing: {root}")
 
@@ -1113,14 +1163,16 @@ def main() -> int:
         ).resolve()
 
     started = time.monotonic()
-    matrix: dict[str, dict[str, object]] = {}
+    baseline_matrix = baseline.get("matrix", {}) if baseline is not None else {}
+    matrix: dict[str, dict[str, object]] = (
+        copy.deepcopy(baseline_matrix) if isinstance(baseline_matrix, dict) else {}
+    )
     failures: list[str] = []
     cpp_contexts: dict[str, CppContext] = {}
     unavailable_implementations: set[str] = set()
     required_implementations = {
         implementation_language(root, language_name, component)
-        for language_name in languages
-        for component in components
+        for language_name, component in selected_pairs
     }
     try:
         if not args.prepare_only and "go" in required_implementations:
@@ -1145,14 +1197,23 @@ def main() -> int:
                 print(f"[standalone] FAIL python:toolchain: {error}", file=sys.stderr)
                 unavailable_implementations.add("python")
         for language_name in languages:
-            language_results: dict[str, object] = {}
-            matrix[language_name] = language_results
+            language_results = matrix.setdefault(language_name, {})
+            if not isinstance(language_results, dict):
+                language_results = {}
+                matrix[language_name] = language_results
+            language_components = {
+                component
+                for selected_language, component in selected_pairs
+                if selected_language == language_name
+            }
+            if not language_components:
+                continue
             if (
                 not args.prepare_only
                 and language_name in {"cpp", "cppboost"}
                 and language_name in {
                     implementation_language(root, language_name, component)
-                    for component in components
+                    for component in language_components
                 }
             ):
                 try:
@@ -1162,6 +1223,8 @@ def main() -> int:
                     print(f"[standalone] FAIL {language_name}:toolchain: {error}", file=sys.stderr)
                     continue
             for component in components:
+                if component not in language_components:
+                    continue
                 label = f"{language_name}:{component}"
                 implementation = implementation_language(
                     root, language_name, component,
@@ -1216,11 +1279,32 @@ def main() -> int:
         if not args.keep_workspaces and workspace_parent is not None:
             shutil.rmtree(workspace_parent, ignore_errors=True)
 
-    authoritative = (
-        not args.prepare_only
-        and set(languages) == set(LANGUAGES)
-        and set(components) == set(COMPONENTS)
+    incomplete_pairs = failed_matrix_pairs({"matrix": matrix})
+    authoritative = not args.prepare_only and (
+        baseline is not None
+        or (
+            set(languages) == set(LANGUAGES)
+            and set(components) == set(COMPONENTS)
+        )
     )
+    for language, component in sorted(incomplete_pairs):
+        item = matrix.get(language, {}).get(component, {})
+        error = (
+            item.get("error", "missing result")
+            if isinstance(item, dict)
+            else "missing result"
+        )
+        failure = f"{language}:{component}: {error}"
+        if failure not in failures:
+            failures.append(failure)
+    run_elapsed = time.monotonic() - started
+    previous_elapsed = (
+        baseline.get("elapsed_seconds", 0) if baseline is not None else 0
+    )
+    try:
+        total_elapsed = float(previous_elapsed) + run_elapsed
+    except (TypeError, ValueError):
+        total_elapsed = run_elapsed
     summary: dict[str, object] = {
         "status": (
             "fail" if failures else "pass" if authoritative else "diagnostic"
@@ -1233,7 +1317,8 @@ def main() -> int:
         "components": components,
         "matrix": matrix,
         "failures": failures,
-        "elapsed_seconds": round(time.monotonic() - started, 3),
+        "elapsed_seconds": round(total_elapsed, 3),
+        "resumed_failed_leaves": bool(baseline is not None),
     }
     write_summary(summary, SUMMARY if authoritative else DIAGNOSTIC_SUMMARY)
     if failures:

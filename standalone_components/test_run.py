@@ -392,6 +392,34 @@ class StandaloneComponentTest(unittest.TestCase):
         self.assertEqual(run.SUMMARY.name, "summary.json")
         self.assertEqual(run.DIAGNOSTIC_SUMMARY.name, "diagnostic-summary.json")
 
+    def test_failed_matrix_pairs_select_only_failed_or_missing_leaves(self) -> None:
+        matrix = {
+            language: {
+                component: {"status": "pass"}
+                for component in run.COMPONENTS
+            }
+            for language in run.LANGUAGES
+        }
+        matrix["go"]["orderservice"] = {"status": "fail", "error": "proxy"}
+        del matrix["cpp"]["model"]
+
+        self.assertEqual(
+            run.failed_matrix_pairs({"matrix": matrix}),
+            {("go", "orderservice"), ("cpp", "model")},
+        )
+
+    def test_authoritative_summary_for_resume_rejects_diagnostic_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            summary = Path(directory) / "summary.json"
+            summary.write_text('{"authoritative": false, "status": "diagnostic"}\n')
+            self.assertIsNone(run.authoritative_summary_for_resume(summary))
+
+            summary.write_text('{"authoritative": true, "status": "fail"}\n')
+            self.assertEqual(
+                run.authoritative_summary_for_resume(summary),
+                {"authoritative": True, "status": "fail"},
+            )
+
     def test_userver_context_is_only_set_for_an_existing_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -409,7 +437,7 @@ class StandaloneComponentTest(unittest.TestCase):
     def test_cpp_toolchain_uses_the_generated_neutral_fetch_switch(self) -> None:
         source = Path(run.__file__).read_text()
         self.assertIn('"FETCH_CPP_DEPENDENCIES": "OFF"', source)
-        self.assertNotIn("FETCH_CPP_DEPENDENCIES", source)
+        self.assertNotIn("SERVICEGEN_FETCH_CPP_DEPENDENCIES", source)
 
     def test_cpp_component_build_uses_conan_cmake_protoc_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
