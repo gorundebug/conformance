@@ -284,6 +284,37 @@ class PublishedComponentsTest(unittest.TestCase):
             "scripts/package-python-service.generated.sh",
         )
 
+    def test_python_published_build_uses_independent_framework_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkouts = root / "checkouts" / "gorundebug"
+            service = root / "service"
+            service.mkdir()
+            (service / "make.generated.mk").write_text(
+                "PYSERVICELIB_SOURCE_CONTEXT ?= remote\n"
+                "MODEL_PYTHON_SOURCE_CONTEXT ?= remote\n"
+            )
+            for path in (
+                checkouts / "servicelib" / "v1.0.0",
+                checkouts / "model_go" / "v1.0.0",
+                checkouts / "pyservicelib" / "v1.0.0",
+                checkouts / "pyexample" / "v1.0.0" / "model_python",
+                checkouts / "pyexample" / "v1.0.0" / "inventory_service_api",
+                checkouts / "pyexample" / "v1.0.0" / "order_service_api",
+            ):
+                path.mkdir(parents=True)
+
+            arguments = run.published_context_arguments(
+                "python", service, root / "checkouts", "v1.0.0"
+            )
+
+            self.assertIn(
+                "PYSERVICELIB_SOURCE_CONTEXT="
+                f"{checkouts / 'pyservicelib' / 'v1.0.0'}",
+                arguments,
+            )
+
+
 
 if __name__ == "__main__":
     unittest.main()

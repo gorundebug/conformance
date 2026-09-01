@@ -619,6 +619,7 @@ def published_context_arguments(
         })
     elif language_name == "python":
         contexts.update({
+            "PYSERVICELIB_SOURCE_CONTEXT": source("pyservicelib"),
             "MODEL_PYTHON_SOURCE_CONTEXT": source(
                 project_repository, "model_python"
             ),
