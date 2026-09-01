@@ -884,6 +884,10 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
     else:
         configure_userver_source_context(env, root)
     run_command(
+        ["make", "cpp-tools"], example, env=env,
+        log_name=f"{language_name}-toolchain-prerequisites",
+    )
+    run_command(
         [*compose, "build", "cpp-build"], example, env=env,
         log_name=f"{language_name}-toolchain",
     )

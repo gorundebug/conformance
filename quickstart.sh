@@ -194,6 +194,16 @@ if [ -n "${DEPENDENCY_PROXY_DIR:-}" ]; then
   echo "==> Using shared dependency proxy (host: $DEPENDENCY_PROXY_CLIENT_HOST, containers: ${DEPENDENCY_PROXY_DOCKER_HOST:-host.docker.internal})"
 fi
 
+# Generated C++ Compose files use the proxy directory as a bind mount when
+# proxy mode is enabled. Without it they intentionally share one external
+# Conan volume, so create that neutral cache before any direct Compose runner.
+if [ -z "${DEPENDENCY_CONAN_HOME:-}" ]; then
+  DEPENDENCY_CONAN_VOLUME="${DEPENDENCY_CONAN_VOLUME:-dependency-conan2}"
+  export DEPENDENCY_CONAN_VOLUME
+  docker volume inspect "$DEPENDENCY_CONAN_VOLUME" >/dev/null 2>&1 ||
+    docker volume create "$DEPENDENCY_CONAN_VOLUME" >/dev/null
+fi
+
 # goexample/cppexample/pyexample each split their service/module code into
 # further separate repos (orderservice, inventoryservice, order_service_api,
 # inventory_service_api, model), restored via their own clone.generated.sh.
