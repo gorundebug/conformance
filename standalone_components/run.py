@@ -864,8 +864,6 @@ def configure_userver_source_context(
     userver = root / "userver"
     if userver.is_dir():
         environment["USERVER_SOURCE_CONTEXT"] = str(userver)
-    else:
-        environment.pop("USERVER_SOURCE_CONTEXT", None)
 
 
 def ensure_cpp_image(root: Path, language_name: str) -> CppContext:

@@ -439,13 +439,14 @@ class StandaloneComponentTest(unittest.TestCase):
                 {"authoritative": True, "status": "fail"},
             )
 
-    def test_userver_context_is_only_set_for_an_existing_checkout(self) -> None:
+    def test_userver_context_preserves_configured_mirror_without_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            environment = {"USERVER_SOURCE_CONTEXT": "/stale/missing/userver"}
+            mirror = "http://proxy.example/git/userver.git#pinned"
+            environment = {"USERVER_SOURCE_CONTEXT": mirror}
 
             run.configure_userver_source_context(environment, root)
-            self.assertNotIn("USERVER_SOURCE_CONTEXT", environment)
+            self.assertEqual(environment["USERVER_SOURCE_CONTEXT"], mirror)
 
             (root / "userver").mkdir()
             run.configure_userver_source_context(environment, root)
