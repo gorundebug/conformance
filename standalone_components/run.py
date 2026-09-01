@@ -33,6 +33,7 @@ sys.path.insert(0, str(CONFORMANCE))
 
 import cpp_source_cache  # noqa: E402
 import dependency_download_mirrors  # noqa: E402
+import dependency_environment  # noqa: E402
 import go_toolchain  # noqa: E402
 
 
@@ -870,10 +871,14 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
     language = LANGUAGES[language_name]
     example = root / language.example
     compose = ["docker", "compose", "-f", "docker-compose.cmake.generated.yml"]
-    env = docker_process_environment({
+    framework_environment = dependency_environment.from_framework(
+        root / language.framework
+    )
+    framework_environment.update({
         "SERVICELIB_SOURCE_CONTEXT": str(root / language.framework),
         "FETCH_CPP_DEPENDENCIES": "OFF",
     })
+    env = docker_process_environment(framework_environment)
     source_cache: Path | None = None
     if language_name == "cppboost":
         source_cache = cpp_source_cache.configure_environment(

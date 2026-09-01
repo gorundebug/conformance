@@ -454,6 +454,15 @@ class StandaloneComponentTest(unittest.TestCase):
                 environment["USERVER_SOURCE_CONTEXT"], str(root / "userver")
             )
 
+    def test_cpp_toolchain_loads_framework_dependency_environment(self) -> None:
+        source = Path(run.__file__).read_text()
+        self.assertIn(
+            "dependency_environment.from_framework(\n"
+            "        root / language.framework\n"
+            "    )",
+            source,
+        )
+
     def test_cpp_toolchain_uses_the_generated_neutral_fetch_switch(self) -> None:
         source = Path(run.__file__).read_text()
         self.assertIn('"FETCH_CPP_DEPENDENCIES": "OFF"', source)
