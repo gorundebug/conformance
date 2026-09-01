@@ -336,7 +336,12 @@ class DependencyRootTest(unittest.TestCase):
 
         build_commands: list[list[str]] = []
         with tempfile.TemporaryDirectory() as directory:
-            artifacts = Path(directory)
+            temporary = Path(directory)
+            root = temporary / "root"
+            (root / "goexample").mkdir(parents=True)
+            (root / "goexample/go.work").write_text("go 1.25.4\n")
+            artifacts = temporary / "artifacts"
+            artifacts.mkdir()
             binary = artifacts / "grpc-probe"
 
             def fake_run(command: list[str], **_: object) -> mock.Mock:
@@ -345,15 +350,17 @@ class DependencyRootTest(unittest.TestCase):
                 return mock.Mock(returncode=0)
 
             prepare = globals_["prepare_grpc_probe"]
+            prepare.__globals__["ROOT"] = root
             prepare.__globals__["ARTIFACTS"] = artifacts
             prepare.__globals__["GRPC_PROBE_BINARY"] = binary
             with mock.patch.object(globals_["subprocess"], "run", side_effect=fake_run):
                 prepare()
 
-        self.assertEqual(len(build_commands), 1)
-        build = build_commands[0]
+        self.assertEqual(build_commands[0], ["make", "gen-proto"])
+        self.assertEqual(len(build_commands), 2)
+        build = build_commands[1]
         self.assertEqual(build[:3], ["docker", "run", "--rm"])
-        self.assertIn(f"{globals_['ROOT'] / 'goexample'}:/repo/goexample:ro", build)
+        self.assertIn(f"{root / 'goexample'}:/repo/goexample:ro", build)
         self.assertIn(f"{CONFORMANCE_DIR}:/repo/conformance:ro", build)
         self.assertIn("servicelib-conformance-scenario-grpc-probe-build-cache:/go-cache", build)
         self.assertIn("servicelib-conformance-scenario-grpc-probe-module-cache:/go/pkg/mod", build)
