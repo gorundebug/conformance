@@ -294,14 +294,16 @@ class DependencyRootTest(unittest.TestCase):
 
     def test_quickstart_keeps_performance_natives_outside_profile_workspace(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
-        native_export = (
-            'export PERFORMANCE_NATIVE_DEPENDENCIES_DIR='
-            '"$DEPENDENCIES_DIR/performance-native"'
+        native_default = (
+            'PERFORMANCE_NATIVE_DEPENDENCIES_DIR='
+            '"${PERFORMANCE_NATIVE_DEPENDENCIES_DIR:-$CONFORMANCE_ROOT/'
+            '.dependencies/performance-native}"'
         )
         profile_switch = 'DEPENDENCIES_DIR="$PROFILE_WORKSPACE"'
-        self.assertIn(native_export, quickstart)
+        self.assertIn(native_default, quickstart)
+        self.assertIn('export PERFORMANCE_NATIVE_DEPENDENCIES_DIR', quickstart)
         self.assertIn(profile_switch, quickstart)
-        self.assertLess(quickstart.index(native_export), quickstart.index(profile_switch))
+        self.assertLess(quickstart.index(native_default), quickstart.index(profile_switch))
 
     def test_benchmark_entrypoints_share_the_canonical_defaults(self) -> None:
         makefile = (CONFORMANCE_DIR / "benchmarks/examples/Makefile").read_text()

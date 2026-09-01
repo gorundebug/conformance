@@ -108,8 +108,11 @@ DEPENDENCIES_DIR="$(CDPATH= cd -- "$DEPENDENCIES_DIR" && pwd)"
 export DEPENDENCIES_DIR
 # Framework examples may later switch to a disposable generated workspace.
 # Performance baselines must stay in one persistent, tag-pinned cache shared
-# by benchmark and profiling runs.
-export PERFORMANCE_NATIVE_DEPENDENCIES_DIR="$DEPENDENCIES_DIR/performance-native"
+# by benchmark and profiling runs.  This cache belongs to conformance itself;
+# DEPENDENCIES_DIR may be an external framework workspace and must not be
+# polluted with mutable benchmark checkouts.
+PERFORMANCE_NATIVE_DEPENDENCIES_DIR="${PERFORMANCE_NATIVE_DEPENDENCIES_DIR:-$CONFORMANCE_ROOT/.dependencies/performance-native}"
+export PERFORMANCE_NATIVE_DEPENDENCIES_DIR
 
 echo "==> Checking prerequisites"
 missing=0
