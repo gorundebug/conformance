@@ -17,6 +17,7 @@ CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE_DIR))
 import cpp_source_cache
 import cpp_userver
+import dependency_environment
 import typescript_toolchain
 
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
@@ -502,7 +503,10 @@ def main() -> int:
     canonical_command.extend(
         ["--rm", "test", "/bin/bash", "-lc", canonical_script]
     )
-    runs.append(execute("canonical-cpp-operators", canonical_command, CANONICAL))
+    canonical_env = dependency_environment.from_framework(CANONICAL)
+    runs.append(execute(
+        "canonical-cpp-operators", canonical_command, CANONICAL, canonical_env
+    ))
     canonical_runtime_script = (
         "/workspace/build/servicelib_serviceapp_test && "
         "/workspace/build/servicelib_status_test"
@@ -516,6 +520,7 @@ def main() -> int:
                 canonical_runtime_script,
             ],
             CANONICAL,
+            canonical_env,
         )
     )
 
@@ -523,7 +528,7 @@ def main() -> int:
         boost_build_volume = cpp_source_cache.build_volume_name(
             BOOST, "cppboostservicelib-operators"
         )
-        boost_env = os.environ.copy()
+        boost_env = dependency_environment.from_framework(BOOST)
         boost_env["CPPBOOSTSERVICELIB_TEST_SOURCE_CACHE_DIR"] = str(
             cpp_source_cache.ensure(BOOST)
         )

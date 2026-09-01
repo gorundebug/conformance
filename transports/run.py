@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
 import cpp_userver
+import dependency_environment
 import go_toolchain
 import typescript_toolchain
 
@@ -499,7 +500,7 @@ def boost_source_cache_command() -> list[str]:
 
 
 def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[str, str]:
-    environment = os.environ.copy()
+    environment = dependency_environment.from_framework(BOOST)
     environment["SERVICEGEN_RUN_DOCKER_TESTS"] = "1"
     if prepare_source_cache:
         cpp_source_cache.configure_environment(environment, BOOST)
@@ -757,17 +758,18 @@ def main() -> int:
         TYPESCRIPT,
         interop_env,
     ))
+    canonical_env = dependency_environment.from_framework(CANONICAL)
     runs.append(execute(
         "canonical-cpp-http-lifecycle",
-        canonical_http_command(args.skip_build), CANONICAL,
+        canonical_http_command(args.skip_build), CANONICAL, canonical_env,
     ))
     runs.append(execute(
         "canonical-cpp-grpc-endpoint-semantics",
-        canonical_command(args.skip_build), CANONICAL,
+        canonical_command(args.skip_build), CANONICAL, canonical_env,
     ))
     runs.append(execute(
         "canonical-cpp-kafka-application-wire",
-        canonical_kafka_command(args.skip_build), CANONICAL,
+        canonical_kafka_command(args.skip_build), CANONICAL, canonical_env,
     ))
     if not args.skip_build:
         runs.append(execute(
@@ -775,6 +777,7 @@ def main() -> int:
             ["docker", "build", "-f", "Dockerfile.cmake", "-t",
              "cppboostservicelib-build", "."],
             BOOST,
+            dependency_environment.from_framework(BOOST),
         ))
         runs.append(execute(
             "boost-source-cache",

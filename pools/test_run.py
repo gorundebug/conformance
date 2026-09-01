@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from pools import run
+import dependency_environment
 
 
 class FrameworkEnvironmentTest(unittest.TestCase):
@@ -30,7 +30,7 @@ class FrameworkEnvironmentTest(unittest.TestCase):
                 },
                 clear=True,
             ):
-                environment = run.framework_environment(framework)
+                environment = dependency_environment.from_framework(framework)
 
         self.assertEqual(
             environment["USERVER_SOURCE_CONTEXT"],
@@ -50,7 +50,7 @@ class FrameworkEnvironmentTest(unittest.TestCase):
                 "fi\n"
             )
             with mock.patch.dict(os.environ, {}, clear=True):
-                environment = run.framework_environment(framework)
+                environment = dependency_environment.from_framework(framework)
 
         self.assertNotIn("USERVER_SOURCE_CONTEXT", environment)
 

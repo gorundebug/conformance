@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
 import cpp_userver
+import dependency_environment
 import typescript_toolchain
 
 
@@ -26,37 +27,6 @@ CANONICAL = ROOT / "cppservicelib"
 BOOST = ROOT / "cppboostservicelib"
 TYPESCRIPT = ROOT / "tsservicelib"
 BOOST_BUILD_IMAGE = "cppboostservicelib-build:local"
-
-
-def framework_environment(framework: Path) -> dict[str, str]:
-    """Load the framework-owned dependency contract for direct Docker calls.
-
-    The exact source revisions belong to each framework repository.  Loading
-    its normal shell contract here keeps BuildKit named contexts on the Git
-    mirror without duplicating pinned revisions in conformance.
-    """
-    script = framework / "scripts" / "dependency-proxy-env.sh"
-    if not script.is_file():
-        raise RuntimeError(f"dependency environment is missing: {script}")
-    process = subprocess.run(
-        [
-            "/bin/bash",
-            "-c",
-            'source "$1"; env -0',
-            "pools-framework-environment",
-            str(script),
-        ],
-        check=True,
-        capture_output=True,
-        env=os.environ,
-    )
-    result: dict[str, str] = {}
-    for entry in process.stdout.split(b"\0"):
-        if not entry or b"=" not in entry:
-            continue
-        name, value = entry.split(b"=", 1)
-        result[name.decode()] = value.decode()
-    return result
 
 
 REQUIRED_SOURCE_CASES = {
@@ -312,7 +282,7 @@ def main() -> int:
         "canonical-cpp-pools",
         canonical_command,
         CANONICAL,
-        env=framework_environment(CANONICAL),
+        env=dependency_environment.from_framework(CANONICAL),
     ))
 
     if not args.skip_build:
@@ -321,7 +291,7 @@ def main() -> int:
             ["docker", "build", "-f", "Dockerfile.cmake", "-t",
              BOOST_BUILD_IMAGE, "."],
             BOOST,
-            env=framework_environment(BOOST),
+            env=dependency_environment.from_framework(BOOST),
         ))
         runs.append(execute(
             "boost-source-cache",

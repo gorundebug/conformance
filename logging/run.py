@@ -19,6 +19,7 @@ CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE_DIR))
 import cpp_source_cache
 import cpp_userver
+import dependency_environment
 
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "logging" / "summary.json"
@@ -224,6 +225,7 @@ def main() -> int:
             ["docker", "compose", "-f", "docker-compose.cmake.yml", "run",
              "--rm", "test", "/bin/bash", "-lc", canonical_script],
             CANONICAL,
+            dependency_environment.from_framework(CANONICAL),
         ),
         execute(
             "boost-cpp-structured-logging",

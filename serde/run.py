@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
 import cpp_userver
+import dependency_environment
 import go_toolchain
 import typescript_toolchain
 
@@ -228,11 +229,17 @@ def rust_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict[s
     return fixtures, run, setup_runs
 
 
-def json_probe(name: str, command: list[str], cwd: Path) -> tuple[dict[str, object], dict[str, object]]:
+def json_probe(
+    name: str,
+    command: list[str],
+    cwd: Path,
+    env: dict[str, str] | None = None,
+) -> tuple[dict[str, object], dict[str, object]]:
     started = time.monotonic()
     completed = subprocess.run(
         command,
         cwd=cwd,
+        env=env,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -412,8 +419,9 @@ def main() -> int:
         boost_script,
     ]
 
+    canonical_env = dependency_environment.from_framework(CANONICAL)
     runs = [
-        execute("canonical-cpp-serde", canonical_command, CANONICAL),
+        execute("canonical-cpp-serde", canonical_command, CANONICAL, canonical_env),
         execute("boost-cpp-serde", boost_command, BOOST),
     ]
     if not args.skip_build:
@@ -553,7 +561,8 @@ def main() -> int:
         "-o /tmp/custom-serde-boost && /tmp/custom-serde-boost",
     ]
     canonical_custom, canonical_custom_run = json_probe(
-        "canonical-cpp-custom-json-serde", canonical_custom_command, CANONICAL
+        "canonical-cpp-custom-json-serde", canonical_custom_command, CANONICAL,
+        canonical_env,
     )
     boost_custom, boost_custom_run = json_probe(
         "boost-cpp-custom-json-serde", boost_custom_command, BOOST
@@ -621,6 +630,7 @@ def main() -> int:
         "canonical-cpp-generated-protobuf-wire", canonical_protobuf_compose,
         ROOT / "cppexample",
         fixture_prefix="protobuf_",
+        env=canonical_env,
     )
 
     boost_protobuf_compose = [
