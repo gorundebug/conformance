@@ -328,7 +328,16 @@ def main() -> int:
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--profile", choices=("current",), required=True)
     args = parser.parse_args()
-    prepare(args.source_root.resolve(), args.workspace.resolve(), args.profile)
+    summary = prepare(
+        args.source_root.resolve(), args.workspace.resolve(), args.profile
+    )
+    for language, counts in summary["generated_graphs"].items():
+        print(
+            f"Verified {args.profile} graph for {language}: "
+            f"TaskPool={counts['task_pool_links']}, "
+            f"PriorityTaskPool={counts['priority_task_pool_links']}, "
+            f"ParallelCall={counts['parallel_call_links']}"
+        )
     print(f"Prepared {args.profile} profile workspace: {args.workspace}")
     return 0
 
