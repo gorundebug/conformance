@@ -489,6 +489,7 @@ class DependencyRootTest(unittest.TestCase):
                 "target=/workspace/build,volume-nocopy,readonly",
                 args,
             )
+            self.assertIn("cppboostexample-cpp-build:local", args)
 
     def test_dependency_snapshot_uses_generated_conan_metadata(self) -> None:
         source = (CONFORMANCE_DIR / "dependencies/run.py").read_text()

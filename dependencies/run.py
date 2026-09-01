@@ -38,6 +38,7 @@ BINARIES = {
     "orderservice": "/workspace/build/orderservice/example_order_service",
     "inventoryservice": "/workspace/build/inventoryservice/example_inventory_service",
 }
+CPPBOOST_BUILD_IMAGE = "cppboostexample-cpp-build:local"
 NATIVE_BINARIES = {
     "orderservice-native": (
         "cppboostnativeexample-orderservice:local",
@@ -330,6 +331,12 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
 
     results: dict[str, dict[str, object]] = {}
     build_volume = framework_env["CPPBOOST_BUILD_VOLUME"]
+    compose_source = (example / "docker-compose.cmake.generated.yml").read_text()
+    if f"image: {CPPBOOST_BUILD_IMAGE}" not in compose_source:
+        raise RuntimeError(
+            "generated C++ build image identity differs from the dependency "
+            f"inspector: expected {CPPBOOST_BUILD_IMAGE}"
+        )
     for service, binary in BINARIES.items():
         output = command(
             [
@@ -341,7 +348,7 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
                 *cpp_source_cache.volume_mount_args(
                     build_volume, readonly=True
                 ),
-                "cppboostexample-cpp-build",
+                CPPBOOST_BUILD_IMAGE,
                 binary,
             ],
             cwd=example,
