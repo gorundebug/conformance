@@ -814,7 +814,7 @@ class DependencyRootTest(unittest.TestCase):
     def test_sanitizer_local_mode_supplies_go_temporal_fallback_framework(self) -> None:
         sanitizers = runpy.run_path(str(CONFORMANCE_DIR / "sanitizers/run.py"))
         implementation_env = sanitizers["implementation_env"]
-        expected = str(CONFORMANCE_DIR.parent / "servicelib")
+        expected = str(sanitizers["ROOT"] / "servicelib")
         for language in ("go", "cpp", "cppboost", "python", "rust", "typescript"):
             with self.subTest(language=language):
                 self.assertEqual(
