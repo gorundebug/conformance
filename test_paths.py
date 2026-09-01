@@ -43,7 +43,7 @@ class DependencyRootTest(unittest.TestCase):
                 dependency_download_mirrors,
                 "environment",
                 return_value={
-                    "npm_config_confluent_kafka_javascript_binary_host_mirror": mirror
+                    "npm_config_confluent_kafka-javascript_binary_host_mirror": mirror
                 },
             ),
         ):
@@ -54,7 +54,7 @@ class DependencyRootTest(unittest.TestCase):
         )
         self.assertEqual(
             environment[
-                "npm_config_confluent_kafka_javascript_binary_host_mirror"
+                "npm_config_confluent_kafka-javascript_binary_host_mirror"
             ],
             mirror,
         )
