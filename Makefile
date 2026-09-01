@@ -52,7 +52,7 @@ endif
 MANIFEST_GATED_TARGETS := tooling structure signatures config-core config-schema \
 	config-runtime-core config-runtime-go config-runtime-typescript dependencies \
 	standalone-components published-components pools operators serde transports kafka temporal tracing \
-	metrics dashboards-core logging scenarios call-semantics sanitizers generation kubernetes profiling
+	metrics dashboards-core logging scenarios call-semantics sanitizers generation kubernetes profiling benchmarks
 $(MANIFEST_GATED_TARGETS): dependency-manifests
 
 test-paths:

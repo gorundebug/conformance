@@ -45,6 +45,7 @@ gates=(
   generation
   kubernetes
   profiling
+  benchmarks
 )
 
 if [ "$resume" -eq 0 ]; then

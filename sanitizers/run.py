@@ -460,8 +460,13 @@ def implementation_env(language: str) -> dict[str, str]:
     env.setdefault("SANITIZER_STOP_TIMEOUT", "7")
     env.setdefault("RACE_STOP_TIMEOUT", "7")
     env.setdefault("LIFECYCLE_STOP_TIMEOUT", "7")
+    # Canonical projects use the Go Automation Service as the Temporal fallback
+    # whenever their primary language has no supported Temporal SDK. Local-mode
+    # verification therefore always needs the Go framework context as well as
+    # the primary language framework context.
+    env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     if language == "go":
-        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
+        pass
     elif language == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
     elif language == "cppboost":
@@ -471,7 +476,6 @@ def implementation_env(language: str) -> dict[str, str]:
         env["PYSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "pyservicelib")
     elif language == "rust":
         env["RUSTSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "rustservicelib")
-        env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     elif language == "typescript":
         env["TSSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "tsservicelib")
     return env

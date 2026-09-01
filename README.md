@@ -75,6 +75,9 @@ package caches, images and pre-existing containers are not removed. A gate is
 also failed if it leaves a new container behind. A non-resume run clears prior
 suite, benchmark and profiling outcomes after the disposable graph profile has
 been prepared; the resume command preserves the ledger and completed results.
+The final two gates are `profiling` and then `benchmarks`, so the staged run
+verifies both performance toolchains after every correctness and infrastructure
+gate has passed.
 
 For a deliberately clean run, remove `.artifacts` before quickstart. Do this
 between the two complete profiles when neither run may reuse a prior suite

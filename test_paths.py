@@ -811,6 +811,17 @@ class DependencyRootTest(unittest.TestCase):
 
         self.assertEqual(actual, aggregate["LANGUAGE_SUITES"]["sanitizers"])
 
+    def test_sanitizer_local_mode_supplies_go_temporal_fallback_framework(self) -> None:
+        sanitizers = runpy.run_path(str(CONFORMANCE_DIR / "sanitizers/run.py"))
+        implementation_env = sanitizers["implementation_env"]
+        expected = str(CONFORMANCE_DIR.parent / "servicelib")
+        for language in ("go", "cpp", "cppboost", "python", "rust", "typescript"):
+            with self.subTest(language=language):
+                self.assertEqual(
+                    implementation_env(language)["GOSERVICELIB_SOURCE_CONTEXT"],
+                    expected,
+                )
+
     def test_quickstart_supports_full_current_profile(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
         self.assertIn('--profile)', quickstart)
@@ -850,6 +861,7 @@ class DependencyRootTest(unittest.TestCase):
             "generation",
             "kubernetes",
             "profiling",
+            "benchmarks",
         ]
         positions = [runner.index(f"  {gate}\n") for gate in expected]
         self.assertEqual(positions, sorted(positions))
