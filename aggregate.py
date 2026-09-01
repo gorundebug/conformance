@@ -50,7 +50,12 @@ LANGUAGE_SUITES = {
     "call-semantics": {
         "go", "cpp", "cppboost", "python", "rust", "typescript",
     },
-    "sanitizers": {"cpp-asan", "cpp-tsan", "cppboost-asan", "cppboost-tsan"},
+    "sanitizers": {
+        "go-race",
+        "cpp-runtime", "cpp-asan", "cpp-tsan",
+        "cppboost-runtime", "cppboost-asan", "cppboost-tsan",
+        "python-runtime", "rust-runtime", "typescript-runtime",
+    },
     "kubernetes": {
         "go", "cpp", "cppboost", "python", "rust", "typescript",
     },

@@ -788,6 +788,19 @@ class DependencyRootTest(unittest.TestCase):
             },
         )
 
+    def test_sanitizer_matrix_covers_every_declared_runtime_profile(self) -> None:
+        sanitizers = runpy.run_path(str(CONFORMANCE_DIR / "sanitizers/run.py"))
+        aggregate = runpy.run_path(str(CONFORMANCE_DIR / "aggregate.py"))
+        actual = {
+            f"{language}-{profile}"
+            for language, profiles in sanitizers[
+                "IMPLEMENTATION_SANITIZERS"
+            ].items()
+            for profile in profiles
+        }
+
+        self.assertEqual(actual, aggregate["LANGUAGE_SUITES"]["sanitizers"])
+
     def test_quickstart_supports_full_current_profile(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
         self.assertIn('--profile)', quickstart)
