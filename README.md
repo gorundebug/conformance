@@ -374,13 +374,20 @@ Services, health probes, ConfigMap and Secret wiring, and ServiceMonitor
 resources for runtimes whose metrics are collected with the Prometheus pull
 model.
 
-The gate then performs one complete Go runtime probe. It builds the existing
-minimal service images, pushes them to the temporary local registry, installs
-the pinned official Redpanda chart when Kafka is present, and rolls out all
-four services. The local environment also contains Prometheus, Grafana,
-Jaeger, Loki and the OpenTelemetry Collector. The probe sends a real
-HTTP-to-gRPC order, waits for the authenticated Kafka event to reach Analytics
-Service, and verifies Kubernetes health, metrics, dashboards, traces and logs.
+The gate then performs one complete runtime probe. It builds and rolls out all
+four service images for Go, userver C++, Boost C++, Python, Rust and TypeScript.
+One shared local registry and k3s cluster are reused while each language's
+service releases replace the previous implementation. This keeps the runtime
+coverage complete without reinstalling the same heavy infrastructure six
+times. The cluster contains the pinned official Redpanda and Temporal charts,
+Prometheus, Grafana, Jaeger, Loki and the OpenTelemetry Collector.
+
+The Go rollout runs the complete Temporal, HTTP-to-gRPC, authenticated Kafka,
+metrics, dashboards, traces and logs probe. Every subsequent language rollout
+must become ready with its own four images and successfully execute the same
+order pipeline. In proxy mode, the gate also derives the registries used by
+the deployed pods, verifies that each has a generated k3s mirror and proves
+that default registry fallback is disabled.
 
 Both metric paths are part of the generated contract: ServiceMonitor scrapes
 the C++ and TypeScript `/metrics` endpoints, while Go, Python and Rust export
@@ -390,8 +397,6 @@ to the same canonical `service` and `job` labels and removes temporary
 Generated Grafana dashboards therefore use the same service identity in the
 ordinary Docker Compose environment and in Kubernetes.
 
-The real end-to-end Kubernetes rollout currently uses Go as the runtime probe;
-all six framework implementations are independently Helm-linted and rendered.
 The disposable k3s cluster, registry data and workload volumes are removed even
 when the gate fails. Downloaded containerd image layers are deliberately kept
 in the architecture-specific external

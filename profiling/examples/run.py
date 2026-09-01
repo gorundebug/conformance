@@ -708,7 +708,10 @@ def verify_cppboost_release_build(
         return result.stdout.strip()
 
     for service in ("inventoryservice", "orderservice"):
-        image = f"cppboostexample-{service}"
+        # Generated examples deliberately use an explicit local tag.  Do not
+        # rely on Docker's implicit :latest here: a clean profiling build
+        # produces only the :local image.
+        image = f"cppboostexample-{service}:local"
         build_type = image_label(image, "org.gorundebug.build-type")
         if build_type != "Release":
             raise RuntimeError(

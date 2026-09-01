@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -161,6 +162,74 @@ def completed_workflow_count(executions: list[dict[str, object]]) -> int:
     return sum(
         item.get("status") == "WORKFLOW_EXECUTION_STATUS_COMPLETED"
         for item in executions
+    )
+
+
+def image_registry(image: str) -> str:
+    """Return the registry used by a Kubernetes image reference."""
+    # An image without a slash is always an unqualified Docker Hub reference;
+    # the colon in ``postgres:16.4`` separates its tag, not a registry port.
+    if "/" not in image:
+        return "docker.io"
+    first = image.split("/", 1)[0]
+    if "." in first or ":" in first or first == "localhost":
+        return first
+    return "docker.io"
+
+
+def validate_runtime_registry_proxies(
+    compose: list[str], kubectl: list[str], example: Path,
+    environment: dict[str, str],
+) -> None:
+    """Prove proxy-mode k3s cannot bypass mirrors used by deployed pods."""
+    if not environment.get("DEPENDENCY_PROXY_DIR", "").strip():
+        return
+    registry_config = capture(
+        [*compose, "exec", "-T", "kubernetes", "cat",
+         "/etc/rancher/k3s/registries.yaml"],
+        example, environment,
+    )
+    configured = set(re.findall(r'^  "([^\"]+)":$', registry_config, re.MULTILINE))
+    pod_list = json.loads(capture(
+        [*kubectl, "get", "pods", "--all-namespaces", "-o", "json"],
+        example, environment,
+    ))
+    images = {
+        str(container["image"])
+        for pod in pod_list.get("items", [])
+        for container in pod.get("spec", {}).get("containers", [])
+        if container.get("image")
+    }
+    used = {image_registry(image) for image in images}
+    external = used - {"registry:5000"}
+    missing = external - configured
+    fallback_disabled = capture(
+        [*compose, "exec", "-T", "kubernetes", "printenv",
+         "K3S_DISABLE_DEFAULT_REGISTRY_ENDPOINT"],
+        example, environment,
+    ).strip().lower()
+    write_json_artifact(
+        "registry-proxy-runtime.json",
+        {
+            "configured": sorted(configured),
+            "fallback_disabled": fallback_disabled == "true",
+            "images": sorted(images),
+            "used": sorted(used),
+        },
+    )
+    if missing:
+        raise RuntimeError(
+            "Kubernetes pods use registries without generated proxy mirrors: "
+            + ", ".join(sorted(missing))
+        )
+    if fallback_disabled != "true":
+        raise RuntimeError(
+            "proxy-mode Kubernetes allows the default registry fallback"
+        )
+    print(
+        "[kubernetes] PASS  pod registries use generated mirrors with "
+        "default fallback disabled",
+        flush=True,
     )
 
 
@@ -324,8 +393,84 @@ def validate_example(language: str, example: Path) -> None:
     print(f"[kubernetes] PASS  {language} static contract", flush=True)
 
 
-def runtime_probe(example: Path) -> None:
+def language_source_environment(language: str) -> dict[str, str]:
+    values = {
+        "go": {"GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib")},
+        "cpp": {
+            "GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),
+            "SERVICELIB_SOURCE_CONTEXT": str(ROOT / "cppservicelib"),
+        },
+        "cppboost": {
+            "GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),
+            "SERVICELIB_SOURCE_CONTEXT": str(ROOT / "cppboostservicelib"),
+        },
+        "python": {
+            "PYSERVICELIB_SOURCE_CONTEXT": str(ROOT / "pyservicelib"),
+        },
+        "rust": {
+            "GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),
+            "RUSTSERVICELIB_SOURCE_CONTEXT": str(ROOT / "rustservicelib"),
+        },
+        "typescript": {
+            "TSSERVICELIB_SOURCE_CONTEXT": str(ROOT / "tsservicelib"),
+        },
+    }
+    return values[language]
+
+
+def validate_language_services(
+    language: str, example: Path, environment: dict[str, str],
+    request_body: str,
+) -> None:
+    print(f"[kubernetes] START {language} service runtime", flush=True)
+    script = ["bash", "scripts/kubernetes.generated.sh"]
+    compose = ["docker", "compose", "-f", "docker-compose.kubernetes.yml"]
+    kubectl = [*compose, "exec", "-T", "kubernetes", "kubectl"]
+    run([*script, "services-up"], example, environment)
+    deployed_images: dict[str, str] = {}
+    for service in SERVICES:
+        image = capture(
+            [
+                *kubectl, "--namespace", environment["KUBERNETES_NAMESPACE"],
+                "get", "deployment", service,
+                "-o", "jsonpath={.spec.template.spec.containers[0].image}",
+            ],
+            example, environment,
+        ).strip()
+        expected = f"registry:5000/{example.name}/{service}:local"
+        if image != expected:
+            raise RuntimeError(
+                f"{language} {service} rollout uses {image!r}, expected {expected!r}"
+            )
+        deployed_images[service] = image
+    response = capture(
+        [
+            *kubectl, "create", "--raw",
+            f"/api/v1/namespaces/{environment['KUBERNETES_NAMESPACE']}/services/"
+            "http:orderservice:9091/proxy/v1/processorder",
+            "-f", "-",
+        ],
+        example, environment, input_value=request_body,
+    )
+    try:
+        response_value: object = json.loads(response)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"{language} Kubernetes order response is not JSON: {response!r}"
+        ) from error
+    write_json_artifact(
+        f"{language}-service-runtime.json",
+        {"images": deployed_images, "response": response_value},
+    )
+    print(
+        f"[kubernetes] PASS  {language} four-service rollout and order pipeline",
+        flush=True,
+    )
+
+
+def runtime_probe(examples: dict[str, Path]) -> None:
     print("[kubernetes] START go local k3s runtime", flush=True)
+    example = examples["go"]
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     local_go_work = ARTIFACTS / "go.work"
     go_modules = sorted(path.parent for path in example.rglob("go.mod"))
@@ -353,15 +498,19 @@ def runtime_probe(example: Path) -> None:
             "KUBERNETES_KAFKA_PASSWORD": (
                 f"servicegen-conformance-{os.getpid()}-{int(time.time())}"
             ),
-            "GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),
             "GOWORK": str(local_go_work),
+            "USE_LOCAL_MODULES": "1",
         }
     )
+    environment.update(language_source_environment("go"))
     script = ["bash", "scripts/kubernetes.generated.sh"]
     compose = ["docker", "compose", "-f", "docker-compose.kubernetes.yml"]
     kubectl = [*compose, "exec", "-T", "kubernetes", "kubectl"]
     try:
         run([*script, "up"], example, environment)
+        validate_runtime_registry_proxies(
+            compose, kubectl, example, environment,
+        )
         run([*script, "test"], example, environment)
         automation_status_path = (
             "/api/v1/namespaces/servicelib-conformance/services/"
@@ -602,6 +751,15 @@ def runtime_probe(example: Path) -> None:
                 "analytics-service did not commit the authenticated Kubernetes "
                 "Kafka event:\n" + group_status
             )
+        for language, language_example in examples.items():
+            if language == "go":
+                continue
+            language_environment = dict(environment)
+            language_environment["GOWORK"] = "off"
+            language_environment.update(language_source_environment(language))
+            validate_language_services(
+                language, language_example, language_environment, request_body,
+            )
     finally:
         subprocess.run(
             [*script, "clean"], cwd=example, env=environment, check=False,
@@ -626,7 +784,7 @@ def write_summary(status: str, error: str | None = None) -> None:
         "status": status,
         "languages": list(EXAMPLES),
         "services": list(SERVICES),
-        "runtime_language": "go",
+        "runtime_languages": list(EXAMPLES),
         "helm_image": HELM_IMAGE,
     }
     if error is not None:
@@ -649,9 +807,12 @@ def main() -> int:
             with tempfile.TemporaryDirectory(
                 prefix="runtime-", dir=ARTIFACTS,
             ) as directory:
-                runtime_probe(disposable_runtime_example(
-                    ROOT / EXAMPLES["go"], Path(directory),
-                ))
+                runtime_probe({
+                    language: disposable_runtime_example(
+                        ROOT / example_name, Path(directory),
+                    )
+                    for language, example_name in EXAMPLES.items()
+                })
     except Exception as error:  # noqa: BLE001
         write_summary("fail", str(error))
         print(f"Kubernetes conformance failed: {error}", file=sys.stderr)
