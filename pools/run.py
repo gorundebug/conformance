@@ -25,6 +25,38 @@ GO = ROOT / "servicelib"
 CANONICAL = ROOT / "cppservicelib"
 BOOST = ROOT / "cppboostservicelib"
 TYPESCRIPT = ROOT / "tsservicelib"
+BOOST_BUILD_IMAGE = "cppboostservicelib-build:local"
+
+
+def framework_environment(framework: Path) -> dict[str, str]:
+    """Load the framework-owned dependency contract for direct Docker calls.
+
+    The exact source revisions belong to each framework repository.  Loading
+    its normal shell contract here keeps BuildKit named contexts on the Git
+    mirror without duplicating pinned revisions in conformance.
+    """
+    script = framework / "scripts" / "dependency-proxy-env.sh"
+    if not script.is_file():
+        raise RuntimeError(f"dependency environment is missing: {script}")
+    process = subprocess.run(
+        [
+            "/bin/bash",
+            "-c",
+            'source "$1"; env -0',
+            "pools-framework-environment",
+            str(script),
+        ],
+        check=True,
+        capture_output=True,
+        env=os.environ,
+    )
+    result: dict[str, str] = {}
+    for entry in process.stdout.split(b"\0"):
+        if not entry or b"=" not in entry:
+            continue
+        name, value = entry.split(b"=", 1)
+        result[name.decode()] = value.decode()
+    return result
 
 
 REQUIRED_SOURCE_CASES = {
@@ -276,14 +308,20 @@ def main() -> int:
     canonical_command.extend(
         ["--rm", "test", "/bin/bash", "-lc", canonical_script]
     )
-    runs.append(execute("canonical-cpp-pools", canonical_command, CANONICAL))
+    runs.append(execute(
+        "canonical-cpp-pools",
+        canonical_command,
+        CANONICAL,
+        env=framework_environment(CANONICAL),
+    ))
 
     if not args.skip_build:
         runs.append(execute(
             "boost-build-image",
             ["docker", "build", "-f", "Dockerfile.cmake", "-t",
-             "cppboostservicelib-build", "."],
+             BOOST_BUILD_IMAGE, "."],
             BOOST,
+            env=framework_environment(BOOST),
         ))
         runs.append(execute(
             "boost-source-cache",
@@ -303,7 +341,7 @@ def main() -> int:
                 *cpp_source_cache.build_volume_mount_args(
                     BOOST, "cppboostservicelib-pools"
                 ),
-                "cppboostservicelib-build:local", "/bin/bash", "-lc",
+                BOOST_BUILD_IMAGE, "/bin/bash", "-lc",
                 boost_framework_build_script(),
             ],
             BOOST,
@@ -324,7 +362,7 @@ def main() -> int:
                 ),
                 "-w",
                 "/workspace",
-                "cppboostservicelib-build:local",
+                BOOST_BUILD_IMAGE,
                 "ctest",
                 "--test-dir",
                 "build/docker",
