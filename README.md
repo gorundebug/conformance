@@ -52,6 +52,30 @@ before the `--` separator:
 ./quickstart.sh -- resume                        # failed/missing suites only
 ```
 
+For a release investigation that must expose accidental BuildKit cache
+dependencies, run every release gate in order with a completely cold BuildKit
+cache:
+
+```bash
+DEPENDENCY_PROXY_DIR=/path/to/dependency-proxy \
+  ./quickstart.sh --profile current -- cold-gates
+```
+
+The runner stops immediately at the first failed gate and records each observed
+PASS or FAIL in `.artifacts/cold-gates/<profile>.tsv`. After fixing the cause,
+resume at the first non-passing gate without repeating earlier successful ones:
+
+```bash
+DEPENDENCY_PROXY_DIR=/path/to/dependency-proxy \
+  ./quickstart.sh --profile current -- cold-gates-resume
+```
+
+Only BuildKit's build cache is pruned before every gate. Nexus, Git mirrors,
+package caches, images and pre-existing containers are not removed. A gate is
+also failed if it leaves a new container behind. A non-resume run clears prior
+suite, benchmark and profiling outcomes after the disposable graph profile has
+been prepared; the resume command preserves the ledger and completed results.
+
 For a deliberately clean run, remove `.artifacts` before quickstart. Do this
 between the two complete profiles when neither run may reuse a prior suite
 result. Switching profiles also invalidates incompatible artifacts

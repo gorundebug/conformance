@@ -31,6 +31,8 @@ set -euo pipefail
 #   ./quickstart.sh -- fast                          # fast development gate
 #   ./quickstart.sh -- integration                   # runtime/integration gate
 #   ./quickstart.sh -- resume                        # retry failed/missing suites
+#   ./quickstart.sh --profile current -- cold-gates  # every gate with a cold BuildKit cache
+#   ./quickstart.sh --profile current -- cold-gates-resume
 #
 # For diagnosing a single language, skip this script and call the runners
 # directly, e.g. `python3 tracing/run.py --language cpp`.
@@ -261,7 +263,6 @@ if [ -d "$CONFORMANCE_ROOT/.artifacts" ] && [ "$PREVIOUS_PROFILE" != "$EXAMPLE_P
 fi
 mkdir -p "$CONFORMANCE_ROOT/.artifacts"
 printf '%s\n' "$EXAMPLE_PROFILE" > "$PROFILE_MARKER"
-export EXAMPLE_PROFILE="$EXAMPLE_PROFILE"
 export EXAMPLE_PROFILE="$EXAMPLE_PROFILE"
 
 if [ "$EXAMPLE_PROFILE" = "current" ]; then

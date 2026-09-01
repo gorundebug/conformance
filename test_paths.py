@@ -810,6 +810,50 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn('profile_workspace.py', quickstart)
         self.assertIn("export DEPENDENCIES_DIR", quickstart)
 
+    def test_cold_gate_runner_is_ordered_fails_fast_and_resumable(self) -> None:
+        runner = (CONFORMANCE_DIR / "scripts" / "run-cold-gates.sh").read_text()
+        makefile = (CONFORMANCE_DIR / "Makefile").read_text()
+        expected = [
+            "dependency-manifests",
+            "tooling",
+            "structure",
+            "signatures",
+            "config-core",
+            "config-schema",
+            "pools",
+            "operators",
+            "serde",
+            "config-runtime-core",
+            "config-runtime-go",
+            "config-runtime-typescript",
+            "dependencies",
+            "standalone-components",
+            "published-components",
+            "transports",
+            "kafka",
+            "temporal",
+            "tracing",
+            "metrics",
+            "dashboards-core",
+            "logging",
+            "scenarios",
+            "call-semantics",
+            "sanitizers",
+            "generation",
+            "kubernetes",
+            "profiling",
+        ]
+        positions = [runner.index(f"  {gate}\n") for gate in expected]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("set -euo pipefail", runner)
+        self.assertIn("docker builder prune --all --force", runner)
+        self.assertIn('rm -rf "$root/benchmarks/examples/.artifacts"', runner)
+        self.assertIn('record_status "$gate" FAIL', runner)
+        self.assertIn('exit "$status"', runner)
+        self.assertIn('if [ "$resume" -eq 1 ] && passed "$gate"', runner)
+        self.assertIn("cold-gates:", makefile)
+        self.assertIn("cold-gates-resume:", makefile)
+
     def test_quickstart_proxy_wrapper_survives_profile_artifact_cleanup(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
         self.assertIn("servicelib-proxy-bin.XXXXXX", quickstart)

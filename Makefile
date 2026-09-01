@@ -41,7 +41,8 @@ endif
 	generation profiling profiling-all profiling-tests \
 	profiling-durable profiling-durable-quick \
 	benchmarks benchmark benchmarks-quick benchmarks-durable benchmarks-durable-quick benchmarks-tests \
-	fast integration release resume all clean dependency-source-cache-invalidate
+	fast integration release resume all clean dependency-source-cache-invalidate \
+	cold-gates cold-gates-resume
 
 .NOTPARALLEL: fast integration release resume all
 
@@ -77,6 +78,12 @@ integration: config-runtime dependencies standalone-components published-compone
 
 resume:
 	python3 resume.py
+
+cold-gates:
+	+MAKE_COMMAND="$(MAKE)" bash scripts/run-cold-gates.sh
+
+cold-gates-resume:
+	+MAKE_COMMAND="$(MAKE)" bash scripts/run-cold-gates.sh --resume
 
 structure:
 	python3 run_suite.py structure python3 structure/run.py
