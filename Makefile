@@ -198,4 +198,7 @@ benchmarks-tests:
 	python3 -m unittest discover -s benchmarks/examples -p 'test_*.py' -v
 
 clean:
+	@for path in .artifacts benchmarks/examples/.artifacts profiling/examples/.artifacts; do \
+		if [ -e "$$path" ]; then chmod -R u+w "$$path"; fi; \
+	done
 	rm -rf .artifacts benchmarks/examples/.artifacts profiling/examples/.artifacts
