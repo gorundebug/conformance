@@ -24,7 +24,7 @@ ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expandus
 OUTPUT = CONFORMANCE_DIR / ".artifacts" / "signatures" / "summary.json"
 TOKEN = re.compile(
     r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|'
-    r"[A-Za-z_]\w*|\d+(?:\.\d+)?|::|->\*|->|<=>|<<=|>>=|"
+    r"[A-Za-z_]\w*|\d+(?:\.\d+)?|::|->\*|->|<=>|<<=|>>=|<<|"
     r"&&|\|\||==|!=|<=|>=|\+\+|--|\+=|-=|\*=|/=|%=|&=|\|=|\^=|"
     r"\.\.\.|\[\[|\]\]|[{}()\[\];,:<>~=+\-*/%&|^!.?]"
 )
