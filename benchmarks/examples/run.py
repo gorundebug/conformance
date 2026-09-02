@@ -845,7 +845,7 @@ def verify_cpp_compose_isolation(
     if services is None:
         services = resolved_compose_services(language, env)
     for service in ("inventoryservice", "orderservice"):
-        expected_image = f"{expected_prefix}-{service}"
+        expected_image = f"{expected_prefix}-{service}:local"
         actual_image = services[service].get("image")
         if actual_image != expected_image:
             raise RuntimeError(
