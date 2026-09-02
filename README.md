@@ -74,7 +74,9 @@ Every invocation creates a timestamped run directory under
 `.artifacts/cold-gates/<profile>/runs/`. Complete stdout and stderr for each
 gate are stored in a separately named `<index>-<gate>.log` file. The terminal
 shows only suite boundaries and progress messages; when a gate fails, the
-runner prints the full log path and its last 200 lines before exiting.
+runner prints the full log path and its last 200 lines before exiting. The
+fourth column of the profile TSV ledger points to the log that produced each
+recorded PASS or FAIL.
 When dependency proxy mode is enabled, the gate log also records the sanitized
 route configuration. Matching `.proxy-requests.log` and
 `.proxy-outbound.log` files contain the Nexus access-log slices observed during

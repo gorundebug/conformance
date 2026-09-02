@@ -877,6 +877,7 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn('[proxy-audit] mode=proxy', runner)
         self.assertIn('$gate.proxy-requests.log', runner)
         self.assertIn('$gate.proxy-outbound.log', runner)
+        self.assertIn('"$gate" "$status" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$log_file"', runner)
         self.assertIn("cold-gates:", makefile)
         self.assertIn("cold-gates-resume:", makefile)
 

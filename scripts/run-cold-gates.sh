@@ -160,9 +160,11 @@ write_proxy_log_delta() {
 record_status() {
   local gate="$1"
   local status="$2"
+  local log_file="${3:-}"
   local temporary="$state_file.tmp.$$"
   awk -F '\t' -v gate="$gate" '$1 != gate' "$state_file" > "$temporary"
-  printf '%s\t%s\t%s\n' "$gate" "$status" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$temporary"
+  printf '%s\t%s\t%s\t%s\n' \
+    "$gate" "$status" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$log_file" >> "$temporary"
   mv "$temporary" "$state_file"
 }
 
@@ -203,7 +205,7 @@ for gate in "${gates[@]}"; do
   echo "==> [cold-gates:$profile] log $gate_log"
   echo "==> [cold-gates:$profile] clearing all BuildKit cache"
   if ! run_logged "$gate_log" docker builder prune --all --force; then
-    record_status "$gate" FAIL
+    record_status "$gate" FAIL "$gate_log"
     echo "==> [cold-gates:$profile] FAIL $gate: BuildKit cleanup failed" >&2
     echo "==> [cold-gates:$profile] full log: $gate_log" >&2
     tail -n 200 "$gate_log" >&2
@@ -226,7 +228,7 @@ for gate in "${gates[@]}"; do
       "$proxy_outbound_audit" outbound-requests "$gate_log"
   fi
   if [ "$status" -ne 0 ]; then
-    record_status "$gate" FAIL
+    record_status "$gate" FAIL "$gate_log"
     echo "==> [cold-gates:$profile] FAIL $index/$total $gate (exit $status)" >&2
     echo "==> [cold-gates:$profile] full log: $gate_log" >&2
     tail -n 200 "$gate_log" >&2
@@ -237,7 +239,7 @@ for gate in "${gates[@]}"; do
   docker ps -a --format '{{.ID}}' | sort > "$current_containers"
   comm -13 "$baseline_containers" "$current_containers" > "$new_containers"
   if [ -s "$new_containers" ]; then
-    record_status "$gate" FAIL
+    record_status "$gate" FAIL "$gate_log"
     echo "==> [cold-gates:$profile] FAIL $gate: containers were left behind" >&2
     while IFS= read -r container_id; do
       docker ps -a --filter "id=$container_id" --format '  {{.ID}} {{.Names}} {{.Status}}' >&2
@@ -245,7 +247,7 @@ for gate in "${gates[@]}"; do
     exit 1
   fi
 
-  record_status "$gate" PASS
+  record_status "$gate" PASS "$gate_log"
   echo "==> [cold-gates:$profile] PASS $index/$total $gate (log: $gate_log)"
 done
 
