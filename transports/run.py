@@ -561,7 +561,9 @@ def boost_command(build_dir: str, sanitizer: bool,
             "cppboostservicelib_grpc_streaming_test && " + run
         )
     return [
-        "docker", "run", "--rm", "-v",
+        "docker", "run", "--rm",
+        *dependency_environment.docker_arguments(BOOST),
+        "-v",
         cpp_source_cache.source_mount(BOOST),
         "-v", f"{BOOST}:/workspace",
         *cpp_source_cache.build_volume_mount_args(
@@ -600,7 +602,9 @@ def boost_kafka_command(build_dir: str, sanitizer: bool,
             "cppboostservicelib_kafka_endpoints_test && " + run
         )
     return [
-        "docker", "run", "--rm", "-v",
+        "docker", "run", "--rm",
+        *dependency_environment.docker_arguments(BOOST),
+        "-v",
         cpp_source_cache.source_mount(BOOST),
         "-v", f"{BOOST}:/workspace",
         *cpp_source_cache.build_volume_mount_args(
@@ -627,7 +631,9 @@ def boost_http_custom_command(skip_build: bool) -> list[str]:
             "cppboostservicelib_custom_endpoints_test && " + run
         )
     return [
-        "docker", "run", "--rm", "-v",
+        "docker", "run", "--rm",
+        *dependency_environment.docker_arguments(BOOST),
+        "-v",
         cpp_source_cache.source_mount(BOOST),
         "-v", f"{BOOST}:/workspace",
         *cpp_source_cache.build_volume_mount_args(
