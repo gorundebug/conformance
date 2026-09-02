@@ -91,9 +91,9 @@ package caches, images and pre-existing containers are not removed. A gate is
 also failed if it leaves a new container behind. A non-resume run clears prior
 suite, benchmark and profiling outcomes after the disposable graph profile has
 been prepared; the resume command preserves the ledger and completed results.
-The final two gates are `profiling` and then `benchmarks`, so the staged run
-verifies both performance toolchains after every correctness and infrastructure
-gate has passed.
+The final gate is `benchmarks`. Profiling remains a separately runnable full
+diagnostic matrix because combining two long performance toolchains with every
+correctness pass provides no additional semantic coverage.
 
 For a deliberately clean run, remove `.artifacts` before quickstart. Do this
 between the two complete profiles when neither run may reuse a prior suite
@@ -144,8 +144,7 @@ the development workspace where repositories sit next to `conformance`.
 For diagnosing a single language, call a runner directly (see below), e.g.
 `python3 tracing/run.py --language cpp`.
 
-Do not run benchmark, profiling and conformance concurrently. The full
-conformance matrix already includes its own mandatory profiling gate.
+Do not run benchmark, profiling and conformance concurrently.
 `quickstart.sh` holds a shared tooling lock, and the other runners refuse a
 concurrent run, preventing container/port collisions, invalid CPU measurements
 and concurrent writes to C++ build trees.
@@ -280,7 +279,7 @@ cover the common workflows:
 ```bash
 make fast         # dependency manifests, structure, signatures, config, pools, operators and serde
 make integration  # runtime, standalone/published builds, transports, Kafka, telemetry and scenarios
-make release      # fast + integration + mandatory profiling + aggregate report
+make release      # fast + integration + aggregate report
 make resume       # run only failed or missing leaf suites, then aggregate
 ```
 
@@ -582,12 +581,12 @@ Results are written to
 
 ## Profiling conformance and profiling toolkit
 
-The profiling gate runs `cppboostexample` and `cppboostnativeexample` with the
-same scenario, VUs, duration, warm-up and service/load-generator CPU quotas. It
-profiles both Order and Inventory, rejects errors or dropped iterations, and
-validates the schema and non-empty contents of every flamegraph, folded stack,
-top-frame and load artifact. Framework runs additionally require complete
-timestamped Asio worker/event-loop/gRPC CompletionQueue runtime metrics.
+The explicit profiling target runs all twelve framework/native implementations
+with the same scenario, VUs, duration, warm-up and service/load-generator CPU
+quotas. It captures CPU, allocation, scheduler and off-CPU profiles for Order
+and Inventory and validates the complete CPU matrix. The Boost pair additionally
+gets deep schema/content validation for every derived artifact and timestamped
+Asio worker/event-loop/gRPC CompletionQueue runtime metrics.
 The runner reads the actual generated CMake cache and rejects a stale Debug
 volume; `--skip-build` is accepted only when the reused framework binary is a
 Release build.
@@ -598,15 +597,13 @@ python3 profiling/run.py --skip-build
 python3 profiling/run.py --skip-run  # validate existing artifacts only
 ```
 
-The machine-readable result is `.artifacts/profiling/summary.json`. This is a
-mandatory part of `make all`; build-only or process-start smoke tests do not
-satisfy it.
+The machine-readable result is `.artifacts/profiling/summary.json`.
+Profiling is an explicit, expensive diagnostic target and is intentionally not
+part of `make integration`, `make release`, or the staged cold-gate chain.
 
 The complete profiler now lives in `profiling/examples/` in this repository;
-there is no runtime dependency on a separate `profiling` checkout. The
-mandatory gate deliberately keeps the expensive Release CPU, allocation,
-scheduler and off-CPU matrix focused on the Boost framework/native pair. The
-same toolkit retains profiling for every framework/native implementation,
+there is no runtime dependency on a separate `profiling` checkout. The toolkit
+retains profiling for every framework/native implementation,
 TypeScript Inspector CPU/heap profiles and runtime diagnostics, failure-path
 scenarios, host preparation switches and all derived flamegraph artifacts:
 
@@ -621,6 +618,9 @@ make profiling-tests
 
 With `quickstart.sh`, `--profile current` runs the same profiler against the
 disposable pooled graph; the default remains the canonical FunctionCall graph.
+Complete output is split by implementation under
+`profiling/examples/.artifacts/logs/<profile>/`; every file includes that
+language's build, dependency-proxy/cache, Compose and profiler output.
 
 ## Comparative benchmarks
 
@@ -648,6 +648,9 @@ artifacts remain under `benchmarks/examples/.artifacts/`. Benchmarks are an
 explicit target rather than part of `make all`: throughput is host-dependent
 and running it after the semantic and profiling suites would add a second long
 load matrix without increasing semantic coverage.
+Complete build/proxy/load output is stored per implementation under
+`benchmarks/examples/.artifacts/logs/<profile>/`; the terminal prints only
+concise progress and a failure tail.
 
 Normal benchmark and profiling targets keep local cron, Temporal and the
 Automation Service disabled. The `*-durable` targets are the explicit opt-in

@@ -1,4 +1,5 @@
 import json
+import sys
 import tempfile
 import unittest
 from argparse import Namespace
@@ -7,6 +8,50 @@ from pathlib import Path
 from unittest.mock import patch
 
 import run as benchmark
+
+
+class LanguageLoggingTest(unittest.TestCase):
+    def test_captures_complete_subprocess_output_per_profile_and_language(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            artifacts = Path(directory)
+            args = Namespace(graph_profile="current", result_prefix="")
+            with patch.object(benchmark, "ARTIFACTS", artifacts):
+                with benchmark.language_log(args, "go") as log:
+                    benchmark.run(
+                        [
+                            sys.executable,
+                            "-c",
+                            "import sys; print('proxy-request'); print('build-error', file=sys.stderr)",
+                        ],
+                        cwd=artifacts,
+                        env=environ.copy(),
+                    )
+                self.assertEqual(log, artifacts / "logs/current/go.log")
+                contents = log.read_text()
+                self.assertIn("proxy-request", contents)
+                self.assertIn("build-error", contents)
+
+
+class DependencyEnvironmentTest(unittest.TestCase):
+    def test_preserves_complete_proxy_contract_for_builds(self) -> None:
+        language = benchmark.LANGUAGES[0]
+        args = Namespace(
+            cores=2, duration="1s", graph_profile="current",
+            loadgen_cores=2, vus=1,
+        )
+        contract = {
+            "DEPENDENCY_PROXY_DIR": "/cache",
+            "DEPENDENCY_CONAN_REMOTE_URL": "http://proxy/conan-group",
+            "DEPENDENCY_GITHUB_RAW_URL": "http://proxy/github-raw",
+            "GOPROXY": "http://proxy/go-proxy/",
+            "NPM_CONFIG_REGISTRY": "http://proxy/npm-proxy/",
+            "PIP_INDEX_URL": "http://proxy/pypi-proxy/simple",
+            "CARGO_REGISTRIES_CRATES_IO_INDEX": "sparse+http://proxy/cargo-proxy/",
+        }
+        with patch.dict(environ, contract, clear=False):
+            actual = benchmark.environment(args, language)
+        for name, value in contract.items():
+            self.assertEqual(actual[name], value)
 
 
 class BenchmarkInputContractTest(unittest.TestCase):

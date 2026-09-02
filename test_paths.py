@@ -652,14 +652,14 @@ class DependencyRootTest(unittest.TestCase):
                 if expected is not None:
                     value["languages"] = sorted(expected)
                 summary.write_text(json.dumps(value) + "\n")
-            failed = artifacts / "profiling" / "summary.json"
+            failed = artifacts / "logging" / "summary.json"
             failed.write_text(json.dumps({
                 "status": "fail",
                 "diagnostics": [{
                     "code": "SG_VERIFICATION_COMMAND_FAILED",
                     "severity": "error",
                     "stage": "verification",
-                    "message": "Conformance suite 'profiling' failed",
+                    "message": "Conformance suite 'logging' failed",
                 }],
             }) + "\n")
 
@@ -670,12 +670,12 @@ class DependencyRootTest(unittest.TestCase):
                 globals_["main"]()
 
             result = json.loads((artifacts / "summary.json").read_text())
-            profiling = result["matrix"]["profiling"]
+            logging = result["matrix"]["logging"]
             self.assertEqual(
-                profiling["detail"],
-                "[SG_VERIFICATION_COMMAND_FAILED] Conformance suite 'profiling' failed",
+                logging["detail"],
+                "[SG_VERIFICATION_COMMAND_FAILED] Conformance suite 'logging' failed",
             )
-            self.assertEqual(profiling["diagnostics"][0]["stage"], "verification")
+            self.assertEqual(logging["diagnostics"][0]["stage"], "verification")
 
     def test_resume_selects_only_failed_or_missing_leaf_suites(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "resume.py"))
@@ -860,7 +860,6 @@ class DependencyRootTest(unittest.TestCase):
             "sanitizers",
             "generation",
             "kubernetes",
-            "profiling",
             "benchmarks",
         ]
         positions = [runner.index(f"  {gate}\n") for gate in expected]
@@ -1009,6 +1008,15 @@ class DependencyRootTest(unittest.TestCase):
         makefile = (CONFORMANCE_DIR / "Makefile").read_text()
         self.assertIn("benchmarks benchmark:", makefile)
         self.assertIn("profiling-all:", makefile)
+        self.assertNotIn("release: fast integration profiling", makefile)
+        self.assertEqual(
+            set(profiling_gate["ALL_LANGUAGES"]),
+            {
+                "go", "go-native", "cpp", "cpp-native", "cppboost",
+                "cppboost-native", "python", "python-native", "rust",
+                "rust-native", "typescript", "typescript-native",
+            },
+        )
 
     def test_runtime_graph_normalization_uses_semantic_node_identity(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "metrics/run.py"))

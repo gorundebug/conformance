@@ -18,7 +18,7 @@ SUITES = (
     "dependencies", "standalone-components", "published-components", "pools",
     "operators", "serde", "transports", "kafka", "temporal", "tracing", "metrics",
     "dashboards", "logging",
-    "scenarios", "call-semantics", "sanitizers", "generation", "kubernetes", "profiling",
+    "scenarios", "call-semantics", "sanitizers", "generation", "kubernetes",
 )
 LANGUAGE_SUITES = {
     "standalone-components": {

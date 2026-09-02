@@ -21,6 +21,11 @@ PROFILING_RUNNER = PROFILING_ROOT / "examples" / "run.py"
 PROFILE_ARTIFACTS = PROFILING_ROOT / "examples" / ".artifacts"
 ARTIFACTS = CONFORMANCE_DIR / ".artifacts" / "profiling"
 LANGUAGES = ("cppboost", "cppboost-native")
+ALL_LANGUAGES = (
+    "go", "go-native", "cpp", "cpp-native", "cppboost", "cppboost-native",
+    "python", "python-native", "rust", "rust-native",
+    "typescript", "typescript-native",
+)
 SERVICES = ("orderservice", "inventoryservice")
 RUNTIME_METRICS = {
     "runtime_active_work",
@@ -494,6 +499,38 @@ def validate_artifacts(args: argparse.Namespace) -> dict[str, Any]:
     return results
 
 
+def validate_cpu_matrix(args: argparse.Namespace) -> dict[str, Any]:
+    results: dict[str, Any] = {}
+    for language in ALL_LANGUAGES:
+        services: dict[str, Any] = {}
+        for service in SERVICES:
+            prefix = f"{language}.{service}"
+            svg = PROFILE_ARTIFACTS / f"{prefix}.flamegraph.svg"
+            folded = Path(f"{svg}.folded.txt")
+            top = Path(f"{svg}.top.txt")
+            load = PROFILE_ARTIFACTS / f"{prefix}.profiling-load.json"
+            require("<svg" in read_text(svg), f"invalid flamegraph SVG: {svg}")
+            require(
+                "self time" in read_text(top).lower(),
+                f"invalid top-frame summary: {top}",
+            )
+            services[service] = {
+                "folded": validate_folded(folded),
+                "load": validate_load(load, args),
+                "artifacts": {
+                    "svg": str(svg), "folded": str(folded),
+                    "top": str(top), "load": str(load),
+                    "log": str(
+                        PROFILE_ARTIFACTS / "logs" /
+                        os.environ.get("EXAMPLE_PROFILE", "function-call") /
+                        f"{language}.log"
+                    ),
+                },
+            }
+        results[language] = services
+    return results
+
+
 def compare_framework_native(results: dict[str, Any]) -> dict[str, Any]:
     comparison: dict[str, Any] = {}
     for service in SERVICES:
@@ -557,7 +594,7 @@ def compare_framework_native(results: dict[str, Any]) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run and validate the mandatory Boost framework/native profiling matrix"
+        description="Run all-language profiling and deeply validate the Boost pair"
     )
     parser.add_argument("--cores", type=int, default=2)
     parser.add_argument("--loadgen-cores", type=int, default=6)
@@ -576,14 +613,14 @@ def main() -> int:
         str(PROFILING_RUNNER),
         "--graph-profile",
         os.environ.get("EXAMPLE_PROFILE", "function-call"),
-        "--language", "cppboost",
-        "--language", "cppboost-native",
         "--cores", str(args.cores),
         "--loadgen-cores", str(args.loadgen_cores),
         "--vus", str(args.vus),
         "--duration", args.duration,
         "--warmup", args.warmup,
     ]
+    for language in ALL_LANGUAGES:
+        command.extend(("--language", language))
     if args.skip_build:
         command.append("--skip-build")
     for profile_kind in ("cpu", "allocation", "scheduler", "offcpu"):
@@ -597,7 +634,10 @@ def main() -> int:
         env["ASIO_GRPC_SOURCE_CONTEXT"] = str(asio_grpc_source)
         subprocess.run(command, cwd=PROFILING_ROOT, env=env, check=True)
 
-    results = validate_artifacts(args)
+    cpu_matrix = validate_cpu_matrix(args)
+    deep_results = validate_artifacts(args)
+    results = dict(cpu_matrix)
+    results.update(deep_results)
     summary = {
         "status": "pass",
         "workload": {
@@ -613,6 +653,14 @@ def main() -> int:
             "warmup": args.warmup,
         },
         "languages": results,
+        "logs": {
+            language: str(
+                PROFILE_ARTIFACTS / "logs" /
+                os.environ.get("EXAMPLE_PROFILE", "function-call") /
+                f"{language}.log"
+            )
+            for language in ALL_LANGUAGES
+        },
         "framework_native_comparison": compare_framework_native(results),
     }
     ARTIFACTS.mkdir(parents=True, exist_ok=True)

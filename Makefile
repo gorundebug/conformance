@@ -69,7 +69,7 @@ tooling:
 
 all: release
 
-release: fast integration profiling
+release: fast integration
 	python3 aggregate.py
 
 fast: dependency-manifests tooling structure signatures config pools operators serde

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import json
 import os
@@ -18,7 +19,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 import tooling_lock
 
@@ -41,6 +42,56 @@ USERVER_REMOTE_CONTEXT = (
     "https://github.com/userver-framework/userver.git"
     "#c9f77729c0edce7e423def2d4a4450aa7fc9d259"
 )
+ACTIVE_LANGUAGE_LOG: TextIO | None = None
+
+
+def language_log_path(args: argparse.Namespace, language: str) -> Path:
+    profile = getattr(args, "graph_profile", "function-call")
+    prefix = f"{args.result_prefix}." if args.result_prefix else ""
+    return ARTIFACTS / "logs" / profile / f"{prefix}{language}.log"
+
+
+def _terminal(message: str, *, error: bool = False) -> None:
+    print(message, file=sys.__stderr__ if error else sys.__stdout__, flush=True)
+
+
+def _failure_tail(path: Path, lines: int = 40) -> str:
+    try:
+        return "\n".join(path.read_text(errors="replace").splitlines()[-lines:])
+    except OSError as error:
+        return f"cannot read log tail: {error}"
+
+
+@contextlib.contextmanager
+def language_log(
+    args: argparse.Namespace, language: str, *, phase: str = "run", append: bool = False
+):
+    global ACTIVE_LANGUAGE_LOG
+    path = language_log_path(args, language)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    label = f"benchmark:{language}:{phase}"
+    _terminal(f"==> [{label}] START (log: {path})")
+    started = time.monotonic()
+    with path.open("a" if append else "w", encoding="utf-8", buffering=1) as output:
+        if append:
+            output.write(f"\n=== {phase} ===\n")
+        previous = ACTIVE_LANGUAGE_LOG
+        ACTIVE_LANGUAGE_LOG = output
+        try:
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                yield path
+        except BaseException:
+            elapsed = time.monotonic() - started
+            _terminal(
+                f"==> [{label}] FAIL ({elapsed:.1f}s; log: {path})",
+                error=True,
+            )
+            _terminal(_failure_tail(path), error=True)
+            raise
+        finally:
+            ACTIVE_LANGUAGE_LOG = previous
+    elapsed = time.monotonic() - started
+    _terminal(f"==> [{label}] PASS ({elapsed:.1f}s; log: {path})")
 
 
 def cppboost_dependency_context(dependency: str) -> str:
@@ -259,14 +310,22 @@ def run(
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     print("+", " ".join(command), flush=True)
-    return subprocess.run(
-        command,
-        cwd=cwd,
-        env=env,
-        check=check,
-        text=True,
+    completed = subprocess.run(
+        command, cwd=cwd, env=env, check=False, text=True,
         capture_output=capture,
+        stdout=None if capture or ACTIVE_LANGUAGE_LOG is None else ACTIVE_LANGUAGE_LOG,
+        stderr=None if capture or ACTIVE_LANGUAGE_LOG is None else subprocess.STDOUT,
     )
+    if capture and ACTIVE_LANGUAGE_LOG is not None:
+        if completed.stdout:
+            ACTIVE_LANGUAGE_LOG.write(completed.stdout)
+        if completed.stderr:
+            ACTIVE_LANGUAGE_LOG.write(completed.stderr)
+    if check and completed.returncode != 0:
+        raise subprocess.CalledProcessError(
+            completed.returncode, command, completed.stdout, completed.stderr
+        )
+    return completed
 
 
 def compose_command(language: Language, *args: str) -> list[str]:
@@ -1025,6 +1084,12 @@ def write_results(results: list[dict[str, Any]], args: argparse.Namespace) -> No
             "expected_status": args.expected_status,
         },
         "results": results,
+        "logs": {
+            result["language"]: str(
+                language_log_path(args, result["language"])
+            )
+            for result in results
+        },
     }
     results_json = ARTIFACTS / artifact_name(args, "results.json")
     results_csv = ARTIFACTS / artifact_name(args, "results.csv")
@@ -1099,6 +1164,7 @@ def write_results(results: list[dict[str, Any]], args: argparse.Namespace) -> No
         f"- Virtual users: `{args.vus}`\n"
         f"- Warm-up: `{args.warmup}`\n"
         f"- Measurement: `{args.runs} × {args.duration}`\n\n"
+        f"- Complete per-language logs: `{language_log_path(args, '<language>').parent}`\n\n"
         + header
         + separator
         + "\n".join(table_rows)
@@ -1223,6 +1289,8 @@ def main() -> int:
         return 0
     ensure_examples(selected, args)
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    for language in selected:
+        language_log_path(args, language.name).unlink(missing_ok=True)
     cpp_selected = any(language.name.startswith("cpp") for language in selected)
     if cpp_selected:
         if any(language.name == "cpp" for language in selected):
@@ -1236,18 +1304,22 @@ def main() -> int:
     if any(language.name == "python" for language in selected):
         prepare_python_configs()
 
+    results = []
     if not args.skip_build:
         for language in selected:
-            build(language, environment(args, language))
+            with language_log(args, language.name, phase="build", append=True):
+                build(language, environment(args, language))
     if args.build_only:
         return 0
 
-    results = []
     for language in selected:
-        print(f"\n=== {language.name} ===", flush=True)
-        runs = benchmark_language(language, args)
-        results.append(aggregate(language, runs, args))
-        write_results(results, args)
+        with language_log(
+            args, language.name, phase="run", append=True
+        ):
+            print(f"=== {language.name} ===", flush=True)
+            runs = benchmark_language(language, args)
+            results.append(aggregate(language, runs, args))
+            write_results(results, args)
 
     print(
         "\n" + (ARTIFACTS / artifact_name(args, "results.md")).read_text(),

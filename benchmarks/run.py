@@ -72,6 +72,11 @@ def validate(results: dict[str, Any], args: argparse.Namespace) -> None:
     }
     require(actual == LANGUAGES,
             f"benchmark language matrix differs: {sorted(actual)}")
+    logs = results.get("logs")
+    require(isinstance(logs, dict), "benchmark per-language logs are missing")
+    require(set(logs) == LANGUAGES, "benchmark log language matrix differs")
+    for language, path in logs.items():
+        require(Path(path).is_file(), f"{language}: benchmark log is missing: {path}")
     for row in rows:
         require(isinstance(row, dict), "benchmark row must be an object")
         language = row.get("language")
@@ -123,6 +128,7 @@ def main() -> int:
         "languages": sorted(LANGUAGES),
         "parameters": results["parameters"],
         "results": results["results"],
+        "logs": results["logs"],
         "artifacts": {
             "json": str(RUNNER_ARTIFACTS / "results.json"),
             "csv": str(RUNNER_ARTIFACTS / "results.csv"),
