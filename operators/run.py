@@ -110,25 +110,32 @@ FUNCTION_CONTRACTS = {
     ROOT / "cppexample/orderservice/internal/functions/order/process_order_items.hpp": {
         "required": (
             "template <typename Output>", "servicelib::StreamBase& stream",
-            "Output&& out", "std::unique_ptr<ProcessOrderItems> MakeProcessOrderItems",
+            "Output&& out",
+            "userver::engine::TaskWithResult<std::unique_ptr<ProcessOrderItems>> MakeProcessOrderItems",
         ),
         "forbidden": ("typename... Outputs", "std::get<0>(collectors)"),
     },
     ROOT / "cppboostexample/orderservice/internal/functions/order/process_order_items.hpp": {
         "required": (
             "template <typename Output>", "servicelib::StreamBase& stream",
-            "Output&& out", "std::unique_ptr<ProcessOrderItems> MakeProcessOrderItems",
+            "Output&& out",
+            "boost::asio::awaitable<std::unique_ptr<ProcessOrderItems>> MakeProcessOrderItems",
         ),
         "forbidden": ("typename... Outputs", "std::get<0>(collectors)"),
     },
     ROOT / "pyexample/orderservice/src/order_service/internal/functions/order/process_order_items.py": {
-        "required": ("stream: Stream", "value: Order", "out: Collect[OrderItem]"),
+        "required": (
+            "stream: Stream", "value: Order", "out: Collect[OrderItem]",
+            "async def make_process_order_items(", ") -> ProcessOrderItems:",
+        ),
         "forbidden": ("*outputs", "*collectors"),
     },
     ROOT / "rustexample/orderservice/src/internal/functions/order/process_order_items.rs": {
         "required": (
             "_stream: &dyn RuntimeStream", "value: &Order",
             "out: &Collector<OrderItem>",
+            "pub async fn make_process_order_items(",
+            ") -> RuntimeResult<ProcessOrderItems>",
         ),
         "forbidden": ("outputs: &[", "collectors: &[", "Payload<Order>", "&Stream<OrderItem>"),
     },
@@ -137,22 +144,22 @@ FUNCTION_CONTRACTS = {
             "_stream: Stream",
             "value: Readonly<Order>",
             "out: Collector<OrderItem>",
-            "export function makeProcessOrderItems(",
-            "): ProcessOrderItems",
+            "export async function makeProcessOrderItems(",
+            "): Promise<ProcessOrderItems>",
         ),
         "forbidden": ("...outputs", "...collectors", "Payload<Order>", "stream?: Stream"),
     },
     ROOT / "servicegen/internal/codegenerator/templates/cpp/functions/function_hpp.tmpl": {
         "required": (
             "servicelib::StreamBase& stream", "template <typename Output>",
-            "inline std::unique_ptr<{{.Name}}> Make{{.Name}}",
+            "inline userver::engine::TaskWithResult<std::unique_ptr<{{.Name}}>> Make{{.Name}}",
         ),
         "forbidden": ("typename... Outputs", "std::get<0>"),
     },
     ROOT / "servicegen/internal/codegenerator/templates/cppboost/functions/function_hpp.tmpl": {
         "required": (
             "servicelib::StreamBase& stream", "template <typename Output>",
-            "inline std::unique_ptr<{{.Name}}> Make{{.Name}}",
+            "inline boost::asio::awaitable<std::unique_ptr<{{.Name}}>> Make{{.Name}}",
         ),
         "forbidden": ("typename... Outputs", "std::get<0>"),
     },
