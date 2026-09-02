@@ -75,6 +75,14 @@ Every invocation creates a timestamped run directory under
 gate are stored in a separately named `<index>-<gate>.log` file. The terminal
 shows only suite boundaries and progress messages; when a gate fails, the
 runner prints the full log path and its last 200 lines before exiting.
+When dependency proxy mode is enabled, the gate log also records the sanitized
+route configuration. Matching `.proxy-requests.log` and
+`.proxy-outbound.log` files contain the Nexus access-log slices observed during
+that gate. A non-empty request log proves that clients contacted Nexus; a
+non-empty outbound log shows which cache misses Nexus fetched upstream. Git
+mirror routing and its preflight result remain visible in the enclosing
+quickstart output, while any per-gate Git download URLs remain in the full gate
+log.
 
 Only BuildKit's build cache is pruned before every gate. Nexus, Git mirrors,
 package caches, images and pre-existing containers are not removed. A gate is

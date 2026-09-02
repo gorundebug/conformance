@@ -91,6 +91,72 @@ run_logged() {
   return "$command_status"
 }
 
+proxy_log_size() {
+  local path="$1"
+  if [ -r "$path" ]; then
+    wc -c < "$path" | tr -d '[:space:]'
+  else
+    printf '0\n'
+  fi
+}
+
+write_proxy_configuration() {
+  local log_file="$1"
+  if [ -z "${DEPENDENCY_PROXY_DIR:-}" ]; then
+    echo "[proxy-audit] mode=direct" >> "$log_file"
+    return
+  fi
+
+  {
+    echo "[proxy-audit] mode=proxy"
+    printf '[proxy-audit] data_dir=%s\n' "$DEPENDENCY_PROXY_DIR"
+    env | LC_ALL=C sort | awk -F= '
+      $1 == "DEPENDENCY_PROXY_CLIENT_HOST" ||
+      $1 == "DEPENDENCY_PROXY_DOCKER_HOST" ||
+      $1 == "DEPENDENCY_GIT_MIRROR_URL" ||
+      $1 == "DEPENDENCY_CONAN_REMOTE_URL" ||
+      $1 == "DEPENDENCY_DOCKER_REGISTRY" ||
+      $1 == "GOPROXY" ||
+      $1 == "NPM_CONFIG_REGISTRY" ||
+      $1 == "PIP_INDEX_URL" ||
+      $1 == "UV_INDEX_URL" ||
+      $1 == "CARGO_REGISTRIES_CRATES_IO_INDEX" {
+        print "[proxy-audit] route " $0
+      }
+    '
+  } | sed -E 's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\1***:***@#g' >> "$log_file"
+}
+
+write_proxy_log_delta() {
+  local source_file="$1"
+  local initial_size="$2"
+  local audit_file="$3"
+  local label="$4"
+  local gate_log="$5"
+
+  if [ ! -r "$source_file" ]; then
+    printf '[proxy-audit] %s unavailable: %s\n' "$label" "$source_file" >> "$gate_log"
+    return
+  fi
+
+  local final_size
+  final_size="$(proxy_log_size "$source_file")"
+  if [ "$final_size" -ge "$initial_size" ]; then
+    tail -c "+$((initial_size + 1))" "$source_file" > "$audit_file"
+  else
+    # Nexus rotated the active log during the gate. Preserve the complete new
+    # active file and make the rotation explicit instead of reporting a false
+    # zero-request result.
+    printf '[proxy-audit] active log rotated during gate; new active file follows\n' > "$audit_file"
+    cat "$source_file" >> "$audit_file"
+  fi
+
+  local entries
+  entries="$(wc -l < "$audit_file" | tr -d '[:space:]')"
+  printf '[proxy-audit] %s entries=%s file=%s\n' \
+    "$label" "$entries" "$audit_file" >> "$gate_log"
+}
+
 record_status() {
   local gate="$1"
   local status="$2"
@@ -126,7 +192,14 @@ for gate in "${gates[@]}"; do
 
   echo "==> [cold-gates:$profile] START $index/$total $gate"
   gate_log="$log_dir/$(printf '%02d' "$index")-$gate.log"
+  proxy_request_audit="$log_dir/$(printf '%02d' "$index")-$gate.proxy-requests.log"
+  proxy_outbound_audit="$log_dir/$(printf '%02d' "$index")-$gate.proxy-outbound.log"
   : > "$gate_log"
+  nexus_request_log="${DEPENDENCY_PROXY_DIR:-}/nexus/log/request.log"
+  nexus_outbound_log="${DEPENDENCY_PROXY_DIR:-}/nexus/log/outbound-request.log"
+  nexus_request_offset="$(proxy_log_size "$nexus_request_log")"
+  nexus_outbound_offset="$(proxy_log_size "$nexus_outbound_log")"
+  write_proxy_configuration "$gate_log"
   echo "==> [cold-gates:$profile] log $gate_log"
   echo "==> [cold-gates:$profile] clearing all BuildKit cache"
   if ! run_logged "$gate_log" docker builder prune --all --force; then
@@ -145,6 +218,12 @@ for gate in "${gates[@]}"; do
     # prerequisite old prevents every later one-gate invocation from silently
     # running a second suite before the named gate.
     run_logged "$gate_log" "$make_command" --no-print-directory -o dependency-manifests "$gate" || status=$?
+  fi
+  if [ -n "${DEPENDENCY_PROXY_DIR:-}" ]; then
+    write_proxy_log_delta "$nexus_request_log" "$nexus_request_offset" \
+      "$proxy_request_audit" requests "$gate_log"
+    write_proxy_log_delta "$nexus_outbound_log" "$nexus_outbound_offset" \
+      "$proxy_outbound_audit" outbound-requests "$gate_log"
   fi
   if [ "$status" -ne 0 ]; then
     record_status "$gate" FAIL
