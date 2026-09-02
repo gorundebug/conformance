@@ -80,6 +80,7 @@
       "runtime/config/type_types.hpp",
       "runtime/consumer.hpp",
       "runtime/context.hpp",
+      "runtime/datasource.hpp",
       "runtime/detail/kafka_admin.hpp",
       "runtime/environment.hpp",
       "runtime/logging/logging.hpp",
