@@ -186,9 +186,19 @@
       "scripts/quickstart.generated.sh"
     ],
     "changed_interface_boundaries": [
+      "analyticsservice/internal/functions/analytics/count_order_processed.hpp",
+      "analyticsservice/internal/functions/cron/analytics_schedule_source.hpp",
       "analyticsservice/internal/functions/endpoint/order_processed_endpoint_source.hpp",
+      "inventoryservice/internal/functions/endpoint/process_order_item_source.hpp",
+      "inventoryservice/internal/functions/inventory_item/get_inventory_item_data.hpp",
       "orderservice/internal/functions/endpoint/order_processed_endpoint_sink.hpp",
-      "orderservice/internal/functions/endpoint/process_order_source.hpp"
+      "orderservice/internal/functions/endpoint/process_order_item_sink.hpp",
+      "orderservice/internal/functions/endpoint/process_order_source.hpp",
+      "orderservice/internal/functions/order/map_order_item_result_to_order_state.hpp",
+      "orderservice/internal/functions/order/map_to_order_processed.hpp",
+      "orderservice/internal/functions/order/map_to_order_state.hpp",
+      "orderservice/internal/functions/order/process_order_items.hpp",
+      "orderservice/internal/functions/order/soft_deadline.hpp"
     ],
     "required_boundary_interface_tokens": {
       "orderservice/internal/functions/endpoint/process_order_source.hpp": [
