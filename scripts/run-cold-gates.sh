@@ -5,6 +5,8 @@ root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 profile="${EXAMPLE_PROFILE:-function-call}"
 state_dir="$root/.artifacts/cold-gates"
 state_file="$state_dir/$profile.tsv"
+run_id="${COLD_GATES_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+log_dir="$state_dir/$profile/runs/$run_id"
 resume=0
 
 if [ "${1:-}" = "--resume" ]; then
@@ -66,6 +68,28 @@ if [ "$resume" -eq 0 ]; then
 fi
 mkdir -p "$state_dir"
 touch "$state_file"
+mkdir -p "$log_dir"
+
+run_logged() {
+  local log_file="$1"
+  shift
+
+  set +e
+  "$@" 2>&1 \
+    | tee -a "$log_file" \
+    | awk '
+        /^==>/ ||
+        /^\[progress\]/ ||
+        /^\[[^]]+\] (START|PASS|FAIL)/ ||
+        /conformance (passed|failed)/ {
+          print
+          fflush()
+        }
+      '
+  local command_status="${PIPESTATUS[0]}"
+  set -e
+  return "$command_status"
+}
 
 record_status() {
   local gate="$1"
@@ -101,25 +125,32 @@ for gate in "${gates[@]}"; do
   fi
 
   echo "==> [cold-gates:$profile] START $index/$total $gate"
+  gate_log="$log_dir/$(printf '%02d' "$index")-$gate.log"
+  : > "$gate_log"
+  echo "==> [cold-gates:$profile] log $gate_log"
   echo "==> [cold-gates:$profile] clearing all BuildKit cache"
-  if ! docker builder prune --all --force; then
+  if ! run_logged "$gate_log" docker builder prune --all --force; then
     record_status "$gate" FAIL
     echo "==> [cold-gates:$profile] FAIL $gate: BuildKit cleanup failed" >&2
+    echo "==> [cold-gates:$profile] full log: $gate_log" >&2
+    tail -n 200 "$gate_log" >&2
     exit 1
   fi
 
   status=0
   if [ "$gate" = "dependency-manifests" ]; then
-    "$make_command" --no-print-directory "$gate" || status=$?
+    run_logged "$gate_log" "$make_command" --no-print-directory "$gate" || status=$?
   else
     # dependency-manifests is the first explicit gate. Marking that phony
     # prerequisite old prevents every later one-gate invocation from silently
     # running a second suite before the named gate.
-    "$make_command" --no-print-directory -o dependency-manifests "$gate" || status=$?
+    run_logged "$gate_log" "$make_command" --no-print-directory -o dependency-manifests "$gate" || status=$?
   fi
   if [ "$status" -ne 0 ]; then
     record_status "$gate" FAIL
     echo "==> [cold-gates:$profile] FAIL $index/$total $gate (exit $status)" >&2
+    echo "==> [cold-gates:$profile] full log: $gate_log" >&2
+    tail -n 200 "$gate_log" >&2
     echo "==> [cold-gates:$profile] resume with: bash ./quickstart.sh --profile $profile -- cold-gates-resume" >&2
     exit "$status"
   fi
@@ -136,7 +167,7 @@ for gate in "${gates[@]}"; do
   fi
 
   record_status "$gate" PASS
-  echo "==> [cold-gates:$profile] PASS $index/$total $gate"
+  echo "==> [cold-gates:$profile] PASS $index/$total $gate (log: $gate_log)"
 done
 
 echo "==> [cold-gates:$profile] PASS all $total gates"

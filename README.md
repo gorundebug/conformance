@@ -70,6 +70,12 @@ DEPENDENCY_PROXY_DIR=/path/to/dependency-proxy \
   ./quickstart.sh --profile current -- cold-gates-resume
 ```
 
+Every invocation creates a timestamped run directory under
+`.artifacts/cold-gates/<profile>/runs/`. Complete stdout and stderr for each
+gate are stored in a separately named `<index>-<gate>.log` file. The terminal
+shows only suite boundaries and progress messages; when a gate fails, the
+runner prints the full log path and its last 200 lines before exiting.
+
 Only BuildKit's build cache is pruned before every gate. Nexus, Git mirrors,
 package caches, images and pre-existing containers are not removed. A gate is
 also failed if it leaves a new container behind. A non-resume run clears prior

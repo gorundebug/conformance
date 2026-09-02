@@ -871,6 +871,9 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn('record_status "$gate" FAIL', runner)
         self.assertIn('exit "$status"', runner)
         self.assertIn('if [ "$resume" -eq 1 ] && passed "$gate"', runner)
+        self.assertIn('tee -a "$log_file"', runner)
+        self.assertIn('tail -n 200 "$gate_log"', runner)
+        self.assertIn('$state_dir/$profile/runs/$run_id', runner)
         self.assertIn("cold-gates:", makefile)
         self.assertIn("cold-gates-resume:", makefile)
 
