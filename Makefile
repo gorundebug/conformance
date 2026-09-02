@@ -39,6 +39,7 @@ endif
 	kafka temporal tracing metrics dashboards dashboards-core logging scenarios \
 	call-semantics sanitizers standalone-components published-components kubernetes \
 	generation profiling profiling-all profiling-tests \
+	idle-cpu \
 	profiling-durable profiling-durable-quick \
 	benchmarks benchmark benchmarks-quick benchmarks-durable benchmarks-durable-quick benchmarks-tests \
 	fast integration release resume all clean dependency-source-cache-invalidate \
@@ -52,7 +53,7 @@ endif
 MANIFEST_GATED_TARGETS := tooling structure signatures config-core config-schema \
 	config-runtime-core config-runtime-go config-runtime-typescript dependencies \
 	standalone-components published-components pools operators serde transports kafka temporal tracing \
-	metrics dashboards-core logging scenarios call-semantics sanitizers generation kubernetes profiling benchmarks
+	metrics dashboards-core logging scenarios call-semantics sanitizers generation kubernetes idle-cpu profiling benchmarks
 $(MANIFEST_GATED_TARGETS): dependency-manifests
 
 test-paths:
@@ -168,6 +169,9 @@ generation:
 
 kubernetes:
 	python3 run_suite.py kubernetes python3 kubernetes/run.py
+
+idle-cpu:
+	python3 run_suite.py idle-cpu python3 idle_cpu/run.py
 
 profiling:
 	python3 run_suite.py profiling python3 profiling/run.py

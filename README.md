@@ -622,6 +622,28 @@ Complete output is split by implementation under
 `profiling/examples/.artifacts/logs/<profile>/`; every file includes that
 language's build, dependency-proxy/cache, Compose and profiler output.
 
+## Temporal idle CPU preflight
+
+Before a clean `current` conformance run, the explicit `idle-cpu` target checks
+the configured-idle Automation Service in every Temporal-capable framework:
+Go, Python and TypeScript. For each language it builds and starts the complete
+four-service project together with Redpanda and Temporal, waits for all four
+service readiness endpoints, samples the Automation Service container without
+external requests, saves its logs, and tears the complete environment down.
+
+```bash
+bash ./quickstart.sh --profile current -- idle-cpu
+```
+
+The terminal reports average, p95 and maximum container CPU. Full service/build
+output, the effective dependency-proxy routes and every raw sample are saved in
+`.artifacts/idle-cpu/logs/<language>.log`; the combined machine-readable result
+is `.artifacts/idle-cpu/summary.json`. This is an observational preflight rather
+than a benchmark: configured cron schedules and Temporal polling remain enabled.
+It is intentionally separate from `cold-gates`, so the expensive three-language
+startup is run once immediately before the clean `current` cycle instead of in
+both graph profiles.
+
 ## Comparative benchmarks
 
 The former standalone benchmark toolkit now lives in `benchmarks/examples/`.
