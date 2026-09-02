@@ -165,12 +165,13 @@ def run(implementation: Implementation, *args: str, check: bool = True) -> None:
 
 def prepare_grpc_probe() -> None:
     """Build the reusable static probe once instead of running `go run` per RPC."""
-    generated_api = (
-        ROOT
-        / "goexample/inventory_service_api/pkg/generated/proto/"
-        "inventoryserviceapi/processorderitem/processorderitem.pb.go"
+    generated_api = ROOT / "goexample/inventory_service_api/pkg/generated/proto/inventoryserviceapi"
+    required_generated_api = (
+        generated_api / "inventoryserviceapi.generated.pb.go",
+        generated_api / "inventoryserviceapi.generated_grpc.pb.go",
+        generated_api / "processorderitem/processorderitem.pb.go",
     )
-    if not generated_api.is_file():
+    if not all(path.is_file() for path in required_generated_api):
         generate_command = ["make", "gen-proto"]
         print("+", " ".join(generate_command), flush=True)
         subprocess.run(
