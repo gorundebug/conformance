@@ -100,6 +100,30 @@ class DependencyEnvironmentTest(unittest.TestCase):
             self.assertEqual(environment["BASE_VALUE"], "kept")
             self.assertEqual(environment["NPM_CONFIG_REGISTRY"], "mirror/npm")
 
+    def test_container_contract_is_translated_for_host_dependency_commands(self) -> None:
+        environment = {
+            "DEPENDENCY_PROXY_DIR": "/cache",
+            "GOPROXY": "http://host.docker.internal:18081/repository/go-proxy/",
+            "PIP_TRUSTED_HOST": "host.docker.internal",
+            "GIT_CONFIG_KEY_0": (
+                "url.http://host.docker.internal:18084/cgi-bin/git/github.com/.insteadOf"
+            ),
+            "UNRELATED": "kept",
+        }
+
+        host_environment = dependency_environment.for_host(environment)
+
+        self.assertEqual(
+            host_environment["GOPROXY"],
+            "http://localhost:18081/repository/go-proxy/",
+        )
+        self.assertEqual(host_environment["PIP_TRUSTED_HOST"], "localhost")
+        self.assertEqual(
+            host_environment["GIT_CONFIG_KEY_0"],
+            "url.http://localhost:18084/cgi-bin/git/github.com/.insteadOf",
+        )
+        self.assertEqual(host_environment["UNRELATED"], "kept")
+
 
 if __name__ == "__main__":
     unittest.main()

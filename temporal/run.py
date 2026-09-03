@@ -323,7 +323,7 @@ def verify_go_workflowcheck(language: Language, env: dict[str, str]) -> bool:
     tool = ARTIFACTS / "tools" / "workflowcheck-v0.5.0"
     if not tool.exists():
         tool.parent.mkdir(parents=True, exist_ok=True)
-        install_env = env.copy()
+        install_env = dependency_environment.for_host(env)
         install_env["GOBIN"] = str(tool.parent)
         dependency_environment.run_dependency_command(
             [

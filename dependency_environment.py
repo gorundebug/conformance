@@ -49,6 +49,25 @@ def from_project(project: Path) -> dict[str, str]:
     return _read_environment([str(script), "--print-environment"])
 
 
+def for_host(environment: dict[str, str]) -> dict[str, str]:
+    """Translate a generated container dependency contract for host commands.
+
+    Generated projects deliberately expose container-reachable proxy URLs,
+    because their normal consumer is Docker/Compose.  A conformance runner may
+    also need to execute a dependency command directly on the host.  Keep the
+    same proxy route and credentials, changing only the address used to reach
+    that proxy from the host.
+    """
+    docker_host = environment.get(
+        "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+    )
+    proxy_host = environment.get("DEPENDENCY_PROXY_HOST", "localhost")
+    return {
+        name: _host_value(value, docker_host, proxy_host)
+        for name, value in environment.items()
+    }
+
+
 def _read_environment(command: list[str]) -> dict[str, str]:
     process = subprocess.run(
         command,
@@ -152,3 +171,16 @@ def _docker_value(value: str, proxy_host: str, docker_host: str) -> str:
             netloc += f":{parsed.port}"
         return urlunsplit(parsed._replace(netloc=netloc))
     return value.replace(f"://{proxy_host}:", f"://{docker_host}:")
+
+
+def _host_value(value: str, docker_host: str, proxy_host: str) -> str:
+    if value == docker_host:
+        return proxy_host
+    parsed = urlsplit(value)
+    if parsed.scheme and parsed.hostname == docker_host:
+        rendered_host = f"[{proxy_host}]" if ":" in proxy_host else proxy_host
+        netloc = rendered_host
+        if parsed.port is not None:
+            netloc += f":{parsed.port}"
+        return urlunsplit(parsed._replace(netloc=netloc))
+    return value.replace(f"://{docker_host}:", f"://{proxy_host}:")
