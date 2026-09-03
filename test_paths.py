@@ -471,19 +471,32 @@ class DependencyRootTest(unittest.TestCase):
 
         linked_dependencies = globals_["linked_dependencies"]
         linked_dependencies.__globals__["command"] = command
-        with (
-            mock.patch.dict(
-                os.environ,
-                {"CPPBOOST_BUILD_VOLUME": "expected-build-volume"},
-                clear=False,
-            ),
-            mock.patch.object(
-                globals_["cpp_source_cache"],
-                "build_volume_name",
-                return_value="expected-build-volume",
-            ),
-        ):
-            linked_dependencies(skip_build=True)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            example = root / "cppboostexample"
+            example.mkdir()
+            (root / "cppboostnativeexample").mkdir()
+            (example / "docker-compose.cmake.generated.yml").write_text(
+                "services:\n"
+                "  cpp-build:\n"
+                "    image: cppboostexample-cpp-build:local\n"
+            )
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"CPPBOOST_BUILD_VOLUME": "expected-build-volume"},
+                    clear=False,
+                ),
+                mock.patch.dict(
+                    linked_dependencies.__globals__, {"ROOT": root}
+                ),
+                mock.patch.object(
+                    globals_["cpp_source_cache"],
+                    "build_volume_name",
+                    return_value="expected-build-volume",
+                ),
+            ):
+                linked_dependencies(skip_build=True)
 
         framework_commands = commands[:2]
         self.assertEqual(len(framework_commands), 2)
@@ -534,8 +547,11 @@ class DependencyRootTest(unittest.TestCase):
 
     def test_standalone_rust_runs_only_declared_generation_targets(self) -> None:
         source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
+        self.assertIn(
+            "for item in (*DECLARED_MODULES[component], component):", source
+        )
         self.assertIn('r"(?m)^generate\\s*:"', source)
-        self.assertIn('if re.search(', source)
+        self.assertIn("for path in makefiles", source)
 
     def test_standalone_typescript_forces_proxy_registry(self) -> None:
         source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
