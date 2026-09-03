@@ -138,7 +138,7 @@ LANGUAGES = (
         BENCHMARK_DIR / "compose.go-native.yml",
         verify_framework_pool=False,
         repository="https://github.com/gorundebug/gonativeexample.git",
-        revision="v0.2.76",
+        revision="v0.2.77",
     ),
     Language("cpp", ROOT / "cppexample", BENCHMARK_DIR / "compose.cpp.yml"),
     Language(
@@ -147,7 +147,7 @@ LANGUAGES = (
         BENCHMARK_DIR / "compose.cpp-native.yml",
         verify_framework_pool=False,
         repository="https://github.com/gorundebug/cppnativeexample.git",
-        revision="v0.2.76",
+        revision="v0.2.77",
     ),
     Language(
         "cpp-boost",
@@ -160,7 +160,7 @@ LANGUAGES = (
         BENCHMARK_DIR / "compose.cpp-boost-native.yml",
         verify_framework_pool=False,
         repository="https://github.com/gorundebug/cppboostnativeexample.git",
-        revision="v0.2.76",
+        revision="v0.2.77",
     ),
     Language("python", ROOT / "pyexample", BENCHMARK_DIR / "compose.python.yml"),
     Language(
@@ -169,7 +169,7 @@ LANGUAGES = (
         BENCHMARK_DIR / "compose.python-native.yml",
         verify_framework_pool=False,
         repository="https://github.com/gorundebug/pynativeexample.git",
-        revision="v0.2.76",
+        revision="v0.2.77",
     ),
     Language("rust", ROOT / "rustexample", BENCHMARK_DIR / "compose.rust.yml"),
     Language(
@@ -178,7 +178,7 @@ LANGUAGES = (
         BENCHMARK_DIR / "compose.rust-native.yml",
         verify_framework_pool=False,
         repository="https://github.com/gorundebug/rustnativeexample.git",
-        revision="v0.2.76",
+        revision="v0.2.77",
     ),
     Language(
         "typescript",
@@ -193,7 +193,7 @@ LANGUAGES = (
         repository="https://github.com/gorundebug/tsnativeexample.git",
         # Managed by servicegen's atomic release script. ``main`` is permitted
         # only until the first TypeScript-native release tag is published.
-        revision="v0.2.76",
+        revision="v0.2.77",
     ),
 )
 
