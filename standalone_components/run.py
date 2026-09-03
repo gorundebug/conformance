@@ -753,18 +753,24 @@ def rust_cargo_arguments() -> list[str]:
 def build_rust(target: Path, component: str) -> None:
     component_dir = component_directory("rust", component)
     package = component_package_name("rust", target / component_dir)
-    generation_targets = [
-        component_directory("rust", item)
-        for item in (*DECLARED_MODULES[component], component)
-        if re.search(
-            r"(?m)^generate\s*:",
-            (target / component_directory("rust", item) / "Makefile").read_text(),
-        )
-    ]
-    generation = " && ".join(
-        f"make -C /workspace/{item} generate"
-        for item in generation_targets
-    )
+    generation_commands: list[str] = []
+    for item in (*DECLARED_MODULES[component], component):
+        item_dir = component_directory("rust", item)
+        item_root = target / item_dir
+        openapi_generator = item_root / "generate-openapi.generated.sh"
+        if openapi_generator.is_file():
+            generation_commands.append(
+                f"/workspace/{item_dir}/generate-openapi.generated.sh"
+            )
+            continue
+        makefiles = [item_root / "Makefile", item_root / "make.generated.mk"]
+        if any(
+            path.is_file()
+            and re.search(r"(?m)^generate\s*:", path.read_text())
+            for path in makefiles
+        ):
+            generation_commands.append(f"make -C /workspace/{item_dir} generate")
+    generation = " && ".join(generation_commands)
     phases = [
         generation,
         shlex.join([
@@ -1302,13 +1308,22 @@ def main() -> int:
         if not args.keep_workspaces and workspace_parent is not None:
             shutil.rmtree(workspace_parent, ignore_errors=True)
 
-    incomplete_pairs = failed_matrix_pairs({"matrix": matrix})
     authoritative = not args.prepare_only and (
         baseline is not None
         or (
             set(languages) == set(LANGUAGES)
             and set(components) == set(COMPONENTS)
         )
+    )
+    incomplete_pairs = (
+        failed_matrix_pairs({"matrix": matrix})
+        if authoritative
+        else {
+            (language, component)
+            for language, component in selected_pairs
+            if matrix.get(language, {}).get(component, {}).get("status")
+            != "pass"
+        }
     )
     for language, component in sorted(incomplete_pairs):
         item = matrix.get(language, {}).get(component, {})
