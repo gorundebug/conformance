@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,31 @@ import dependency_environment
 
 
 class DependencyEnvironmentTest(unittest.TestCase):
+    def test_dependency_command_retries_without_changing_environment(self) -> None:
+        expected_environment = {"GOPROXY": "http://proxy.invalid/go"}
+        completed = subprocess.CompletedProcess(["go", "install"], 0)
+        with (
+            mock.patch(
+                "dependency_environment.subprocess.run",
+                side_effect=[
+                    subprocess.CalledProcessError(1, ["go", "install"]),
+                    completed,
+                ],
+            ) as run,
+            mock.patch("dependency_environment.time.sleep") as sleep,
+        ):
+            result = dependency_environment.run_dependency_command(
+                ["go", "install"],
+                cwd=Path("/tmp"),
+                env=expected_environment,
+            )
+
+        self.assertIs(result, completed)
+        self.assertEqual(run.call_count, 2)
+        for call in run.call_args_list:
+            self.assertEqual(call.kwargs["env"], expected_environment)
+        sleep.assert_called_once_with(2.0)
+
     def test_framework_script_is_the_single_direct_runner_contract(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             framework = Path(directory)

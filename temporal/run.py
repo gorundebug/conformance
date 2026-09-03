@@ -325,7 +325,7 @@ def verify_go_workflowcheck(language: Language, env: dict[str, str]) -> bool:
         tool.parent.mkdir(parents=True, exist_ok=True)
         install_env = env.copy()
         install_env["GOBIN"] = str(tool.parent)
-        run(
+        dependency_environment.run_dependency_command(
             [
                 "go",
                 "install",

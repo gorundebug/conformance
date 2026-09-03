@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from pathlib import Path
+from typing import Sequence
 from urllib.parse import urlsplit, urlunsplit
 
 
@@ -61,6 +63,45 @@ def _read_environment(command: list[str]) -> dict[str, str]:
         name, value = entry.split(b"=", 1)
         environment[name.decode()] = value.decode()
     return environment
+
+
+def run_dependency_command(
+    command: Sequence[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    attempts: int = 10,
+    retry_delay_seconds: float = 2.0,
+) -> subprocess.CompletedProcess[str]:
+    """Run a dependency download with retries and no alternate route.
+
+    Proxy mode must keep using the configured proxy on every attempt; direct
+    mode must keep using the normal upstream route.  Retrying the unchanged
+    environment preserves that contract instead of silently introducing a
+    fallback when a registry or proxy has a transient failure.
+    """
+    if attempts < 1:
+        raise ValueError("dependency command attempts must be positive")
+    rendered = " ".join(command)
+    for attempt in range(1, attempts + 1):
+        try:
+            return subprocess.run(
+                list(command),
+                cwd=cwd,
+                env=env,
+                check=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError:
+            if attempt == attempts:
+                raise
+            delay = min(retry_delay_seconds * attempt, 15.0)
+            print(
+                f"[dependency] command failed; retrying in {delay:g}s "
+                f"({attempt}/{attempts}): {rendered}",
+                flush=True,
+            )
+            time.sleep(delay)
 
 
 def docker_arguments(framework: Path) -> list[str]:
