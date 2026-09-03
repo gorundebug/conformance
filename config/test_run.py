@@ -61,6 +61,24 @@ services:
 """
         self.assertEqual(RUN.unresolved_override_paths(config, override), [])
 
+    def test_temporal_endpoint_capacity_requires_matching_override(self) -> None:
+        config = """\
+endpoints:
+  activity:
+    maxConcurrentActivities: $activityMaxConcurrentActivities
+  workflow:
+    maxConcurrentWorkflowTasks: $workflowMaxConcurrentWorkflowTasks
+"""
+        override = """\
+endpoints:
+  activity:
+    maxConcurrentActivities: 2
+"""
+        self.assertEqual(
+            RUN.unresolved_override_paths(config, override),
+            ["endpoints.workflow.maxConcurrentWorkflowTasks"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
