@@ -514,9 +514,16 @@ def main() -> int:
     runs.append(execute(
         "canonical-cpp-operators", canonical_command, CANONICAL, canonical_env
     ))
-    canonical_runtime_script = (
+    canonical_runtime_tests = (
         "/workspace/build/servicelib_serviceapp_test && "
         "/workspace/build/servicelib_status_test"
+    )
+    canonical_runtime_script = (
+        canonical_runtime_tests
+        if args.skip_build
+        else "cmake --build --preset docker --parallel --target "
+        "servicelib_serviceapp_test servicelib_status_test && "
+        + canonical_runtime_tests
     )
     runs.append(
         execute(
