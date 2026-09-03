@@ -553,6 +553,19 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn('r"(?m)^generate\\s*:"', source)
         self.assertIn("for path in makefiles", source)
 
+    def test_published_mirror_mounts_generated_runtime_dependencies(self) -> None:
+        source = (CONFORMANCE_DIR / "published_components/run.py").read_text()
+        self.assertIn(
+            "f\"{example / 'scripts/git_mirror.generated.cgi'}:"
+            "/www/cgi-bin/git:ro\"",
+            source,
+        )
+        self.assertIn(
+            "f\"{example / 'scripts/git-retry.generated.sh'}:"
+            "/www/git-retry.generated.sh:ro\"",
+            source,
+        )
+
     def test_standalone_typescript_forces_proxy_registry(self) -> None:
         source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
         self.assertIn("--config.registry=", source)

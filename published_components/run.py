@@ -454,6 +454,8 @@ def start_mirror(root: Path, mirror_root: Path, port: int, name: str) -> None:
             "--volume", f"{mirror_root}:/mirrors",
             "--volume",
             f"{example / 'scripts/git_mirror.generated.cgi'}:/www/cgi-bin/git:ro",
+            "--volume",
+            f"{example / 'scripts/git-retry.generated.sh'}:/www/git-retry.generated.sh:ro",
             "servicegen-git-mirror:2.49.1",
         ],
         cwd=example,
