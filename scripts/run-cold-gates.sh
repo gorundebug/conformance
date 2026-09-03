@@ -212,13 +212,17 @@ for gate in "${gates[@]}"; do
   fi
 
   status=0
+  gate_target="$gate"
+  if [ "$resume" -eq 1 ] && [ "$gate" = "standalone-components" ]; then
+    gate_target="standalone-components-resume"
+  fi
   if [ "$gate" = "dependency-manifests" ]; then
-    run_logged "$gate_log" "$make_command" --no-print-directory "$gate" || status=$?
+    run_logged "$gate_log" "$make_command" --no-print-directory "$gate_target" || status=$?
   else
     # dependency-manifests is the first explicit gate. Marking that phony
     # prerequisite old prevents every later one-gate invocation from silently
     # running a second suite before the named gate.
-    run_logged "$gate_log" "$make_command" --no-print-directory -o dependency-manifests "$gate" || status=$?
+    run_logged "$gate_log" "$make_command" --no-print-directory -o dependency-manifests "$gate_target" || status=$?
   fi
   if [ -n "${DEPENDENCY_PROXY_DIR:-}" ]; then
     write_proxy_log_delta "$nexus_request_log" "$nexus_request_offset" \
