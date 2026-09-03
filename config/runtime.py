@@ -14,7 +14,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import cpp_source_cache
 from runtime_fixture import valid_override
 
 
@@ -104,9 +103,6 @@ def main() -> int:
     compose = artifact / "compose.yml"
     env = os.environ.copy()
     env["SERVICELIB_SOURCE_CONTEXT"] = str(framework)
-    env["CPPBOOST_BUILD_VOLUME"] = (
-        cpp_source_cache.build_volume_name(framework)
-    )
     override.write_text(valid_override(1000))
     compose.write_text(
         f"""services:
@@ -115,10 +111,6 @@ def main() -> int:
       - "{PORT}:9091"
     volumes:
       - {override}:/app/config/overrides.yaml:ro
-volumes:
-  cpp-cmake-build:
-    external: true
-    name: {env["CPPBOOST_BUILD_VOLUME"]}
 """
     )
 
@@ -136,8 +128,14 @@ volumes:
     started = False
     try:
         if not args.skip_build:
-            cpp_source_cache.configure_environment(env, framework)
-            run(["./scripts/build.generated.sh", "docker-debug"], example, env)
+            run(
+                [
+                    "make", "-C", "orderservice", "docker-build",
+                    "USE_LOCAL_MODULES=1",
+                ],
+                example,
+                env,
+            )
 
         run(
             compose_command + ["up", "-d", "--no-deps", "orderservice"],
