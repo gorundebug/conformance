@@ -10,6 +10,7 @@ import os
 import re
 import secrets
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -18,6 +19,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import dependency_environment  # noqa: E402
 
 CONFORMANCE = Path(__file__).resolve().parents[1]
 ROOT = (
@@ -97,7 +101,9 @@ LANGUAGES = {
 
 
 def environment(language: Language) -> dict[str, str]:
-    env = os.environ.copy()
+    # Direct gate execution must use the same generated project contract as
+    # Make targets and quickstart. DEPENDENCY_PROXY_DIR is the sole opt-in.
+    env = dependency_environment.from_project(language.example)
     env["SERVICELIB_CONFORMANCE_DIR"] = str(CONFORMANCE)
     if language.name == "go":
         env["GOSERVICELIB_SOURCE_CONTEXT"] = str(language.runtime)

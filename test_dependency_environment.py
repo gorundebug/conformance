@@ -56,6 +56,24 @@ class DependencyEnvironmentTest(unittest.TestCase):
             )
             self.assertNotIn("DEPENDENCY_CONAN_CREDENTIAL_FILE", rendered)
 
+    def test_generated_project_is_the_direct_runner_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            scripts = project / "scripts"
+            scripts.mkdir()
+            script = scripts / "docker-dependency-proxy.generated.sh"
+            script.write_text(
+                "#!/usr/bin/env bash\n"
+                "test \"$1\" = --print-environment\n"
+                "export NPM_CONFIG_REGISTRY=mirror/npm\n"
+                "env -0\n"
+            )
+            script.chmod(0o755)
+            with mock.patch.dict(os.environ, {"BASE_VALUE": "kept"}, clear=True):
+                environment = dependency_environment.from_project(project)
+            self.assertEqual(environment["BASE_VALUE"], "kept")
+            self.assertEqual(environment["NPM_CONFIG_REGISTRY"], "mirror/npm")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -30,14 +30,26 @@ def from_framework(framework: Path) -> dict[str, str]:
     script = framework / "scripts" / "dependency-proxy-env.sh"
     if not script.is_file():
         raise RuntimeError(f"dependency environment is missing: {script}")
+    return _read_environment([
+        "/bin/bash",
+        "-c",
+        'source "$1"; env -0',
+        "framework-dependency-environment",
+        str(script),
+    ])
+
+
+def from_project(project: Path) -> dict[str, str]:
+    """Return the generated project's canonical dependency environment."""
+    script = project / "scripts" / "docker-dependency-proxy.generated.sh"
+    if not script.is_file():
+        raise RuntimeError(f"project dependency environment is missing: {script}")
+    return _read_environment([str(script), "--print-environment"])
+
+
+def _read_environment(command: list[str]) -> dict[str, str]:
     process = subprocess.run(
-        [
-            "/bin/bash",
-            "-c",
-            'source "$1"; env -0',
-            "framework-dependency-environment",
-            str(script),
-        ],
+        command,
         check=True,
         capture_output=True,
         env=os.environ,
