@@ -181,6 +181,18 @@ cleanup() {
 trap cleanup EXIT INT TERM
 docker ps -a --format '{{.ID}}' | sort > "$baseline_containers"
 
+if [ "$resume" -eq 0 ]; then
+  cleanup_log="$log_dir/00-buildkit-cleanup.log"
+  : > "$cleanup_log"
+  echo "==> [cold-gates:$profile] clearing all BuildKit cache once before the profile"
+  if ! run_logged "$cleanup_log" docker builder prune --all --force; then
+    echo "==> [cold-gates:$profile] FAIL: initial BuildKit cleanup failed" >&2
+    echo "==> [cold-gates:$profile] full log: $cleanup_log" >&2
+    tail -n 200 "$cleanup_log" >&2
+    exit 1
+  fi
+fi
+
 make_command="${MAKE_COMMAND:-make}"
 total="${#gates[@]}"
 index=0
@@ -202,14 +214,6 @@ for gate in "${gates[@]}"; do
   nexus_outbound_offset="$(proxy_log_size "$nexus_outbound_log")"
   write_proxy_configuration "$gate_log"
   echo "==> [cold-gates:$profile] log $gate_log"
-  echo "==> [cold-gates:$profile] clearing all BuildKit cache"
-  if ! run_logged "$gate_log" docker builder prune --all --force; then
-    record_status "$gate" FAIL "$gate_log"
-    echo "==> [cold-gates:$profile] FAIL $gate: BuildKit cleanup failed" >&2
-    echo "==> [cold-gates:$profile] full log: $gate_log" >&2
-    tail -n 200 "$gate_log" >&2
-    exit 1
-  fi
 
   status=0
   gate_target="$gate"
