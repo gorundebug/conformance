@@ -49,6 +49,7 @@ class DependencyRootTest(unittest.TestCase):
         ):
             command = typescript_toolchain.install_command()
             environment = typescript_toolchain.environment()
+        self.assertIn("--ignore-scripts", command)
         self.assertIn(
             f"--config.registry={proxy}/npm-proxy/", command
         )

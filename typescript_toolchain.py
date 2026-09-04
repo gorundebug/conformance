@@ -33,6 +33,11 @@ def install_command() -> list[str]:
     command.extend([
         "install",
         "--frozen-lockfile",
+        # Host-side conformance gates compile and exercise the TypeScript
+        # implementation with injected transport clients. Native dependency
+        # installation belongs to the Docker runtime/integration builds; do
+        # not make these unit gates depend on a host C/C++ toolchain.
+        "--ignore-scripts",
         "--store-dir",
         str(PNPM_STORE),
     ])
