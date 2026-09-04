@@ -60,20 +60,6 @@ CPPBOOST_SNAPSHOT = {
     "opentelemetry-cpp": "OPENTELEMETRY",
     "googletest": "GOOGLETEST",
 }
-USERVER_CONAN_SNAPSHOT = {
-    "grpc",
-    "librdkafka",
-    "libcron",
-    "openssl",
-    "protobuf",
-    "re2",
-    "userver",
-    "userver-boost",
-    "userver-googletest",
-    "userver-googleapis",
-    "userver-opentelemetry-proto",
-    "yaml-cpp",
-}
 SHARED_NATIVE_CONAN_PACKAGES = (
     (
         "cppservicelib",
@@ -130,9 +116,10 @@ def static_findings() -> list[dict[str, object]]:
     return findings
 
 
-def manifest_dependencies(path: Path) -> dict[str, dict[str, str]]:
-    dependencies: dict[str, dict[str, str]] = {}
+def manifest_dependencies(path: Path) -> dict[str, dict[str, object]]:
+    dependencies: dict[str, dict[str, object]] = {}
     current: str | None = None
+    current_sequence: str | None = None
     in_dependencies = False
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         if raw_line == "dependencies:":
@@ -140,20 +127,43 @@ def manifest_dependencies(path: Path) -> dict[str, dict[str, str]]:
             continue
         if in_dependencies and raw_line and not raw_line.startswith(" "):
             break
-        match = re.fullmatch(r"    ([^:]+):", raw_line)
+        match = re.fullmatch(r"    (\S[^:]*):", raw_line)
         if in_dependencies and match:
             current = match.group(1)
             dependencies[current] = {}
+            current_sequence = None
             continue
         match = re.fullmatch(
-            r"        (repository|revision|conanVersion):\s+(.+)", raw_line
+            r"        (repository|revision|conanVersion|conanPackage):\s+(.+)", raw_line
         )
         if in_dependencies and current and match:
+            current_sequence = None
             value = match.group(2)
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = ast.literal_eval(value)
             dependencies[current][match.group(1)] = value
+            continue
+        match = re.fullmatch(r"        (conanScopes):", raw_line)
+        if in_dependencies and current and match:
+            current_sequence = match.group(1)
+            dependencies[current][current_sequence] = []
+            continue
+        match = re.fullmatch(r"            -\s+(.+)", raw_line)
+        if in_dependencies and current and current_sequence and match:
+            sequence = dependencies[current][current_sequence]
+            assert isinstance(sequence, list)
+            sequence.append(match.group(1))
     return dependencies
+
+
+def conan_dependencies_for_scope(
+    manifest: dict[str, dict[str, object]], scope: str
+) -> set[str]:
+    return {
+        name
+        for name, dependency in manifest.items()
+        if scope in dependency.get("conanScopes", [])
+    }
 
 
 def dependency_snapshot_errors() -> list[str]:
@@ -164,6 +174,14 @@ def dependency_snapshot_errors() -> list[str]:
     boost_snapshot = runpy.run_path(
         str(ROOT / "cppboostservicelib" / "conan" / "dependencies_generated.py")
     )
+    expected_boost_dependencies = conan_dependencies_for_scope(manifest, "cppboost")
+    actual_boost_dependencies = set(boost_snapshot["VERSIONS"]) - {"conan"}
+    if actual_boost_dependencies != expected_boost_dependencies:
+        errors.append(
+            "cppboostservicelib generated Conan dependency set differs: "
+            f"actual={sorted(actual_boost_dependencies)!r}, "
+            f"expected={sorted(expected_boost_dependencies)!r}"
+        )
     for dependency in CPPBOOST_SNAPSHOT:
         expected = manifest.get(dependency, {})
         for field, generated_map in (
@@ -182,14 +200,15 @@ def dependency_snapshot_errors() -> list[str]:
     userver_snapshot = runpy.run_path(
         str(ROOT / "cppservicelib" / "conan" / "dependencies_generated.py")
     )["VERSIONS"]
+    expected_userver_dependencies = conan_dependencies_for_scope(manifest, "userver")
     actual_userver_dependencies = set(userver_snapshot) - {"conan"}
-    if actual_userver_dependencies != USERVER_CONAN_SNAPSHOT:
+    if actual_userver_dependencies != expected_userver_dependencies:
         errors.append(
             "cppservicelib generated Conan dependency set differs: "
             f"actual={sorted(actual_userver_dependencies)!r}, "
-            f"expected={sorted(USERVER_CONAN_SNAPSHOT)!r}"
+            f"expected={sorted(expected_userver_dependencies)!r}"
         )
-    for dependency in sorted(USERVER_CONAN_SNAPSHOT):
+    for dependency in sorted(expected_userver_dependencies):
         actual = userver_snapshot.get(dependency)
         expected = manifest.get(dependency, {}).get("conanVersion")
         if actual != expected:

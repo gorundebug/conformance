@@ -515,7 +515,9 @@ class DependencyRootTest(unittest.TestCase):
     def test_dependency_snapshot_uses_generated_conan_metadata(self) -> None:
         source = (CONFORMANCE_DIR / "dependencies/run.py").read_text()
         self.assertGreaterEqual(source.count('"conan" / "dependencies_generated.py"'), 2)
-        self.assertIn('"openssl",', source)
+        self.assertIn('conan_dependencies_for_scope(manifest, "userver")', source)
+        self.assertIn('conan_dependencies_for_scope(manifest, "cppboost")', source)
+        self.assertNotIn("USERVER_CONAN_SNAPSHOT", source)
         self.assertNotIn('"cmake" / "DependencyVersions.cmake"', source)
 
     def test_dependency_manifest_reader_decodes_quoted_scalar_values(self) -> None:
@@ -533,6 +535,25 @@ class DependencyRootTest(unittest.TestCase):
             dependencies = globals_["manifest_dependencies"](manifest)
 
         self.assertEqual(dependencies["re2"]["conanVersion"], "20230301")
+
+    def test_dependency_manifest_reader_decodes_conan_scopes(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "dependencies/run.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "dependencies.yaml"
+            manifest.write_text(
+                "dependencies:\n"
+                "    openssl:\n"
+                "        conanVersion: 3.6.3\n"
+                "        conanScopes:\n"
+                "            - cppboost\n"
+                "            - userver\n",
+                encoding="utf-8",
+            )
+            dependencies = globals_["manifest_dependencies"](manifest)
+
+        self.assertEqual(
+            dependencies["openssl"]["conanScopes"], ["cppboost", "userver"]
+        )
 
     def test_standalone_cpp_builds_install_conan_graph_before_cmake(self) -> None:
         source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
