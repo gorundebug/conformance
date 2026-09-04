@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -776,25 +777,31 @@ def build_python_module(module: Path, port: int, name: str) -> None:
     )
 
 
+def rust_module_build_command(module: Path) -> list[str]:
+    make_contract = (module / "make.generated.mk").read_text()
+    if "cargo $(DEPENDENCY_CARGO_CONFIG_ARGS)" in make_contract:
+        return ["make", "test"]
+
+    # API modules are shared repository identities. Their repository-level
+    # Makefile may be owned by the Go scaffold while a Rust binding lives
+    # beside it; compile that binding with its native toolchain. Reuse the
+    # common Cargo route selection so direct mode stays on crates.io and proxy
+    # mode stays on the configured proxy without a fallback between them.
+    cargo = shlex.join([
+        *standalone.rust_cargo_arguments(), "test", "--all-targets",
+    ])
+    script = (
+        "if [[ -x generate-openapi.generated.sh ]]; then "
+        "./generate-openapi.generated.sh; fi && "
+        f"{cargo}"
+    )
+    return ["/bin/bash", "-c", script]
+
+
 def build_rust_module(module: Path, port: int, name: str) -> None:
     standalone.ensure_rust_image()
     container = f"published-rust-{name}-{os.getpid()}".replace("_", "-")
-    make_contract = (module / "make.generated.mk").read_text()
-    if "cargo $(DEPENDENCY_CARGO_CONFIG_ARGS)" in make_contract:
-        build_command = ["make", "test"]
-    else:
-        # API modules are shared repository identities. Their repository-level
-        # Makefile may be owned by the Go scaffold while a Rust binding lives
-        # beside it; compile that binding with its native toolchain.
-        script = (
-            "if [[ -x generate-openapi.generated.sh ]]; then "
-            "./generate-openapi.generated.sh; fi && "
-            "cargo --config 'source.crates-io.replace-with=\"dependency-proxy\"' "
-            "--config \"source.dependency-proxy.registry="
-            "\\\"${CARGO_REGISTRIES_CRATES_IO_INDEX}\\\"\" "
-            "test --all-targets"
-        )
-        build_command = ["/bin/bash", "-c", script]
+    build_command = rust_module_build_command(module)
     command(
         [
             "docker", "run", "--rm", "--name", container,

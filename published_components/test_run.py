@@ -10,6 +10,36 @@ from published_components import run
 
 
 class PublishedComponentsTest(unittest.TestCase):
+    def test_shared_rust_module_uses_direct_cargo_without_proxy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            module = Path(directory)
+            (module / "make.generated.mk").write_text("all:\n")
+            with mock.patch.dict(run.os.environ, {}, clear=True):
+                command = run.rust_module_build_command(module)
+
+        self.assertEqual(command[:2], ["/bin/bash", "-c"])
+        self.assertIn("cargo test --all-targets", command[2])
+        self.assertNotIn("dependency-proxy", command[2])
+
+    def test_shared_rust_module_uses_common_proxy_cargo_route(self) -> None:
+        registry = "sparse+http://host.docker.internal:18081/cargo/"
+        with tempfile.TemporaryDirectory() as directory:
+            module = Path(directory)
+            (module / "make.generated.mk").write_text("all:\n")
+            with mock.patch.dict(
+                run.os.environ,
+                {"DEPENDENCY_PROXY_DIR": "/cache"},
+                clear=True,
+            ), mock.patch.object(
+                run.standalone,
+                "docker_process_environment",
+                return_value={"CARGO_REGISTRIES_CRATES_IO_INDEX": registry},
+            ):
+                command = run.rust_module_build_command(module)
+
+        self.assertIn('source.crates-io.replace-with="dependency-proxy"', command[2])
+        self.assertIn(registry, command[2])
+
     def test_declared_internal_tags_follow_generated_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
