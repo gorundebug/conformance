@@ -18,7 +18,7 @@ fi
 # a pull --ff-only is not sufficient here. Moving the local branch keeps the
 # checkout reproducible without deleting untracked build caches.
 fetch_attempt=1
-fetch_attempts=3
+fetch_attempts=${DEPENDENCY_COMMAND_RETRY_ATTEMPTS:-10}
 while ! git -C "$checkout" fetch --prune origin \
   +refs/heads/main:refs/remotes/origin/main; do
   if [ "$fetch_attempt" -ge "$fetch_attempts" ]; then

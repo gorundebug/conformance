@@ -148,7 +148,10 @@ class DependencyRootTest(unittest.TestCase):
         script = (
             CONFORMANCE_DIR / "scripts" / "update-managed-checkout.sh"
         ).read_text()
-        self.assertIn("fetch_attempts=3", script)
+        self.assertIn(
+            "fetch_attempts=${DEPENDENCY_COMMAND_RETRY_ATTEMPTS:-10}",
+            script,
+        )
         self.assertIn("managed checkout fetch failed; retrying", script)
         self.assertNotIn("https://github.com", script)
 
