@@ -20,6 +20,10 @@ class StandaloneComponentTest(unittest.TestCase):
         self.assertTrue(run.is_transient_network_failure([
             "HTTP status code: 502\n",
         ]))
+        self.assertTrue(run.is_transient_network_failure([
+            "curl: (7) Failed to connect to repo1.maven.org port 443 "
+            "after 7785 ms: Couldn't connect to server\n",
+        ]))
         self.assertFalse(run.is_transient_network_failure([
             "error: linker command failed with exit code 1\n",
         ]))
