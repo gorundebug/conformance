@@ -1505,6 +1505,18 @@ class DependencyRootTest(unittest.TestCase):
         self.assertLess(managed_fetches, full_proxy_environment)
         self.assertIn("url.$bootstrap_git_mirror/github.com/.insteadOf", quickstart)
         self.assertIn("url.$bootstrap_git_mirror/gitlab.com/.insteadOf", quickstart)
+        self.assertIn(
+            "mirror_refresh_repositories=$(printf "
+            "'github.com/gorundebug/%s.git\\n' \"${REPOS[@]}\")",
+            quickstart,
+        )
+        refresh_block = quickstart[
+            quickstart.index('echo "==> Refreshing managed Git mirrors'):
+            quickstart.index('echo "==> Trusting cached Git mirror revisions')
+        ]
+        self.assertIn('--data-binary "$mirror_refresh_repositories"', refresh_block)
+        self.assertNotIn("--speed-limit", refresh_block)
+        self.assertNotIn("--speed-time", refresh_block)
 
     def test_direct_make_enables_the_dependency_proxy(self) -> None:
         makefile = (CONFORMANCE_DIR / "Makefile").read_text()
