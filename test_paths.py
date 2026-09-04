@@ -924,6 +924,7 @@ class DependencyRootTest(unittest.TestCase):
     def test_profile_switch_discards_only_incompatible_cpp_build_trees(self) -> None:
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
 
+        self.assertIn('cold-gates) continue ;;', quickstart)
         self.assertIn("cppexample_cpp-cmake-build", quickstart)
         self.assertIn('docker volume rm "$build_volume"', quickstart)
         self.assertNotIn("cpp-ccache-*", quickstart)

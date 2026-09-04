@@ -248,8 +248,18 @@ PREVIOUS_PROFILE="$(cat "$PROFILE_MARKER" 2>/dev/null || true)"
 if [ -d "$CONFORMANCE_ROOT/.artifacts" ] && [ "$PREVIOUS_PROFILE" != "$EXAMPLE_PROFILE" ]; then
   DISPLAY_PREVIOUS_PROFILE="${PREVIOUS_PROFILE:-unknown}"
   echo "==> Profile changed ($DISPLAY_PREVIOUS_PROFILE -> $EXAMPLE_PROFILE); clearing incompatible suite artifacts"
+  # Cold-gate checkpoints are already keyed by profile. Keep them so a repair
+  # cycle can resume after another profile has run in the same checkout.
+  shopt -s nullglob dotglob
+  for artifact_dir in "$CONFORMANCE_ROOT/.artifacts"/*; do
+    case "$(basename "$artifact_dir")" in
+      cold-gates) continue ;;
+    esac
+    python3 -c 'import shutil, sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' \
+      "$artifact_dir"
+  done
+  shopt -u nullglob dotglob
   for artifact_dir in \
-    "$CONFORMANCE_ROOT/.artifacts" \
     "$CONFORMANCE_ROOT/benchmarks/examples/.artifacts" \
     "$CONFORMANCE_ROOT/profiling/examples/.artifacts"; do
     python3 -c 'import shutil, sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' \
