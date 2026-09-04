@@ -357,7 +357,13 @@ class DependencyRootTest(unittest.TestCase):
             prepare.__globals__["ROOT"] = root
             prepare.__globals__["ARTIFACTS"] = artifacts
             prepare.__globals__["GRPC_PROBE_BINARY"] = binary
-            with mock.patch.object(globals_["subprocess"], "run", side_effect=fake_run):
+            with mock.patch.object(
+                globals_["dependency_environment"],
+                "run_dependency_command",
+                side_effect=fake_run,
+            ), mock.patch.object(
+                globals_["subprocess"], "run", side_effect=fake_run
+            ):
                 prepare()
 
         self.assertEqual(build_commands[0], ["make", "gen-proto"])
@@ -1273,25 +1279,28 @@ class DependencyRootTest(unittest.TestCase):
         function_globals = build_implementation.__globals__
         function_globals["environment"] = mock.Mock(return_value={})
 
-        with mock.patch.object(subprocess, "run") as subprocess_run:
+        with mock.patch.object(
+            scenarios["dependency_environment"], "run_dependency_command"
+        ) as dependency_run:
             build_implementation(
                 implementation("cpp", CONFORMANCE_DIR, Path("compose.cpp.yml"))
             )
-            subprocess_run.assert_called_once_with(
+            dependency_run.assert_called_once_with(
                 ["make", "docker-build", "RUNTIME_IMAGE=1"],
                 cwd=CONFORMANCE_DIR,
                 env={},
-                check=True,
             )
 
-        with mock.patch.object(subprocess, "run") as subprocess_run:
+        with mock.patch.object(
+            scenarios["dependency_environment"], "run_dependency_command"
+        ) as dependency_run:
             build_implementation(
                 implementation(
                     "cppboost", CONFORMANCE_DIR, Path("compose.cppboost.yml")
                 )
             )
             self.assertEqual(
-                [call.args[0] for call in subprocess_run.call_args_list],
+                [call.args[0] for call in dependency_run.call_args_list],
                 [
                     [
                         "make", "-C", service, "docker-build",
