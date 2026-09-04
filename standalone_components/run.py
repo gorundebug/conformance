@@ -50,6 +50,28 @@ GO_TOOLCHAIN_IMAGE = ""
 RUN_ID = f"servicegen-standalone-{os.getpid()}-{int(time.time())}"
 ACTIVE_CONTAINERS: set[str] = set()
 
+COMMAND_ATTEMPTS = 10
+TRANSIENT_NETWORK_MARKERS = (
+    "context deadline exceeded",
+    "could not resolve host",
+    "connection refused",
+    "connection reset by peer",
+    "failed to do request",
+    "network is unreachable",
+    "no route to host",
+    "temporary failure in name resolution",
+    "tls handshake timeout",
+    "unexpected eof",
+    "status code: 429",
+    "status code: 502",
+    "status code: 503",
+    "status code: 504",
+    "status_code: 429",
+    "status_code: 502",
+    "status_code: 503",
+    "status_code: 504",
+)
+
 DOCKER_PROXY_URL_VARIABLES = (
     "GOPROXY",
     "NPM_CONFIG_REGISTRY",
@@ -570,6 +592,14 @@ def print_command(command: Sequence[str], cwd: Path) -> None:
     print(f"- ({cwd}) {rendered}", flush=True)
 
 
+def is_transient_network_failure(output: Iterable[str]) -> bool:
+    return any(
+        marker in line.lower()
+        for line in output
+        for marker in TRANSIENT_NETWORK_MARKERS
+    )
+
+
 def run_command(
     command: Sequence[str],
     cwd: Path,
@@ -586,28 +616,54 @@ def run_command(
     log_dir = ARTIFACTS / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{safe_log_name}.log"
-    tail: deque[str] = deque(maxlen=80)
     if cleanup_container is not None:
         ACTIVE_CONTAINERS.add(cleanup_container)
     try:
-        process = subprocess.Popen(
-            list(command),
-            cwd=cwd,
-            env={**os.environ, **(env or {})},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-        if process.stdout is None:
-            raise RuntimeError("command output pipe was not created")
-        with log_path.open("w") as log:
-            for line in process.stdout:
-                print(line, end="", flush=True)
-                log.write(line)
-                log.flush()
-                tail.append(line)
-        return_code = process.wait()
+        for attempt in range(1, COMMAND_ATTEMPTS + 1):
+            tail: deque[str] = deque(maxlen=80)
+            transient_network_failure = False
+            process = subprocess.Popen(
+                list(command),
+                cwd=cwd,
+                env={**os.environ, **(env or {})},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            if process.stdout is None:
+                raise RuntimeError("command output pipe was not created")
+            log_mode = "w" if attempt == 1 else "a"
+            with log_path.open(log_mode) as log:
+                if attempt > 1:
+                    retry_header = (
+                        f"\n[dependency] retry attempt "
+                        f"{attempt}/{COMMAND_ATTEMPTS}\n"
+                    )
+                    print(retry_header, end="", flush=True)
+                    log.write(retry_header)
+                for line in process.stdout:
+                    print(line, end="", flush=True)
+                    log.write(line)
+                    log.flush()
+                    tail.append(line)
+                    if is_transient_network_failure((line,)):
+                        transient_network_failure = True
+            return_code = process.wait()
+            if return_code == 0:
+                return
+            if not transient_network_failure or attempt == COMMAND_ATTEMPTS:
+                break
+            delay = min(2.0 * attempt, 15.0)
+            message = (
+                f"[dependency] transient network failure; retrying the "
+                f"same command and route in {delay:g}s "
+                f"({attempt}/{COMMAND_ATTEMPTS})\n"
+            )
+            print(message, end="", flush=True)
+            with log_path.open("a") as log:
+                log.write(message)
+            time.sleep(delay)
     finally:
         if cleanup_container is not None:
             remove_container(cleanup_container)

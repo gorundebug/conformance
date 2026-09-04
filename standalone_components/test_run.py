@@ -12,6 +12,66 @@ from standalone_components import run
 
 
 class StandaloneComponentTest(unittest.TestCase):
+    def test_transient_network_failure_classification(self) -> None:
+        self.assertTrue(run.is_transient_network_failure([
+            'failed to do request: Head "https://registry-1.docker.io": '
+            "context deadline exceeded\n",
+        ]))
+        self.assertTrue(run.is_transient_network_failure([
+            "HTTP status code: 502\n",
+        ]))
+        self.assertFalse(run.is_transient_network_failure([
+            "error: linker command failed with exit code 1\n",
+        ]))
+
+    def test_command_retries_transient_failure_without_changing_route(self) -> None:
+        failed = mock.Mock()
+        failed.stdout = iter(["context deadline exceeded\n"])
+        failed.wait.return_value = 1
+        passed = mock.Mock()
+        passed.stdout = iter(["completed\n"])
+        passed.wait.return_value = 0
+
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            run, "ARTIFACTS", Path(directory)
+        ), mock.patch.object(
+            run, "COMMAND_ATTEMPTS", 2
+        ), mock.patch.object(
+            run.subprocess, "Popen", side_effect=[failed, passed]
+        ) as popen, mock.patch.object(run.time, "sleep"):
+            run.run_command(
+                ["docker", "compose", "build"],
+                Path(directory),
+                env={"DEPENDENCY_DOCKER_REGISTRY": "docker.io"},
+                log_name="retry",
+            )
+
+        self.assertEqual(popen.call_count, 2)
+        self.assertEqual(popen.call_args_list[0].args, popen.call_args_list[1].args)
+        self.assertEqual(
+            popen.call_args_list[0].kwargs["env"],
+            popen.call_args_list[1].kwargs["env"],
+        )
+
+    def test_command_does_not_retry_build_failure(self) -> None:
+        failed = mock.Mock()
+        failed.stdout = iter(["linker command failed with exit code 1\n"])
+        failed.wait.return_value = 1
+
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            run, "ARTIFACTS", Path(directory)
+        ), mock.patch.object(
+            run.subprocess, "Popen", return_value=failed
+        ) as popen:
+            with self.assertRaises(RuntimeError):
+                run.run_command(
+                    ["cmake", "--build", "."],
+                    Path(directory),
+                    log_name="build-failure",
+                )
+
+        self.assertEqual(popen.call_count, 1)
+
     def test_direct_runner_loads_generated_proxy_environment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
