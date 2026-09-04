@@ -515,6 +515,7 @@ class DependencyRootTest(unittest.TestCase):
     def test_dependency_snapshot_uses_generated_conan_metadata(self) -> None:
         source = (CONFORMANCE_DIR / "dependencies/run.py").read_text()
         self.assertGreaterEqual(source.count('"conan" / "dependencies_generated.py"'), 2)
+        self.assertIn('"openssl",', source)
         self.assertNotIn('"cmake" / "DependencyVersions.cmake"', source)
 
     def test_dependency_manifest_reader_decodes_quoted_scalar_values(self) -> None:

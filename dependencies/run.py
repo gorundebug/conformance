@@ -64,6 +64,7 @@ USERVER_CONAN_SNAPSHOT = {
     "grpc",
     "librdkafka",
     "libcron",
+    "openssl",
     "protobuf",
     "re2",
     "userver",
