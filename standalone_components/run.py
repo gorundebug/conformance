@@ -51,28 +51,8 @@ RUN_ID = f"servicegen-standalone-{os.getpid()}-{int(time.time())}"
 ACTIVE_CONTAINERS: set[str] = set()
 
 COMMAND_ATTEMPTS = 10
-TRANSIENT_NETWORK_MARKERS = (
-    "context deadline exceeded",
-    "could not resolve host",
-    "connection refused",
-    "connection reset by peer",
-    "connection timed out",
-    "couldn't connect to server",
-    "failed to connect to",
-    "failed to do request",
-    "network is unreachable",
-    "no route to host",
-    "temporary failure in name resolution",
-    "tls handshake timeout",
-    "unexpected eof",
-    "status code: 429",
-    "status code: 502",
-    "status code: 503",
-    "status code: 504",
-    "status_code: 429",
-    "status_code: 502",
-    "status_code: 503",
-    "status_code: 504",
+is_transient_network_failure = (
+    dependency_environment.is_transient_network_failure
 )
 
 DOCKER_PROXY_URL_VARIABLES = (
@@ -595,14 +575,6 @@ def print_command(command: Sequence[str], cwd: Path) -> None:
     print(f"- ({cwd}) {rendered}", flush=True)
 
 
-def is_transient_network_failure(output: Iterable[str]) -> bool:
-    return any(
-        marker in line.lower()
-        for line in output
-        for marker in TRANSIENT_NETWORK_MARKERS
-    )
-
-
 def run_command(
     command: Sequence[str],
     cwd: Path,
@@ -624,7 +596,6 @@ def run_command(
     try:
         for attempt in range(1, COMMAND_ATTEMPTS + 1):
             tail: deque[str] = deque(maxlen=80)
-            transient_network_failure = False
             process = subprocess.Popen(
                 list(command),
                 cwd=cwd,
@@ -650,12 +621,13 @@ def run_command(
                     log.write(line)
                     log.flush()
                     tail.append(line)
-                    if is_transient_network_failure((line,)):
-                        transient_network_failure = True
             return_code = process.wait()
             if return_code == 0:
                 return
-            if not transient_network_failure or attempt == COMMAND_ATTEMPTS:
+            if (
+                not is_transient_network_failure(tail)
+                or attempt == COMMAND_ATTEMPTS
+            ):
                 break
             delay = min(2.0 * attempt, 15.0)
             message = (

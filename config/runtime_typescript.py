@@ -14,7 +14,9 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from runtime_fixture import valid_override
+import dependency_environment
 
 
 HERE = Path(__file__).resolve().parent
@@ -32,8 +34,14 @@ PROJECT = "servicelib-config-conformance-typescript"
 PORT = 19093
 
 
-def run(command: list[str], cwd: Path, env: dict[str, str]) -> None:
+def run(
+    command: list[str], cwd: Path, env: dict[str, str],
+    *, retry_network: bool = False,
+) -> None:
     print("+", " ".join(command), flush=True)
+    if retry_network:
+        dependency_environment.run_dependency_command(command, cwd=cwd, env=env)
+        return
     subprocess.run(command, cwd=cwd, env=env, check=True)
 
 
@@ -131,7 +139,10 @@ def main() -> int:
     started = False
     try:
         if not args.skip_build:
-            run(command + ["build", "orderservice"], example, env)
+            run(
+                command + ["build", "orderservice"], example, env,
+                retry_network=True,
+            )
         run(command + ["up", "-d", "--no-deps", "orderservice"], example, env)
         started = True
         initial_metrics = wait_fetch(

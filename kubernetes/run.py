@@ -20,6 +20,7 @@ CONFORMANCE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(CONFORMANCE))
 
 import go_toolchain  # noqa: E402
+import dependency_environment  # noqa: E402
 
 
 ROOT = Path(
@@ -61,8 +62,16 @@ def kubernetes_port_names(document: str) -> list[str]:
     return result
 
 
-def run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
+def run(
+    command: list[str], cwd: Path, env: dict[str, str] | None = None,
+    *, retry_network: bool = False,
+) -> None:
     print("- " + " ".join(command), flush=True)
+    if retry_network:
+        dependency_environment.run_dependency_command(
+            command, cwd=cwd, env=env or os.environ.copy()
+        )
+        return
     result = subprocess.run(command, cwd=cwd, env=env, check=False)
     if result.returncode != 0:
         raise RuntimeError(
@@ -389,6 +398,7 @@ def validate_example(language: str, example: Path) -> None:
             HELM_IMAGE, "-ec", chart_command,
         ],
         example,
+        retry_network=True,
     )
     print(f"[kubernetes] PASS  {language} static contract", flush=True)
 
@@ -426,7 +436,7 @@ def validate_language_services(
     script = ["bash", "scripts/kubernetes.generated.sh"]
     compose = ["docker", "compose", "-f", "docker-compose.kubernetes.yml"]
     kubectl = [*compose, "exec", "-T", "kubernetes", "kubectl"]
-    run([*script, "services-up"], example, environment)
+    run([*script, "services-up"], example, environment, retry_network=True)
     deployed_images: dict[str, str] = {}
     for service in SERVICES:
         image = capture(
@@ -507,7 +517,7 @@ def runtime_probe(examples: dict[str, Path]) -> None:
     compose = ["docker", "compose", "-f", "docker-compose.kubernetes.yml"]
     kubectl = [*compose, "exec", "-T", "kubernetes", "kubectl"]
     try:
-        run([*script, "up"], example, environment)
+        run([*script, "up"], example, environment, retry_network=True)
         validate_runtime_registry_proxies(
             compose, kubectl, example, environment,
         )

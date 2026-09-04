@@ -21,6 +21,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TextIO
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import dependency_environment
+
 PROFILING_DIR = Path(__file__).resolve().parent
 PROFILING_ROOT = PROFILING_DIR.parent
 ROOT = Path(
@@ -311,8 +314,19 @@ def run(
     env: dict[str, str],
     capture: bool = False,
     check: bool = True,
+    retry_network: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     print("+", " ".join(command), flush=True)
+    if retry_network:
+        if capture or not check:
+            raise ValueError("network retry requires non-captured checked command")
+        return dependency_environment.run_dependency_command(
+            command,
+            cwd=cwd,
+            env=env,
+            output_stream=ACTIVE_LANGUAGE_LOG,
+            echo=ACTIVE_LANGUAGE_LOG is None,
+        )
     completed = subprocess.run(
         command, cwd=cwd, env=env, check=False, text=True,
         capture_output=capture,
@@ -369,6 +383,7 @@ def ensure_example(language: Language, env: dict[str, str]) -> None:
                 ],
                 cwd=language.example,
                 env=env,
+                retry_network=True,
             )
             head = run(
                 ["git", "rev-parse", "HEAD"], cwd=language.example,
@@ -415,6 +430,7 @@ def ensure_example(language: Language, env: dict[str, str]) -> None:
             ],
             cwd=language.example.parent,
             env=env,
+            retry_network=True,
         )
         if not (checkout / "docker-compose.yml").is_file():
             raise RuntimeError(
@@ -688,6 +704,7 @@ def build_profiler_image(env: dict[str, str]) -> None:
         ["docker", "build", *build_args, "-f", "Dockerfile.profiler", "-t", "servicelib-profiler:local", "."],
         cwd=PROFILING_DIR,
         env=env,
+        retry_network=True,
     )
 
 
@@ -725,18 +742,20 @@ def extract_profiler_assets(env: dict[str, str]) -> None:
 
 def build(language: Language, env: dict[str, str]) -> None:
     if language.name == "go":
-        run(["make", "docker-build"], cwd=language.example, env=env)
+        run(["make", "docker-build"], cwd=language.example, env=env, retry_network=True)
     elif language.name in {"cpp", "cppboost"}:
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
             env=env,
+            retry_network=True,
         )
     elif language.name == "typescript":
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
             env=env,
+            retry_network=True,
         )
     else:
         services = ["inventoryservice", "orderservice"]
@@ -746,6 +765,7 @@ def build(language: Language, env: dict[str, str]) -> None:
             compose_command(language, "build", *services),
             cwd=language.example,
             env=env,
+            retry_network=True,
         )
 
 

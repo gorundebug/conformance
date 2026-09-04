@@ -22,6 +22,7 @@ from typing import Any
 CONFORMANCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE))
 import cpp_source_cache
+import dependency_environment
 
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "metrics"
@@ -136,31 +137,40 @@ def compose_command(language: Any, *args: str) -> list[str]:
     return command
 
 
-def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
+def run(
+    command: list[str], *, cwd: Path, env: dict[str, str],
+    retry_network: bool = False,
+) -> None:
     print("+", " ".join(command), flush=True)
+    if retry_network:
+        dependency_environment.run_dependency_command(command, cwd=cwd, env=env)
+        return
     subprocess.run(command, cwd=cwd, env=env, check=True)
 
 
 def build(language: Any, env: dict[str, str]) -> None:
     if language.name == "go":
-        run(["make", "docker-build"], cwd=language.example, env=env)
+        run(["make", "docker-build"], cwd=language.example, env=env, retry_network=True)
     elif language.name == "typescript":
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
             env=env,
+            retry_network=True,
         )
     elif language.name == "cpp":
         run(
             ["./scripts/build.generated.sh", "docker-release"],
             cwd=language.example,
             env=env,
+            retry_network=True,
         )
     elif language.name == "cppboost":
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
             env=env,
+            retry_network=True,
         )
     else:
         run(
@@ -173,6 +183,7 @@ def build(language: Any, env: dict[str, str]) -> None:
             ),
             cwd=language.example,
             env=env,
+            retry_network=True,
         )
 
 

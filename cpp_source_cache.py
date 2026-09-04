@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
+import dependency_environment
+
 
 SOURCE_CACHE_VERSION = b"servicelib-conformance-source-cache-v3\0"
 BUILD_CACHE_LAYOUT_VERSION = "v2"
@@ -292,16 +294,18 @@ def ensure(framework: Path) -> Path:
                 build_proxy_args.extend(["--build-arg", f"{name}={value}"])
         if add_host is not None:
             build_proxy_args[0:0] = ["--add-host", add_host]
-        subprocess.run(
+        dependency_environment.run_dependency_command(
             [
                 "docker", "build", *build_proxy_args,
                 "-f", "Dockerfile.cmake", "-t",
                 "cppboostservicelib-build:local", ".",
             ],
             cwd=framework,
-            check=True,
+            env=os.environ.copy(),
         )
-        subprocess.run(prepare_command(framework), cwd=framework, check=True)
+        dependency_environment.run_dependency_command(
+            prepare_command(framework), cwd=framework, env=os.environ.copy()
+        )
         missing = [
             name for name in REQUIRED_SOURCE_DIRECTORIES
             if not (sources / name).is_dir()

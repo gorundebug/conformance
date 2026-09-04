@@ -9,6 +9,7 @@ import http.client
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -19,6 +20,10 @@ from typing import Any, Callable
 
 
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(CONFORMANCE_DIR))
+
+import dependency_environment  # noqa: E402
+
 ROOT = Path(
     os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)
 ).expanduser().resolve()
@@ -168,8 +173,19 @@ def run(
     check: bool = True,
     env: dict[str, str] | None = None,
     timeout: float | None = None,
+    retry_network: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     print("+", " ".join(command), flush=True)
+    if retry_network:
+        if not check:
+            raise ValueError("retry_network requires check=True")
+        if timeout is not None:
+            raise ValueError("retry_network does not support a command timeout")
+        return dependency_environment.run_dependency_command(
+            command,
+            cwd=cwd,
+            env=env or os.environ.copy(),
+        )
     return subprocess.run(
         command, cwd=cwd, check=check, text=True, env=env, timeout=timeout
     )
@@ -1016,6 +1032,7 @@ def main() -> int:
                         ["make", f"{target}-build", "USE_LOCAL_MODULES=1"],
                         cwd=example,
                         env=env,
+                        retry_network=True,
                     )
                 mode_results: dict[str, Any] = {}
                 if "single-request" in modes:

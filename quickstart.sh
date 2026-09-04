@@ -49,6 +49,24 @@ EXAMPLE_PROFILE="${EXAMPLE_PROFILE:-function-call}"
 
 REPOS=(goexample gonativeexample cppexample cppnativeexample cppboostexample cppboostnativeexample pyexample pynativeexample rustexample rustnativeexample tsexample tsnativeexample servicegen servicelib cppservicelib cppboostservicelib pyservicelib rustservicelib tsservicelib)
 
+export GIT_HTTP_LOW_SPEED_LIMIT=${DEPENDENCY_GIT_LOW_SPEED_LIMIT:-1024}
+export GIT_HTTP_LOW_SPEED_TIME=${DEPENDENCY_GIT_LOW_SPEED_TIME:-30}
+
+retry_dependency_command() {
+  attempt=1
+  attempts=${DEPENDENCY_COMMAND_RETRY_ATTEMPTS:-10}
+  until "$@"; do
+    if [ "$attempt" -ge "$attempts" ]; then
+      echo "dependency command failed after $attempts attempts: $*" >&2
+      return 1
+    fi
+    delay=$((attempt * 2))
+    echo "dependency command failed; retrying same route in ${delay}s ($attempt/$attempts): $*" >&2
+    sleep "$delay"
+    attempt=$((attempt + 1))
+  done
+}
+
 clone_only=0
 refresh_git_mirror=1
 while [ "$#" -gt 0 ]; do
@@ -151,7 +169,9 @@ if [ -n "${DEPENDENCY_PROXY_DIR:-}" ]; then
   echo "==> Routing managed Git checkouts through $bootstrap_git_mirror"
   if [ "$refresh_git_mirror" -eq 1 ]; then
     echo "==> Refreshing every cached Git mirror before resolving revisions"
-    curl --fail-with-body --show-error --silent --request POST \
+    retry_dependency_command curl --fail-with-body --show-error --silent \
+      --connect-timeout 15 --speed-limit 1024 --speed-time 30 --max-time 60 \
+      --request POST \
       "$bootstrap_git_mirror/__servicegen_refresh"
   else
     echo "==> Trusting cached Git mirror revisions (--skip-git-mirror-refresh)"
@@ -171,7 +191,7 @@ for repo in "${REPOS[@]}"; do
     continue
   fi
   echo "  cloning $repo"
-  git clone --depth 1 "$ORG/$repo.git" "$dir"
+  retry_dependency_command git clone --depth 1 "$ORG/$repo.git" "$dir"
 done
 
 PROXY_BIN_DIR=""

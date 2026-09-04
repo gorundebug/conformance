@@ -20,6 +20,7 @@ from pathlib import Path
 CONFORMANCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE))
 import cpp_source_cache
+import dependency_environment
 
 ROOT = Path(
     os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)
@@ -92,9 +93,16 @@ def language_env(language: Language) -> dict[str, str]:
 def run(
     command: list[str], *, cwd: Path, env: dict[str, str],
     capture: bool = False, check: bool = True, announce: bool = True,
+    retry_network: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     if announce:
         print("+", " ".join(command), flush=True)
+    if retry_network:
+        if capture or not check:
+            raise ValueError("network retry requires non-captured checked command")
+        return dependency_environment.run_dependency_command(
+            command, cwd=cwd, env=env
+        )
     return subprocess.run(
         command, cwd=cwd, env=env, check=check,
         capture_output=capture, text=True,
@@ -103,12 +111,13 @@ def run(
 
 def build(language: Language, env: dict[str, str]) -> None:
     if language.name == "go":
-        run(["make", "docker-build"], cwd=language.example, env=env)
+        run(["make", "docker-build"], cwd=language.example, env=env, retry_network=True)
     elif language.name == "typescript":
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
             env=env,
+            retry_network=True,
         )
     elif language.name in {"cpp", "cppboost"}:
         # The Kafka suite runs with the generated runtime overlay.  Building
@@ -119,6 +128,7 @@ def build(language: Language, env: dict[str, str]) -> None:
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example, env=env,
+            retry_network=True,
         )
     else:
         run(
@@ -127,6 +137,7 @@ def build(language: Language, env: dict[str, str]) -> None:
                 "inventoryservice", "orderservice",
             ),
             cwd=language.example, env=env,
+            retry_network=True,
         )
 
 

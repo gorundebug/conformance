@@ -13,6 +13,8 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 BENCHMARK_ROOT = HERE.parent
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import dependency_environment
 DEPENDENCIES = Path(
     os.environ.get(
         "DEPENDENCIES_DIR", str(BENCHMARK_ROOT.parent.parent),
@@ -95,7 +97,7 @@ def build(env: dict[str, str]) -> None:
     local_framework = DEPENDENCIES / "tsservicelib"
     if local_framework.is_dir():
         env["TSSERVICELIB_SOURCE_CONTEXT"] = str(local_framework)
-    run_streaming(
+    dependency_environment.run_dependency_command(
         ["make", "docker-build", "RUNTIME_IMAGE=1"],
         cwd=EXAMPLE,
         env=env,

@@ -14,7 +14,9 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from runtime_fixture import valid_override
+import dependency_environment
 
 
 HERE = Path(__file__).resolve().parent
@@ -25,8 +27,16 @@ PROJECT = "servicelib-config-conformance-go"
 PORT = 19092
 
 
-def run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
+def run(
+    command: list[str], cwd: Path, env: dict[str, str] | None = None,
+    *, retry_network: bool = False,
+) -> None:
     print("+", " ".join(command), flush=True)
+    if retry_network:
+        dependency_environment.run_dependency_command(
+            command, cwd=cwd, env=env or os.environ.copy()
+        )
+        return
     subprocess.run(command, cwd=cwd, env=env, check=True)
 
 
@@ -115,7 +125,7 @@ def main() -> int:
             env = os.environ.copy()
             env["GOCACHE"] = env.get("GOCACHE", "/tmp/servicegen-go-build")
             env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
-            run(["make", "docker-build"], example, env)
+            run(["make", "docker-build"], example, env, retry_network=True)
         run(command + ["up", "-d", "--no-deps", "orderservice"], example)
         started = True
         initial_metrics = wait_fetch(

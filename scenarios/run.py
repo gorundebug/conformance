@@ -17,6 +17,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
+import dependency_environment
 import go_toolchain
 
 HERE = Path(__file__).resolve().parent
@@ -174,11 +175,10 @@ def prepare_grpc_probe() -> None:
     if not all(path.is_file() for path in required_generated_api):
         generate_command = ["make", "gen-proto"]
         print("+", " ".join(generate_command), flush=True)
-        subprocess.run(
+        dependency_environment.run_dependency_command(
             generate_command,
             cwd=ROOT / "goexample",
             env={**os.environ, "GOWORK": "off"},
-            check=True,
         )
 
     command_line = [
@@ -798,11 +798,10 @@ def semantic_result(result: dict[str, Any]) -> dict[str, Any]:
 def build_implementation(implementation: Implementation) -> None:
     if implementation.name == "go":
         print("+ make docker-build", flush=True)
-        subprocess.run(
+        dependency_environment.run_dependency_command(
             ["make", "docker-build"],
             cwd=implementation.example,
             env=environment(implementation),
-            check=True,
         )
     elif implementation.name == "cppboost":
         for service in ("inventoryservice", "orderservice"):
@@ -810,21 +809,23 @@ def build_implementation(implementation: Implementation) -> None:
                 f"+ make -C {service} docker-build USE_LOCAL_MODULES=1",
                 flush=True,
             )
-            subprocess.run(
+            dependency_environment.run_dependency_command(
                 ["make", "-C", service, "docker-build", "USE_LOCAL_MODULES=1"],
                 cwd=implementation.example,
                 env=environment(implementation),
-                check=True,
             )
     elif implementation.name in {"cpp", "typescript"}:
-        subprocess.run(
+        dependency_environment.run_dependency_command(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=implementation.example,
             env=environment(implementation),
-            check=True,
         )
     else:
-        run(implementation, "build", "inventoryservice", "orderservice")
+        dependency_environment.run_dependency_command(
+            command(implementation, "build", "inventoryservice", "orderservice"),
+            cwd=implementation.example,
+            env=environment(implementation),
+        )
 
 
 def main() -> int:

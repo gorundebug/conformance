@@ -298,7 +298,7 @@ def compose_command(language: Language, overlay: Path, *args: str) -> list[str]:
 
 def build(language: Language, overlay: Path, env: dict[str, str]) -> None:
     if language.name == "go":
-        run(
+        dependency_environment.run_dependency_command(
             [
                 "make",
                 "-C",
@@ -310,7 +310,7 @@ def build(language: Language, overlay: Path, env: dict[str, str]) -> None:
             env=env,
         )
         return
-    run(
+    dependency_environment.run_dependency_command(
         compose_command(language, overlay, "build", "automationservice"),
         cwd=language.example,
         env=env,

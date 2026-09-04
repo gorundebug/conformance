@@ -19,6 +19,7 @@ import zipfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
+import dependency_environment
 import go_toolchain
 
 
@@ -155,8 +156,16 @@ TYPESCRIPT_REQUIRED_ARCHIVE_SUFFIXES = (
 TYPESCRIPT_CANONICAL_SERVICE_MAKEFILE = "include make.generated.mk\n"
 
 
-def run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> str:
+def run(
+    command: list[str], *, cwd: Path, env: dict[str, str] | None = None,
+    retry_network: bool = False,
+) -> str:
     print("+", " ".join(command), flush=True)
+    if retry_network:
+        result = dependency_environment.run_dependency_command(
+            command, cwd=cwd, env=env or os.environ.copy()
+        )
+        return result.stdout
     process = subprocess.Popen(
         command, cwd=cwd, env=env, text=True, bufsize=1,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -235,7 +244,10 @@ def prepare_boost_source_cache() -> Path:
         "asio-grpc-src", "librdkafka-src", "opentelemetry-cpp-src",
         "opentelemetry-cpp-build/opentelemetry-proto-prefix/src/opentelemetry-proto",
     )
-    run(cpp_source_cache.prepare_command(FRAMEWORK), cwd=FRAMEWORK)
+    run(
+        cpp_source_cache.prepare_command(FRAMEWORK), cwd=FRAMEWORK,
+        retry_network=True,
+    )
     missing = [name for name in required if not (source_cache / name).is_dir()]
     if missing:
         raise RuntimeError(
@@ -614,7 +626,10 @@ def verify_typescript_generation(
             "-f", "docker-compose.typescript-runtime.generated.yml",
         ]
         try:
-            run(["make", "docker-build", "RUNTIME_IMAGE=1"], cwd=merged, env=env)
+            run(
+                ["make", "docker-build", "RUNTIME_IMAGE=1"],
+                cwd=merged, env=env, retry_network=True,
+            )
             checks.append("docker-build")
             run(
                 [
@@ -627,6 +642,7 @@ def verify_typescript_generation(
                 ],
                 cwd=merged,
                 env=env,
+                retry_network=True,
             )
             run(
                 [
@@ -821,7 +837,7 @@ def main() -> int:
             docker_started = True
             unit_output = run(
                 ["bash", "scripts/test.generated.sh", "docker-release"],
-                cwd=merged, env=docker_env,
+                cwd=merged, env=docker_env, retry_network=True,
             )
             (ARTIFACTS / "unit-release.log").write_text(unit_output)
             if "100% tests passed" not in unit_output:
@@ -832,7 +848,7 @@ def main() -> int:
 
             integration_output = run(
                 ["bash", "scripts/integration-test.generated.sh", "docker-release"],
-                cwd=merged, env=docker_env,
+                cwd=merged, env=docker_env, retry_network=True,
             )
             (ARTIFACTS / "integration.log").write_text(integration_output)
             if "generated Boost C++ integration lifecycle: PASS" not in integration_output:

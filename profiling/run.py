@@ -36,23 +36,10 @@ RUNTIME_METRICS = {
 
 def prepare_cpp_source_contexts() -> tuple[Path, Path]:
     framework = ROOT / "cppboostservicelib"
+    cpp_source_cache.ensure(framework)
     source_cache = cpp_source_cache.source_dir(framework)
     grpc_source = source_cache / "grpc-src"
     asio_grpc_source = source_cache / "asio-grpc-src"
-    if not grpc_source.is_dir() or not asio_grpc_source.is_dir():
-        subprocess.run(
-            [
-                "docker", "build", "-f", "Dockerfile.cmake", "-t",
-                "cppboostservicelib-build:local", ".",
-            ],
-            cwd=framework,
-            check=True,
-        )
-        subprocess.run(
-            cpp_source_cache.prepare_command(framework),
-            cwd=framework,
-            check=True,
-        )
     require(grpc_source.is_dir(), f"missing shared gRPC source cache: {grpc_source}")
     require(
         asio_grpc_source.is_dir(),

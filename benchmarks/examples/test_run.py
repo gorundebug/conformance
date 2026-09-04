@@ -438,6 +438,7 @@ class CleanCheckoutContextTest(unittest.TestCase):
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
             env={},
+            retry_network=True,
         )
 
 

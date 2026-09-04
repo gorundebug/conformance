@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+from collections import deque
 from pathlib import Path
-from typing import Sequence
+from typing import Iterable, Sequence, TextIO
 from urllib.parse import urlsplit, urlunsplit
 
 
@@ -20,6 +21,30 @@ DOCKER_PASSTHROUGH_NAMES = frozenset({
     "PIP_TRUSTED_HOST",
     "UV_INDEX_URL",
 })
+
+TRANSIENT_NETWORK_MARKERS = (
+    "context deadline exceeded",
+    "could not resolve host",
+    "connection refused",
+    "connection reset by peer",
+    "connection timed out",
+    "couldn't connect to server",
+    "failed to connect to",
+    "failed to do request",
+    "network is unreachable",
+    "no route to host",
+    "temporary failure in name resolution",
+    "tls handshake timeout",
+    "unexpected eof",
+    "status code: 429",
+    "status code: 502",
+    "status code: 503",
+    "status code: 504",
+    "status_code: 429",
+    "status_code: 502",
+    "status_code: 503",
+    "status_code: 504",
+)
 
 
 def from_framework(framework: Path) -> dict[str, str]:
@@ -91,6 +116,8 @@ def run_dependency_command(
     env: dict[str, str],
     attempts: int = 10,
     retry_delay_seconds: float = 2.0,
+    output_stream: TextIO | None = None,
+    echo: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     """Run a dependency download with retries and no alternate route.
 
@@ -103,24 +130,65 @@ def run_dependency_command(
         raise ValueError("dependency command attempts must be positive")
     rendered = " ".join(command)
     for attempt in range(1, attempts + 1):
-        try:
-            return subprocess.run(
+        output: list[str] = []
+        tail: deque[str] = deque(maxlen=80)
+        process = subprocess.Popen(
+            list(command),
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        if process.stdout is None:
+            raise RuntimeError("dependency command output pipe was not created")
+        for line in process.stdout:
+            if echo:
+                print(line, end="", flush=True)
+            if output_stream is not None:
+                output_stream.write(line)
+                output_stream.flush()
+            output.append(line)
+            tail.append(line)
+        return_code = process.wait()
+        completed = subprocess.CompletedProcess(
+            list(command), return_code, stdout="".join(output), stderr=None,
+        )
+        if return_code == 0:
+            return completed
+        if (
+            attempt == attempts
+            or not is_transient_network_failure(tail)
+        ):
+            raise subprocess.CalledProcessError(
+                return_code,
                 list(command),
-                cwd=cwd,
-                env=env,
-                check=True,
-                text=True,
+                output=completed.stdout,
             )
-        except subprocess.CalledProcessError:
-            if attempt == attempts:
-                raise
-            delay = min(retry_delay_seconds * attempt, 15.0)
-            print(
-                f"[dependency] command failed; retrying in {delay:g}s "
-                f"({attempt}/{attempts}): {rendered}",
-                flush=True,
-            )
-            time.sleep(delay)
+        delay = min(retry_delay_seconds * attempt, 15.0)
+        notice = (
+            f"[dependency] transient network failure; retrying the same "
+            f"command and route in {delay:g}s "
+            f"({attempt}/{attempts}): {rendered}\n"
+        )
+        if echo:
+            print(notice, end="", flush=True)
+        if output_stream is not None:
+            output_stream.write(notice)
+            output_stream.flush()
+        time.sleep(delay)
+
+    raise AssertionError("dependency retry loop terminated unexpectedly")
+
+
+def is_transient_network_failure(output: Iterable[str]) -> bool:
+    """Return whether recent command output proves a retryable network fault."""
+    return any(
+        marker in line.lower()
+        for line in output
+        for marker in TRANSIENT_NETWORK_MARKERS
+    )
 
 
 def docker_arguments(framework: Path) -> list[str]:

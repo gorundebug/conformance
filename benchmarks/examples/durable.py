@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -15,6 +16,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import dependency_environment
 import tooling_lock
 
 
@@ -135,12 +138,12 @@ def compose(language: Language, overlay: Path, *arguments: str) -> list[str]:
 
 def build(language: Language, overlay: Path, env: dict[str, str]) -> None:
     if language.name == "go":
-        run(
+        dependency_environment.run_dependency_command(
             ["make", "-C", "automationservice", "docker-build", f"PROJECT_DIR={language.example}"],
             cwd=language.example, env=env,
         )
     else:
-        run(
+        dependency_environment.run_dependency_command(
             compose(language, overlay, "build", "automationservice"),
             cwd=language.example, env=env,
         )
@@ -353,4 +356,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

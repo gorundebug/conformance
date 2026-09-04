@@ -13,15 +13,17 @@ import dependency_environment
 class DependencyEnvironmentTest(unittest.TestCase):
     def test_dependency_command_retries_without_changing_environment(self) -> None:
         expected_environment = {"GOPROXY": "http://proxy.invalid/go"}
-        completed = subprocess.CompletedProcess(["go", "install"], 0)
+        failed = mock.Mock()
+        failed.stdout = iter(["failed to connect to proxy\n"])
+        failed.wait.return_value = 1
+        completed = mock.Mock()
+        completed.stdout = iter(["installed\n"])
+        completed.wait.return_value = 0
         with (
             mock.patch(
-                "dependency_environment.subprocess.run",
-                side_effect=[
-                    subprocess.CalledProcessError(1, ["go", "install"]),
-                    completed,
-                ],
-            ) as run,
+                "dependency_environment.subprocess.Popen",
+                side_effect=[failed, completed],
+            ) as popen,
             mock.patch("dependency_environment.time.sleep") as sleep,
         ):
             result = dependency_environment.run_dependency_command(
@@ -30,11 +32,32 @@ class DependencyEnvironmentTest(unittest.TestCase):
                 env=expected_environment,
             )
 
-        self.assertIs(result, completed)
-        self.assertEqual(run.call_count, 2)
-        for call in run.call_args_list:
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(popen.call_count, 2)
+        for call in popen.call_args_list:
             self.assertEqual(call.kwargs["env"], expected_environment)
         sleep.assert_called_once_with(2.0)
+
+    def test_dependency_command_does_not_retry_build_failure(self) -> None:
+        failed = mock.Mock()
+        failed.stdout = iter(["ld: undefined reference to symbol\n"])
+        failed.wait.return_value = 1
+        with (
+            mock.patch(
+                "dependency_environment.subprocess.Popen",
+                return_value=failed,
+            ) as popen,
+            mock.patch("dependency_environment.time.sleep") as sleep,
+        ):
+            with self.assertRaises(subprocess.CalledProcessError):
+                dependency_environment.run_dependency_command(
+                    ["make", "build"],
+                    cwd=Path("/tmp"),
+                    env={},
+                )
+
+        popen.assert_called_once()
+        sleep.assert_not_called()
 
     def test_framework_script_is_the_single_direct_runner_contract(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
