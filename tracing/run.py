@@ -23,6 +23,7 @@ CONFORMANCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE))
 import cpp_source_cache
 import dependency_environment
+import graph_profile
 
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "tracing"
@@ -839,6 +840,9 @@ def run_language(
     language: Language, *, skip_build: bool, keep: bool
 ) -> dict[str, Any]:
     env = language_env(language)
+    graph_profile.verify_generated_project(
+        language.example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     if language.name == "cpp":
         prepare_cpp_configs()
     elif language.name == "python":
@@ -905,6 +909,12 @@ def run_language(
             timeout=90,
             env=env,
         )
+        for service, port in (
+            ("analyticsservice", 9093),
+            ("inventoryservice", 9092),
+            ("orderservice", 9091),
+        ):
+            graph_profile.verify_live_service(language.example, service, port)
         print(
             f"[tracing:{language.name}] PASS  orderservice readiness", flush=True
         )

@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import go_toolchain
+import graph_profile
 
 
 HERE = Path(__file__).resolve().parent
@@ -141,10 +142,11 @@ def verify_graph(example: Path, profile: str) -> dict[str, object]:
     if not graph.is_file():
         raise RuntimeError(f"generated graph is missing: {graph}")
     source = graph.read_text()
-    function_count = source.count("callSemantics: FunctionCall")
-    task_count = source.count("callSemantics: TaskPool")
-    priority_count = source.count("callSemantics: PriorityTaskPool")
-    parallel_count = source.count("callSemantics: ParallelCall")
+    semantic_counts = graph_profile.counts(source)
+    function_count = semantic_counts["FunctionCall"]
+    task_count = semantic_counts["TaskPool"]
+    priority_count = semantic_counts["PriorityTaskPool"]
+    parallel_count = semantic_counts["ParallelCall"]
     if profile == "function-call":
         if function_count != 19 or task_count or priority_count or parallel_count:
             raise RuntimeError(
@@ -238,6 +240,7 @@ def execute_scenarios(
     env = os.environ.copy()
     env.update({
         "DEPENDENCIES_DIR": str(workspace),
+        "EXAMPLE_PROFILE": profile,
         "SERVICELIB_SCENARIO_ARTIFACTS_DIR": str(runtime_artifacts),
         "SERVICELIB_SCENARIO_PROJECT_SUFFIX": f"-{profile}",
         "SERVICELIB_SCENARIO_REQUIRE_POOLS": "1" if profile == "current" else "0",

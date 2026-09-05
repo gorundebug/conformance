@@ -22,6 +22,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import dependency_environment  # noqa: E402
+import graph_profile  # noqa: E402
 
 CONFORMANCE = Path(__file__).resolve().parents[1]
 ROOT = (
@@ -2265,6 +2266,9 @@ def verify_python_workflow_sandbox(
 def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, object]:
     overrides, overlay = prepare_files(language)
     env = environment(language)
+    graph_profile.verify_generated_project(
+        language.example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     workflowcheck = verify_go_workflowcheck(language, env)
     if not skip_build:
         build(language, overlay, env)
@@ -2297,6 +2301,9 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
             env=env,
         )
         wait_status(language, overlay, env)
+        graph_profile.verify_live_service(
+            language.example, "automationservice", 9094
+        )
         python_sandbox = verify_python_workflow_sandbox(language, overlay, env)
         pause_temporal_schedules(language, overlay, env)
 

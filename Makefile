@@ -75,7 +75,7 @@ release: fast integration
 
 fast: dependency-manifests tooling structure signatures config pools operators serde
 
-integration: config-runtime dependencies standalone-components published-components transports kafka temporal tracing metrics dashboards logging scenarios call-semantics sanitizers generation kubernetes
+integration: call-semantics config-runtime dependencies standalone-components published-components transports kafka temporal tracing metrics dashboards logging scenarios sanitizers generation kubernetes
 
 resume:
 	python3 resume.py

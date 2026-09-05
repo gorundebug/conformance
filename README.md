@@ -865,6 +865,14 @@ bash ./quickstart.sh --profile current -- call-semantics
 Native examples are excluded because they do not contain the generated
 ServiceLib graph. Results are written under `.artifacts/call-semantics/`.
 
+This is a runtime contract, not only a generated-file check. After readiness,
+the gate reads `/status/graph` from the actually running Order and Inventory
+services for every framework language and rejects stale images or a mismatched
+profile before sending business traffic. Kafka and Temporal repeat the same
+check for Analytics and Automation, and the Kubernetes gate checks all four
+deployed services. Other runtime suites also compare each started service with
+its generated graph before exercising it.
+
 To run the entire conformance matrix against the same generated pooled graph,
 select the profile at quickstart level:
 

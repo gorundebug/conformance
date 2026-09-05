@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from runtime_fixture import valid_override
 import dependency_environment
+import graph_profile
 
 
 HERE = Path(__file__).resolve().parent
@@ -96,6 +97,9 @@ def main() -> int:
     args = parser.parse_args()
 
     example = ROOT / "tsexample"
+    graph_profile.verify_generated_project(
+        example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     framework = ROOT / "tsservicelib"
     generated_service = (
         example / "orderservice/src/internal/app/service.generated.ts"
@@ -147,6 +151,9 @@ def main() -> int:
         started = True
         initial_metrics = wait_fetch(
             "/metrics", time.monotonic() + args.timeout
+        )
+        graph_profile.verify_live_service_text(
+            example, "orderservice", fetch("/status/graph")
         )
         initial_success = reload_count(initial_metrics, "success")
         initial_error = reload_count(initial_metrics, "error")

@@ -21,6 +21,7 @@ CONFORMANCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE))
 import cpp_source_cache
 import dependency_environment
+import graph_profile
 
 ROOT = Path(
     os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)
@@ -361,6 +362,9 @@ def run_language(
     language: Language, *, skip_build: bool, keep: bool,
 ) -> dict[str, object]:
     env = language_env(language)
+    graph_profile.verify_generated_project(
+        language.example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     metric_phases: dict[str, dict[str, list[str]]] = {}
     try:
         # A previously interrupted suite may have left the same Compose
@@ -397,6 +401,9 @@ def run_language(
             language, "analyticsservice",
             "http://localhost:9093/status/data", env,
         )
+        graph_profile.verify_live_service(
+            language.example, "analyticsservice", 9093
+        )
         assert_service_handlers(language, "analyticsservice", 9093, env)
         assert_topic(language, env, creator="source")
         print(f"[kafka:{language.name}] PASS  source topic creation", flush=True)
@@ -430,6 +437,9 @@ def run_language(
             language, "inventoryservice",
             "http://localhost:9092/status/data", env,
         )
+        graph_profile.verify_live_service(
+            language.example, "inventoryservice", 9092
+        )
         assert_service_handlers(language, "inventoryservice", 9092, env)
         run(
             compose_command(
@@ -439,6 +449,9 @@ def run_language(
         )
         wait_http(
             language, "orderservice", "http://localhost:9091/status/data", env,
+        )
+        graph_profile.verify_live_service(
+            language.example, "orderservice", 9091
         )
         assert_service_handlers(language, "orderservice", 9091, env)
         assert_topic(language, env, creator="sink")

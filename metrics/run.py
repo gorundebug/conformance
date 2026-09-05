@@ -23,6 +23,7 @@ CONFORMANCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE))
 import cpp_source_cache
 import dependency_environment
+import graph_profile
 
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)).expanduser().resolve()
 ARTIFACTS = CONFORMANCE / ".artifacts" / "metrics"
@@ -650,6 +651,9 @@ def run_language(
     language: Any, *, skip_build: bool, keep: bool
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     env = language_env(language)
+    graph_profile.verify_generated_project(
+        language.example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     if language.name == "cpp":
         prepare_cpp_configs()
     elif language.name == "cppboost":
@@ -688,6 +692,12 @@ def run_language(
         wait_service(
             language, "orderservice", SERVICE_URLS["orderservice"], env
         )
+        for service, port in (
+            ("analyticsservice", 9093),
+            ("inventoryservice", 9092),
+            ("orderservice", 9091),
+        ):
+            graph_profile.verify_live_service(language.example, service, port)
         send_request()
         wait_kafka_processing()
         if language.name == "go":

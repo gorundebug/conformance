@@ -50,6 +50,12 @@ def read_results() -> dict[str, Any]:
 def validate(results: dict[str, Any], args: argparse.Namespace) -> None:
     profile = os.environ.get("EXAMPLE_PROFILE", "function-call")
     require(results.get("graph_profile") == profile, "benchmark graph profile differs")
+    semantics = results.get("call_semantics_verification")
+    require(
+        isinstance(semantics, dict)
+        and semantics.get("live_graph") == "/status/graph verified before warm-up",
+        "benchmark live call-semantics verification evidence is missing",
+    )
     parameters = results.get("parameters")
     require(isinstance(parameters, dict), "benchmark parameters are missing")
     expected = {

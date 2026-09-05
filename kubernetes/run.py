@@ -21,6 +21,7 @@ sys.path.insert(0, str(CONFORMANCE))
 
 import go_toolchain  # noqa: E402
 import dependency_environment  # noqa: E402
+import graph_profile  # noqa: E402
 
 
 ROOT = Path(
@@ -432,6 +433,9 @@ def validate_language_services(
     language: str, example: Path, environment: dict[str, str],
     request_body: str,
 ) -> None:
+    graph_profile.verify_generated_project(
+        example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     print(f"[kubernetes] START {language} service runtime", flush=True)
     script = ["bash", "scripts/kubernetes.generated.sh"]
     compose = ["docker", "compose", "-f", "docker-compose.kubernetes.yml"]
@@ -453,6 +457,24 @@ def validate_language_services(
                 f"{language} {service} rollout uses {image!r}, expected {expected!r}"
             )
         deployed_images[service] = image
+    service_ports = {
+        "analyticsservice": 9093,
+        "automationservice": 9094,
+        "inventoryservice": 9092,
+        "orderservice": 9091,
+    }
+    live_graphs: dict[str, dict[str, int]] = {}
+    for service, port in service_ports.items():
+        path = (
+            f"/api/v1/namespaces/{environment['KUBERNETES_NAMESPACE']}/"
+            f"services/http:{service}:{port}/proxy/status/graph"
+        )
+        live_graph = capture(
+            [*kubectl, "get", "--raw", path], example, environment
+        )
+        live_graphs[service] = graph_profile.verify_live_service_text(
+            example, service, live_graph
+        )
     response = capture(
         [
             *kubectl, "create", "--raw",
@@ -470,7 +492,11 @@ def validate_language_services(
         ) from error
     write_json_artifact(
         f"{language}-service-runtime.json",
-        {"images": deployed_images, "response": response_value},
+        {
+            "images": deployed_images,
+            "liveGraphCallSemantics": live_graphs,
+            "response": response_value,
+        },
     )
     print(
         f"[kubernetes] PASS  {language} four-service rollout and order pipeline",

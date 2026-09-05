@@ -28,7 +28,7 @@ folded_output="${output}.folded.txt"
 perf_frequency="${PROFILING_PERF_FREQUENCY:-997}"
 perf_event="${PROFILING_PERF_EVENT:-}"
 perf_period="${PROFILING_PERF_PERIOD:-}"
-pyspy_rate="${PROFILING_PYSPY_RATE:-5}"
+pyspy_rate="${PROFILING_PYSPY_RATE:-100}"
 pyspy_timeout="${PROFILING_PYSPY_TIMEOUT:-}"
 pyspy_nonblocking="${PROFILING_PYSPY_NONBLOCKING:-1}"
 perf_event_args=()
@@ -79,6 +79,9 @@ case "$tool" in
     ;;
   pyspy)
     if [ -z "$pyspy_timeout" ]; then
+      # Under sustained load py-spy may spend substantially longer than the
+      # sampling window draining ptrace samples and writing folded stacks.
+      # Keep the timeout bounded, but scale it with the requested window.
       pyspy_timeout=$((duration * 12))
       if [ "$pyspy_timeout" -lt $((duration + 30)) ]; then
         pyspy_timeout=$((duration + 30))

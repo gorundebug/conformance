@@ -18,6 +18,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
 import dependency_environment
+import graph_profile
 import go_toolchain
 
 HERE = Path(__file__).resolve().parent
@@ -31,6 +32,7 @@ ARTIFACTS = Path(
 ).expanduser().resolve()
 PROJECT_SUFFIX = os.environ.get("SERVICELIB_SCENARIO_PROJECT_SUFFIX", "")
 REQUIRE_POOL_ACTIVITY = os.environ.get("SERVICELIB_SCENARIO_REQUIRE_POOLS") == "1"
+GRAPH_PROFILE = os.environ.get("EXAMPLE_PROFILE", "function-call")
 ORDER_URL = "http://localhost:9091/v1/processorder"
 GRPC_PROBE_OVERLAY = HERE / "compose.grpc-probe.yml"
 GRPC_PROBE_BINARY = ARTIFACTS / "grpc-probe"
@@ -90,6 +92,9 @@ IMPLEMENTATIONS = (
         HERE / "compose.typescript-native.yml",
     ),
 )
+FRAMEWORK_IMPLEMENTATIONS = {
+    "go", "cpp", "cppboost", "python", "rust", "typescript"
+}
 
 NATIVE_SOURCE_CONTEXTS: tuple[Path, Path] | None = None
 
@@ -444,7 +449,9 @@ def graph_text(port: int) -> str:
         return response.read().decode("utf-8")
 
 
-def call_semantics_graph(implementation_name: str) -> dict[str, int]:
+def call_semantics_graph(
+    implementation_name: str, profile: str
+) -> dict[str, int]:
     graphs = {
         "orderservice": graph_text(9091),
         "inventoryservice": graph_text(9092),
@@ -460,60 +467,51 @@ def call_semantics_graph(implementation_name: str) -> dict[str, int]:
     }
     observed: dict[str, int] = {}
     totals = {
+        "function_call_links": 0,
         "task_pool_links": 0,
         "priority_task_pool_links": 0,
         "parallel_call_links": 0,
     }
     for service, pool_name in expected_pools.items():
         graph = graphs[service]
-        task_count = sum(
-            graph.count(token)
-            for token in (
-                "callSemantics: TaskPool",
-                "call_semantics: TaskPool",
-                "call_semantics: !TaskPool",
-                "      taskPool:",
+        semantics = graph_profile.counts(graph)
+        function_count = semantics["FunctionCall"]
+        task_count = semantics["TaskPool"]
+        priority_count = semantics["PriorityTaskPool"]
+        parallel_count = semantics["ParallelCall"]
+        if profile == "current":
+            require(
+                ("poolName:" in graph or "pool_name:" in graph)
+                and pool_name in graph,
+                f"{service} live graph is missing pool {pool_name!r}",
             )
-        )
-        # The public API model uses camelCase. Rust's idiomatic serde output
-        # uses snake_case and represents the data-bearing priority variant as
-        # a YAML tag. Both encodings carry the same graph semantics.
-        priority_count = sum(
-            graph.count(token)
-            for token in (
-                "callSemantics: PriorityTaskPool",
-                "call_semantics: PriorityTaskPool",
-                "call_semantics: !PriorityTaskPool",
-                "      priorityTaskPool:",
-            )
-        )
-        parallel_count = sum(
-            graph.count(token)
-            for token in (
-                "callSemantics: ParallelCall",
-                "call_semantics: ParallelCall",
-                "      parallelCall:",
-            )
-        )
-        require(
-            ("poolName:" in graph or "pool_name:" in graph)
-            and pool_name in graph,
-            f"{service} live graph is missing pool {pool_name!r}",
-        )
+        observed[f"{service}_function_call_links"] = function_count
         observed[f"{service}_task_pool_links"] = task_count
         observed[f"{service}_priority_task_pool_links"] = priority_count
         observed[f"{service}_parallel_call_links"] = parallel_count
+        totals["function_call_links"] += function_count
         totals["task_pool_links"] += task_count
         totals["priority_task_pool_links"] += priority_count
         totals["parallel_call_links"] += parallel_count
     expected_totals = {
-        "task_pool_links": 1,
-        "priority_task_pool_links": 1,
-        "parallel_call_links": 3,
-    }
+        "function-call": {
+            "function_call_links": 6,
+            "task_pool_links": 0,
+            "priority_task_pool_links": 0,
+            "parallel_call_links": 0,
+        },
+        "current": {
+            "function_call_links": 1,
+            "task_pool_links": 1,
+            "priority_task_pool_links": 1,
+            "parallel_call_links": 3,
+        },
+    }.get(profile)
+    require(expected_totals is not None, f"unsupported graph profile {profile!r}")
     require(
         totals == expected_totals,
-        f"live graph call-semantics totals differ: actual={totals}, expected={expected_totals}",
+        f"{profile} live graph call-semantics totals differ: "
+        f"actual={totals}, expected={expected_totals}",
     )
     return observed
 
@@ -620,6 +618,12 @@ def evaluate(implementation: Implementation) -> dict[str, Any]:
         run(implementation, "up", "--detach", "--no-deps", "inventoryservice")
         run(implementation, "up", "--detach", "--no-deps", "orderservice")
         wait_ready(implementation)
+        graph_counts: dict[str, int] = {}
+        if implementation.name in FRAMEWORK_IMPLEMENTATIONS:
+            graph_counts = call_semantics_graph(
+                implementation.name, GRAPH_PROFILE
+            )
+            observed["call_semantics_graph"] = graph_counts
         observed["grpc_success"] = grpc_request(
             implementation, "success", "grpc-success"
         )
@@ -686,9 +690,7 @@ def evaluate(implementation: Implementation) -> dict[str, Any]:
         observed["delayed"]["payload"] = normalize(response.payload)
         observed["delayed"]["elapsed_ms"] = round(delayed_elapsed_ms, 3)
 
-        if REQUIRE_POOL_ACTIVITY:
-            graph_counts = call_semantics_graph(implementation.name)
-            observed["call_semantics_graph"] = graph_counts
+        if REQUIRE_POOL_ACTIVITY and graph_counts:
             observed["pool_activity"] = pool_activity(
                 implementation.name, graph_counts
             )
@@ -877,13 +879,14 @@ def main() -> int:
             "scenarios": sorted(result),
             "wire_artifact": f".artifacts/scenarios/{implementation.name}.json",
         }
-        if REQUIRE_POOL_ACTIVITY:
-            summary["implementations"][implementation.name]["pool_activity"] = result[
-                "pool_activity"
-            ]
+        if "call_semantics_graph" in result:
             summary["implementations"][implementation.name][
                 "call_semantics_graph"
             ] = result["call_semantics_graph"]
+        if REQUIRE_POOL_ACTIVITY and "pool_activity" in result:
+            summary["implementations"][implementation.name]["pool_activity"] = result[
+                "pool_activity"
+            ]
     (ARTIFACTS / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     print("Scenario conformance passed:", ", ".join(value.name for value in selected))
     return 0

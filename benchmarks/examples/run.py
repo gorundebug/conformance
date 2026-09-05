@@ -766,6 +766,83 @@ def runtime_pool_executor_counts(text: str) -> list[int]:
     ]
 
 
+def call_semantics_counts(text: str) -> dict[str, int]:
+    tokens = {
+        "FunctionCall": (
+            "callSemantics: FunctionCall", "call_semantics: FunctionCall",
+            "      functionCall:",
+        ),
+        "TaskPool": (
+            "callSemantics: TaskPool", "call_semantics: TaskPool",
+            "call_semantics: !TaskPool", "      taskPool:",
+        ),
+        "PriorityTaskPool": (
+            "callSemantics: PriorityTaskPool",
+            "call_semantics: PriorityTaskPool",
+            "call_semantics: !PriorityTaskPool", "      priorityTaskPool:",
+        ),
+        "ParallelCall": (
+            "callSemantics: ParallelCall", "call_semantics: ParallelCall",
+            "      parallelCall:",
+        ),
+    }
+    return {
+        name: sum(text.count(token) for token in variants)
+        for name, variants in tokens.items()
+    }
+
+
+def verify_generated_graph_profile(language: Language, profile: str) -> None:
+    if not language.verify_framework_pool:
+        return
+    graph_path = language.example / "graph" / "example.generated.yaml"
+    try:
+        actual = call_semantics_counts(graph_path.read_text())
+    except OSError as error:
+        raise RuntimeError(
+            f"cannot verify {language.name} generated graph profile: {error}"
+        ) from error
+    expected = {
+        "function-call": {
+            "FunctionCall": 19, "TaskPool": 0,
+            "PriorityTaskPool": 0, "ParallelCall": 0,
+        },
+        "current": {
+            "FunctionCall": 8, "TaskPool": 4,
+            "PriorityTaskPool": 4, "ParallelCall": 3,
+        },
+    }[profile]
+    if actual != expected:
+        raise RuntimeError(
+            f"{language.name} generated graph is not profile {profile!r}: "
+            f"actual={actual}, expected={expected}"
+        )
+
+
+def verify_live_service_graph_profile(
+    language: Language, service: str, port: int
+) -> None:
+    if not language.verify_framework_pool:
+        return
+    graph_path = (
+        language.example / service / "graph" / f"{service}.generated.yaml"
+    )
+    expected = call_semantics_counts(graph_path.read_text())
+    url = f"http://localhost:{port}/status/graph"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as response:
+            actual = call_semantics_counts(response.read().decode("utf-8"))
+    except (OSError, UnicodeError, urllib.error.URLError) as error:
+        raise RuntimeError(
+            f"cannot verify {language.name} {service} live graph from {url}: {error}"
+        ) from error
+    if actual != expected:
+        raise RuntimeError(
+            f"{language.name} {service} live graph uses the wrong call semantics: "
+            f"actual={actual}, generated={expected}; the runtime image is stale"
+        )
+
+
 def service_pool_metrics(language: Language, service: str) -> tuple[str, ...]:
     graph_path = (
         language.example / service / "graph" / f"{service}.generated.yaml"
@@ -999,23 +1076,28 @@ def benchmark_language(
             9092,
             args.cores,
         )
-        run(
-            compose_command(language, "up", "--detach", "--no-deps", "orderservice"),
-            cwd=language.example,
-            env=env,
-        )
-        wait_for_service(
-            language,
-            "orderservice",
-            "http://localhost:9091/status/data",
-            env,
-        )
-        verify_configured_pool_size(
-            language,
-            "orderservice",
-            9091,
-            args.cores,
-        )
+        verify_live_service_graph_profile(language, "inventoryservice", 9092)
+        if not args.grpc_only:
+            run(
+                compose_command(
+                    language, "up", "--detach", "--no-deps", "orderservice"
+                ),
+                cwd=language.example,
+                env=env,
+            )
+            wait_for_service(
+                language,
+                "orderservice",
+                "http://localhost:9091/status/data",
+                env,
+            )
+            verify_configured_pool_size(
+                language,
+                "orderservice",
+                9091,
+                args.cores,
+            )
+            verify_live_service_graph_profile(language, "orderservice", 9091)
 
         if args.warmup != "0" and args.warmup != "0s":
             load(
@@ -1086,6 +1168,11 @@ def write_results(results: list[dict[str, Any]], args: argparse.Namespace) -> No
         },
         "scenario": args.scenario,
         "graph_profile": getattr(args, "graph_profile", "function-call"),
+        "call_semantics_verification": {
+            "generated_graph": "exact profile counts verified before build",
+            "live_graph": "/status/graph verified before warm-up",
+            "scope": "framework services; native baselines have no ServiceLib graph",
+        },
         "parameters": {
             "build": "reused" if args.skip_build else "release",
             "service_cores": args.cores,
@@ -1100,6 +1187,12 @@ def write_results(results: list[dict[str, Any]], args: argparse.Namespace) -> No
             "method": args.method,
             "payload_mode": args.payload_mode,
             "expected_status": args.expected_status,
+        },
+        "telemetry": {
+            "verification": "fully merged docker compose config",
+            "SERVICELIB_NOOP_LOGS": "1",
+            "SERVICELIB_NOOP_METRICS": "1",
+            "SERVICELIB_NOOP_TRACING": "1",
         },
         "results": results,
         "logs": {
@@ -1175,6 +1268,8 @@ def write_results(results: list[dict[str, Any]], args: argparse.Namespace) -> No
         "# Framework example benchmark\n\n"
         f"- Scenario: `{args.scenario}`\n"
         f"- Graph profile: `{getattr(args, 'graph_profile', 'function-call')}`\n"
+        "- Call semantics: exact generated graph and live `/status/graph` "
+        "verified before warm-up (framework services)\n"
         + f"- Request: `{args.method} {args.target}` (expected `{args.expected_status}`)\n"
         + f"- Payload mode: `{args.payload_mode}`\n"
         f"- Service CPU quota: `{args.cores}` cores per container\n"
@@ -1182,6 +1277,10 @@ def write_results(results: list[dict[str, Any]], args: argparse.Namespace) -> No
         f"- Virtual users: `{args.vus}`\n"
         f"- Warm-up: `{args.warmup}`\n"
         f"- Measurement: `{args.runs} × {args.duration}`\n\n"
+        "- Telemetry: `SERVICELIB_NOOP_LOGS=1`, "
+        "`SERVICELIB_NOOP_METRICS=1`, `SERVICELIB_NOOP_TRACING=1` "
+        "(verified from the fully merged Docker Compose configuration for "
+        "every listed variant)\n\n"
         f"- Complete per-language logs: `{language_log_path(args, '<language>').parent}`\n\n"
         + header
         + separator
@@ -1306,6 +1405,8 @@ def main() -> int:
         )
         return 0
     ensure_examples(selected, args)
+    for language in selected:
+        verify_generated_graph_profile(language, args.graph_profile)
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     for language in selected:
         language_log_path(args, language.name).unlink(missing_ok=True)

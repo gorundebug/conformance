@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from runtime_fixture import valid_override
 import dependency_environment
+import graph_profile
 
 
 HERE = Path(__file__).resolve().parent
@@ -112,6 +113,9 @@ def main() -> int:
     compose = artifact / "compose.yml"
     env = os.environ.copy()
     env["SERVICELIB_SOURCE_CONTEXT"] = str(framework)
+    graph_profile.verify_generated_project(
+        example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     override.write_text(valid_override(1000))
     compose.write_text(
         f"""services:
@@ -155,6 +159,9 @@ def main() -> int:
         started = True
         deadline = time.monotonic() + args.timeout
         initial_metrics = wait_fetch("/metrics", deadline)
+        graph_profile.verify_live_service_text(
+            example, "orderservice", fetch("/status/graph")
+        )
         initial_success = reload_count(initial_metrics, "success")
         initial_error = reload_count(initial_metrics, "error")
 

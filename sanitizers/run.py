@@ -23,6 +23,7 @@ CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CONFORMANCE_DIR))
 
 import dependency_environment  # noqa: E402
+import graph_profile  # noqa: E402
 
 ROOT = Path(
     os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)
@@ -796,6 +797,9 @@ def exercise(
     example = IMPLEMENTATIONS[language]
     if not example.is_dir():
         raise RuntimeError(f"missing generated example: {example}")
+    graph_profile.verify_generated_project(
+        example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     target = target_name(language, sanitizer)
     services = service_descriptors(
         language, include_fallback_services=sanitizer == "runtime"
@@ -830,6 +834,10 @@ def exercise(
             env=env,
         )
         initial_graphs = wait_ready(services)
+        for service in services:
+            graph_profile.verify_live_service(
+                example, service.name, service.http_port
+            )
         if mode == "single-request":
             request_once()
             load_result = {

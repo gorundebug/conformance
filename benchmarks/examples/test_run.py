@@ -5,7 +5,7 @@ import unittest
 from argparse import Namespace
 from os import environ
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import run as benchmark
 
@@ -122,6 +122,32 @@ class PoolVerificationTest(unittest.TestCase):
         self.assertFalse(
             benchmark.service_uses_priority_task_pool(language, "orderservice")
         )
+
+    def test_generated_profile_rejects_mislabeled_current_graph(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            example = Path(directory)
+            (example / "graph").mkdir()
+            (example / "graph/example.generated.yaml").write_text(
+                "callSemantics: FunctionCall\n" * 8
+                + "callSemantics: TaskPool\n" * 4
+                + "callSemantics: PriorityTaskPool\n" * 4
+                + "callSemantics: ParallelCall\n" * 3
+            )
+            language = benchmark.Language("go", example, example / "compose.yml")
+            with self.assertRaisesRegex(RuntimeError, "not profile 'function-call'"):
+                benchmark.verify_generated_graph_profile(language, "function-call")
+
+    def test_live_profile_rejects_stale_runtime_image(self) -> None:
+        language = self.language_with_graph("FunctionCall")
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = b"callSemantics: TaskPool\n"
+        with patch.object(benchmark.urllib.request, "urlopen", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "runtime image is stale"):
+                benchmark.verify_live_service_graph_profile(
+                    language, "orderservice", 9091
+                )
 
     def test_missing_generated_graph_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

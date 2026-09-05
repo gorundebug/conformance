@@ -1613,6 +1613,69 @@ class DependencyRootTest(unittest.TestCase):
         subprocess_run.assert_called_once()
         self.assertEqual(subprocess_run.call_args.args[0], ["compose", "down"])
 
+    def test_scenarios_reject_live_graph_from_the_wrong_profile(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "scenarios/run.py"))
+        verify = globals_["call_semantics_graph"]
+        current_graphs = [
+            "poolName: Default Pool\ncallSemantics: FunctionCall\n"
+            "callSemantics: TaskPool\ncallSemantics: ParallelCall\n"
+            "callSemantics: ParallelCall\n",
+            "poolName: Inventory Priority Workers\n"
+            "callSemantics: PriorityTaskPool\ncallSemantics: ParallelCall\n",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            verify.__globals__["ARTIFACTS"] = Path(directory)
+            verify.__globals__["graph_text"] = mock.Mock(
+                side_effect=current_graphs
+            )
+            with self.assertRaisesRegex(RuntimeError, "function-call live graph"):
+                verify("go", "function-call")
+
+    def test_scenarios_accept_live_function_call_graph(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "scenarios/run.py"))
+        verify = globals_["call_semantics_graph"]
+        with tempfile.TemporaryDirectory() as directory:
+            verify.__globals__["ARTIFACTS"] = Path(directory)
+            verify.__globals__["graph_text"] = mock.Mock(
+                side_effect=[
+                    "callSemantics: FunctionCall\n" * 4,
+                    "callSemantics: FunctionCall\n" * 2,
+                ]
+            )
+            observed = verify("go", "function-call")
+        self.assertEqual(observed["orderservice_function_call_links"], 4)
+        self.assertEqual(observed["inventoryservice_function_call_links"], 2)
+
+    def test_shared_graph_profile_rejects_mislabeled_generated_graph(self) -> None:
+        profile = runpy.run_path(str(CONFORMANCE_DIR / "graph_profile.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / "graph").mkdir()
+            (project / "graph/example.generated.yaml").write_text(
+                "callSemantics: FunctionCall\n" * 8
+                + "callSemantics: TaskPool\n" * 4
+                + "callSemantics: PriorityTaskPool\n" * 4
+                + "callSemantics: ParallelCall\n" * 3
+            )
+            with self.assertRaisesRegex(RuntimeError, "not profile 'function-call'"):
+                profile["verify_generated_project"](project, "function-call")
+
+    def test_shared_graph_profile_rejects_stale_live_service(self) -> None:
+        profile = runpy.run_path(str(CONFORMANCE_DIR / "graph_profile.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            graph = project / "orderservice/graph"
+            graph.mkdir(parents=True)
+            (graph / "orderservice.generated.yaml").write_text(
+                "callSemantics: FunctionCall\n"
+            )
+            with self.assertRaisesRegex(RuntimeError, "runtime image is stale"):
+                profile["verify_live_service_text"](
+                    project,
+                    "orderservice",
+                    "callSemantics: TaskPool\n",
+                )
+
     def test_logging_python_test_uses_clean_machine_docker_image(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "logging/run.py"))
         build_command, build_env = globals_["python_image_build"]()

@@ -142,7 +142,10 @@ class TypeScriptProfilingTest(unittest.TestCase):
             "${PROFILING_ORDER_PROCESSED_ENABLED:-false}",
             overlay,
         )
-        self.assertIn('SERVICELIB_NOOP_METRICS: "0"', overlay)
+        self.assertNotIn('SERVICELIB_NOOP_METRICS: "0"', overlay)
+        for name in profiling.PROFILING_TELEMETRY_DEFAULTS:
+            self.assertEqual(environment[name], "1")
+        self.assertEqual(environment["PROFILING_PYSPY_RATE"], "100")
         native = [
             language for language in profiling.LANGUAGES
             if language.repository is not None

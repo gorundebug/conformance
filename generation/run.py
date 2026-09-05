@@ -20,6 +20,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cpp_source_cache
 import dependency_environment
+import graph_profile
 import go_toolchain
 
 
@@ -612,6 +613,8 @@ def verify_typescript_generation(
                 "build and Docker targets"
             )
 
+    graph_profile.verify_generated_project(merged, active_example_profile())
+
     checks: list[str] = []
     if not skip_docker:
         env = os.environ.copy()
@@ -663,6 +666,12 @@ def verify_typescript_generation(
             wait_http("http://localhost:9093/status/data")
             run([*compose, "up", "--detach", "orderservice"], cwd=merged, env=env)
             wait_http("http://localhost:9091/status/data")
+            for service, port in (
+                ("analyticsservice", 9093),
+                ("inventoryservice", 9092),
+                ("orderservice", 9091),
+            ):
+                graph_profile.verify_live_service(merged, service, port)
             send_typescript_request()
             checks.append("integration")
         finally:

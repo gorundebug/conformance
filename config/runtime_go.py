@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from runtime_fixture import valid_override
 import dependency_environment
+import graph_profile
 
 
 HERE = Path(__file__).resolve().parent
@@ -95,6 +96,9 @@ def main() -> int:
     args = parser.parse_args()
 
     example = ROOT / "goexample"
+    graph_profile.verify_generated_project(
+        example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     artifact = OUTPUT.parent
     artifact.mkdir(parents=True, exist_ok=True)
     override = artifact / "overrides.yaml"
@@ -130,6 +134,9 @@ def main() -> int:
         started = True
         initial_metrics = wait_fetch(
             "/metrics", time.monotonic() + args.timeout
+        )
+        graph_profile.verify_live_service_text(
+            example, "orderservice", fetch("/status/graph")
         )
         initial_success = reload_count(initial_metrics, "success")
         initial_error = reload_count(initial_metrics, "error")

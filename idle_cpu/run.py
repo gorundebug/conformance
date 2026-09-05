@@ -15,6 +15,9 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import graph_profile
+
 
 CONFORMANCE = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE.parent)).expanduser().resolve()
@@ -183,6 +186,9 @@ def measure_language(
     log = LanguageLog(log_path)
     env = os.environ.copy()
     env["USE_LOCAL_MODULES"] = "1"
+    graph_profile.verify_generated_project(
+        language.example, os.environ.get("EXAMPLE_PROFILE", "function-call")
+    )
     log.write(
         "proxy environment:\n"
         + "\n".join(
@@ -198,6 +204,11 @@ def measure_language(
     try:
         log.run(["make", "docker-up"], cwd=language.example, env=env)
         wait_for_services(readiness_timeout, log)
+        for service, port in SERVICES.items():
+            semantics = graph_profile.verify_live_service(
+                language.example, service, port
+            )
+            log.write(f"verified live {service} call semantics: {semantics}")
         compose(log, language, env, "ps")
         required_containers = (*SERVICES, "redpanda", "temporal")
         for service in required_containers:
