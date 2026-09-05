@@ -149,6 +149,20 @@ class PoolVerificationTest(unittest.TestCase):
                     language, "orderservice", 9091
                 )
 
+    def test_live_profile_accepts_omitted_default_link_semantics(self) -> None:
+        language = self.language_with_graph("FunctionCall")
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = (
+            b"services:\n  orderService:\n"
+            b"    defaultCallSemantics: FunctionCall\nlinks: []\n"
+        )
+        with patch.object(benchmark.urllib.request, "urlopen", return_value=response):
+            benchmark.verify_live_service_graph_profile(
+                language, "orderservice", 9091
+            )
+
     def test_missing_generated_graph_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             language = benchmark.Language(

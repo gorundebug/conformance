@@ -465,6 +465,10 @@ def call_semantics_graph(
         "orderservice": "Default Pool",
         "inventoryservice": "Inventory Priority Workers",
     }
+    expected_link_counts = {
+        "orderservice": 4,
+        "inventoryservice": 2,
+    }
     observed: dict[str, int] = {}
     totals = {
         "function_call_links": 0,
@@ -474,11 +478,17 @@ def call_semantics_graph(
     }
     for service, pool_name in expected_pools.items():
         graph = graphs[service]
-        semantics = graph_profile.counts(graph)
-        function_count = semantics["FunctionCall"]
+        semantics = graph_profile.override_counts(graph)
         task_count = semantics["TaskPool"]
         priority_count = semantics["PriorityTaskPool"]
         parallel_count = semantics["ParallelCall"]
+        function_count = expected_link_counts[service] - (
+            task_count + priority_count + parallel_count
+        )
+        require(
+            function_count >= 0,
+            f"{service} live graph has more semantic overrides than links",
+        )
         if profile == "current":
             require(
                 ("poolName:" in graph or "pool_name:" in graph)

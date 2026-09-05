@@ -55,6 +55,21 @@ def counts(text: str) -> dict[str, int]:
     }
 
 
+def override_counts(
+    text: str, default_semantics: str = "FunctionCall"
+) -> dict[str, int]:
+    """Count only link semantics that differ from the service default.
+
+    Runtime graph exporters intentionally may omit an explicit semantic equal
+    to ``defaultCallSemantics``. Generated YAML may retain it, so raw token
+    counts cannot be compared across those two representations.
+    """
+    result = counts(text)
+    if default_semantics in result:
+        result[default_semantics] = 0
+    return result
+
+
 def verify_generated_project(project: Path, profile: str) -> dict[str, int]:
     expected = PROFILE_COUNTS.get(profile)
     if expected is None:
@@ -91,11 +106,12 @@ def verify_live_service_text(
     project: Path, service: str, live_graph: str
 ) -> dict[str, int]:
     expected_graph = project / service / "graph" / f"{service}.generated.yaml"
-    expected = counts(expected_graph.read_text())
-    actual = counts(live_graph)
+    expected = override_counts(expected_graph.read_text())
+    actual = override_counts(live_graph)
     if actual != expected:
         raise RuntimeError(
             f"{project.name} {service} live graph uses the wrong call semantics: "
-            f"actual={actual}, generated={expected}; the runtime image is stale"
+            f"actual overrides={actual}, generated overrides={expected}; "
+            "the runtime image is stale"
         )
     return actual

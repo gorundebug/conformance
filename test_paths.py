@@ -1676,6 +1676,22 @@ class DependencyRootTest(unittest.TestCase):
                     "callSemantics: TaskPool\n",
                 )
 
+    def test_shared_graph_profile_accepts_omitted_default_semantics(self) -> None:
+        profile = runpy.run_path(str(CONFORMANCE_DIR / "graph_profile.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            graph = project / "orderservice/graph"
+            graph.mkdir(parents=True)
+            (graph / "orderservice.generated.yaml").write_text(
+                "callSemantics: FunctionCall\n"
+            )
+            observed = profile["verify_live_service_text"](
+                project,
+                "orderservice",
+                "defaultCallSemantics: FunctionCall\n",
+            )
+        self.assertEqual(observed["FunctionCall"], 0)
+
     def test_logging_python_test_uses_clean_machine_docker_image(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "logging/run.py"))
         build_command, build_env = globals_["python_image_build"]()
