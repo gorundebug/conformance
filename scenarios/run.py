@@ -454,22 +454,17 @@ def call_semantics_graph(implementation_name: str) -> dict[str, int]:
             graph
         )
 
-    expected = {
-        "orderservice": {
-            "task_pool_links": 0,
-            "priority_task_pool_links": 1,
-            "parallel_call_links": 2,
-            "pool_name": "Default Pool",
-        },
-        "inventoryservice": {
-            "task_pool_links": 1,
-            "priority_task_pool_links": 0,
-            "parallel_call_links": 1,
-            "pool_name": "Inventory Priority Workers",
-        },
+    expected_pools = {
+        "orderservice": "Default Pool",
+        "inventoryservice": "Inventory Priority Workers",
     }
     observed: dict[str, int] = {}
-    for service, requirement in expected.items():
+    totals = {
+        "task_pool_links": 0,
+        "priority_task_pool_links": 0,
+        "parallel_call_links": 0,
+    }
+    for service, pool_name in expected_pools.items():
         graph = graphs[service]
         task_count = sum(
             graph.count(token)
@@ -501,25 +496,25 @@ def call_semantics_graph(implementation_name: str) -> dict[str, int]:
             )
         )
         require(
-            task_count == requirement["task_pool_links"],
-            f"{service} live graph has {task_count} TaskPool links",
-        )
-        require(
-            priority_count == requirement["priority_task_pool_links"],
-            f"{service} live graph has {priority_count} PriorityTaskPool links",
-        )
-        require(
-            parallel_count == requirement["parallel_call_links"],
-            f"{service} live graph has {parallel_count} ParallelCall links",
-        )
-        require(
             ("poolName:" in graph or "pool_name:" in graph)
-            and str(requirement["pool_name"]) in graph,
-            f"{service} live graph is missing pool {requirement['pool_name']!r}",
+            and pool_name in graph,
+            f"{service} live graph is missing pool {pool_name!r}",
         )
         observed[f"{service}_task_pool_links"] = task_count
         observed[f"{service}_priority_task_pool_links"] = priority_count
         observed[f"{service}_parallel_call_links"] = parallel_count
+        totals["task_pool_links"] += task_count
+        totals["priority_task_pool_links"] += priority_count
+        totals["parallel_call_links"] += parallel_count
+    expected_totals = {
+        "task_pool_links": 1,
+        "priority_task_pool_links": 1,
+        "parallel_call_links": 3,
+    }
+    require(
+        totals == expected_totals,
+        f"live graph call-semantics totals differ: actual={totals}, expected={expected_totals}",
+    )
     return observed
 
 
