@@ -14,7 +14,7 @@ class DependencyEnvironmentTest(unittest.TestCase):
     def test_dependency_command_retries_without_changing_environment(self) -> None:
         expected_environment = {"GOPROXY": "http://proxy.invalid/go"}
         failed = mock.Mock()
-        failed.stdout = iter(["failed to connect to proxy\n"])
+        failed.stdout = iter(["502 Bad Gateway\n"])
         failed.wait.return_value = 1
         completed = mock.Mock()
         completed.stdout = iter(["installed\n"])
