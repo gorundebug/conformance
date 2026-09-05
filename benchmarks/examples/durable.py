@@ -114,6 +114,7 @@ services:
         "  automationservice:\n"
         "    cpus: ${DURABLE_BENCHMARK_CORES}\n"
         "    environment:\n"
+        "      SERVICELIB_NOOP_LOGS: \"1\"\n"
         "      SERVICELIB_NOOP_METRICS: \"1\"\n"
         "      SERVICELIB_NOOP_TRACING: \"1\"\n"
         "    volumes:\n"
