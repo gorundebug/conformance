@@ -539,27 +539,33 @@ def counter_total(metrics: str, family: str, pool_name: str) -> float:
     return total
 
 
-def pool_activity(implementation_name: str) -> dict[str, float]:
-    order_metrics = metric_text(9091)
-    inventory_metrics = metric_text(9092)
-    (ARTIFACTS / f"{implementation_name}.orderservice.metrics.prom").write_text(
-        order_metrics
-    )
-    (ARTIFACTS / f"{implementation_name}.inventoryservice.metrics.prom").write_text(
-        inventory_metrics
-    )
-    observed = {
-        "order_priority_tasks": counter_total(
-            order_metrics,
-            "priority_task_pool_tasks_total",
-            "Default Pool",
-        ),
-        "inventory_tasks": counter_total(
-            inventory_metrics,
-            "task_pool_tasks_total",
-            "Inventory Priority Workers",
-        ),
+def pool_activity(
+    implementation_name: str, graph_counts: dict[str, int]
+) -> dict[str, float]:
+    services = {
+        "orderservice": (9091, "Default Pool"),
+        "inventoryservice": (9092, "Inventory Priority Workers"),
     }
+    observed: dict[str, float] = {}
+    for service, (port, pool_name) in services.items():
+        metrics = metric_text(port)
+        (ARTIFACTS / f"{implementation_name}.{service}.metrics.prom").write_text(
+            metrics
+        )
+        task_links = graph_counts[f"{service}_task_pool_links"]
+        priority_links = graph_counts[f"{service}_priority_task_pool_links"]
+        require(
+            (task_links > 0) != (priority_links > 0),
+            f"{service} must use exactly one configured pool semantics",
+        )
+        family = (
+            "task_pool_tasks_total"
+            if task_links > 0
+            else "priority_task_pool_tasks_total"
+        )
+        observed[f"{service}_pool_tasks"] = counter_total(
+            metrics, family, pool_name
+        )
     for name, value in observed.items():
         require(value > 0, f"configured pooled call was not executed: {name}={value}")
     return observed
@@ -681,10 +687,11 @@ def evaluate(implementation: Implementation) -> dict[str, Any]:
         observed["delayed"]["elapsed_ms"] = round(delayed_elapsed_ms, 3)
 
         if REQUIRE_POOL_ACTIVITY:
-            observed["call_semantics_graph"] = call_semantics_graph(
-                implementation.name
+            graph_counts = call_semantics_graph(implementation.name)
+            observed["call_semantics_graph"] = graph_counts
+            observed["pool_activity"] = pool_activity(
+                implementation.name, graph_counts
             )
-            observed["pool_activity"] = pool_activity(implementation.name)
 
         (ARTIFACTS / f"{implementation.name}.json").write_text(
             json.dumps(observed, indent=2, sort_keys=True) + "\n")
