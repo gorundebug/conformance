@@ -20,7 +20,8 @@ fi
 fetch_attempt=1
 fetch_attempts=${DEPENDENCY_COMMAND_RETRY_ATTEMPTS:-10}
 while ! git -C "$checkout" fetch --prune origin \
-  +refs/heads/main:refs/remotes/origin/main; do
+  +refs/heads/main:refs/remotes/origin/main \
+  '+refs/tags/*:refs/tags/*'; do
   if [ "$fetch_attempt" -ge "$fetch_attempts" ]; then
     echo "managed checkout fetch failed after $fetch_attempts attempts: $checkout" >&2
     exit 1
