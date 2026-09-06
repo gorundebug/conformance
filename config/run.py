@@ -66,6 +66,19 @@ GRPC_METHOD_TYPES = {
     "BidirectionalStreaming": 4,
 }
 
+JOIN_TYPES = {
+    "Inner": 1,
+    "Left": 2,
+    "Right": 3,
+    "Outer": 4,
+}
+
+JOIN_STORAGE_TYPES = {
+    "HashMap": 1,
+    "RocksDB": 2,
+    "Aerospike": 3,
+}
+
 
 def upper_first(value: str) -> str:
     return value[:1].upper() + value[1:]
@@ -350,6 +363,14 @@ def normalize_snapshot(value: Any, key: str = "") -> Any:
         marker = "api.HTTPMethodType"
         if value.startswith(marker):
             return value[len(marker):]
+    if key == "joinType" and isinstance(value, str):
+        marker = "api.JoinType"
+        if value.startswith(marker):
+            return JOIN_TYPES.get(value[len(marker):], value)
+    if key == "joinStorage" and isinstance(value, str):
+        marker = "api.JoinStorageType"
+        if value.startswith(marker):
+            return JOIN_STORAGE_TYPES.get(value[len(marker):], value)
     if key == "overlapPolicy" and isinstance(value, str):
         marker = "api.ScheduleOverlapPolicy"
         if value.startswith(marker):

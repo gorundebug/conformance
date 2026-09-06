@@ -15,6 +15,18 @@ SPEC.loader.exec_module(RUN)
 
 
 class OverrideCoverageTest(unittest.TestCase):
+    def test_normalizes_typed_go_join_configuration(self) -> None:
+        self.assertEqual(
+            RUN.normalize_snapshot("api.JoinTypeInner", "joinType"),
+            1,
+        )
+        self.assertEqual(
+            RUN.normalize_snapshot(
+                "api.JoinStorageTypeHashMap", "joinStorage"
+            ),
+            1,
+        )
+
     def test_normalizes_typed_go_schedule_policies(self) -> None:
         self.assertEqual(
             RUN.normalize_snapshot(
