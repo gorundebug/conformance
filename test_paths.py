@@ -1305,7 +1305,11 @@ class DependencyRootTest(unittest.TestCase):
                         "make", "-C", service, "docker-build",
                         "USE_LOCAL_MODULES=1",
                     ]
-                    for service in ("inventoryservice", "orderservice")
+                    for service in (
+                        "analyticsservice",
+                        "inventoryservice",
+                        "orderservice",
+                    )
                 ],
             )
 
