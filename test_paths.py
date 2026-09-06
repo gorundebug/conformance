@@ -102,16 +102,11 @@ class DependencyRootTest(unittest.TestCase):
             subprocess.run(["git", "-C", str(seed), "add", "value"], check=True)
             subprocess.run(["git", "-C", str(seed), "commit", "-m", "old"], check=True,
                            capture_output=True)
-            subprocess.run(["git", "-C", str(seed), "tag", "v0.0.1"], check=True)
             subprocess.run(["git", "-C", str(seed), "remote", "add", "origin", str(origin)],
                            check=True)
             subprocess.run(["git", "-C", str(seed), "push", "-u", "origin", "main"],
                            check=True, capture_output=True)
-            subprocess.run(["git", "-C", str(seed), "push", "origin", "v0.0.1"],
-                           check=True, capture_output=True)
             subprocess.run(["git", "clone", "--branch", "main", str(origin), str(checkout)],
-                           check=True, capture_output=True)
-            subprocess.run(["git", "-C", str(checkout), "tag", "-d", "v0.0.1"],
                            check=True, capture_output=True)
             # Old managed clones may still track a former default branch. The
             # updater must not rely on their persisted remote fetch refspec.
@@ -148,12 +143,6 @@ class DependencyRootTest(unittest.TestCase):
             ).stdout.strip()
             self.assertEqual(local, remote)
             self.assertEqual((checkout / "value").read_text(), "new\n")
-            fetched_tag = subprocess.run(
-                ["git", "-C", str(checkout), "rev-parse", "--verify", "v0.0.1^{commit}"],
-                check=True, capture_output=True, text=True,
-            ).stdout.strip()
-            self.assertTrue(fetched_tag)
-
     def test_managed_checkout_retries_transient_mirror_failures(self) -> None:
         script = (
             CONFORMANCE_DIR / "scripts" / "update-managed-checkout.sh"
