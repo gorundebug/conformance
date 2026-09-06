@@ -192,7 +192,7 @@ def main() -> int:
             "telemetry": bool(
                 re.search(
                     r"ConfigLoader<Config>\s+loader\([\s\S]*?"
-                    r"\{\},\s*bootstrap_logger,\s*metrics,\s*\"\"\s*\);",
+                    r"\{\},\s*bootstrap_logger,\s*\*?metrics,\s*\"\"\s*\);",
                     source,
                 )
             ),
