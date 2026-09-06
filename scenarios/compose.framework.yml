@@ -1,0 +1,5 @@
+services:
+  analyticsservice:
+    restart: "no"
+    environment:
+      ORDER_PROCESSED_ENABLED: "false"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -116,6 +117,8 @@ def command(implementation: Implementation, *args: str) -> list[str]:
                 f"compose file, found {len(runtime_overlays)}"
             )
         result.extend(["--file", str(runtime_overlays[0])])
+    if implementation.name in FRAMEWORK_IMPLEMENTATIONS:
+        result.extend(["--file", str(HERE / "compose.framework.yml")])
     result.extend(
         [
             "--file",
@@ -341,6 +344,9 @@ def prepare_typescript() -> None:
         / "docker_overrides.yaml"
     )
     overrides = source.read_text().replace(
+        "address: dns:///localhost:9202",
+        "address: dns:///inventoryservice:9202",
+    ).replace(
         "  orderProcessed:\n    enabled: true",
         "  orderProcessed:\n    enabled: false",
     ).replace(
@@ -384,6 +390,72 @@ def wait_ready(implementation: Implementation) -> None:
     raise RuntimeError(
         f"{implementation.name} services did not become ready"
         + (f":\n{output}" if output else "")
+    )
+
+
+def wait_analytics_operators(implementation: Implementation) -> dict[str, int]:
+    """Prove that the canonical Analytics graph executed every new operator."""
+    expected = {
+        ("Analytics Orders", "Split Analytics Orders"): 2,
+        ("Split Analytics Orders", "Key Orders For Join"): 2,
+        ("Split Analytics Orders", "Key Orders For Multi Join"): 2,
+        ("Analytics Payments", "Split Analytics Payments"): 2,
+        ("Split Analytics Payments", "Key Payments For Join"): 2,
+        ("Split Analytics Payments", "Key Payments For Multi Join"): 2,
+        ("Analytics Shipments", "Key Shipments For Multi Join"): 2,
+        ("Join Order Payment Analytics", "Write Joined Analytics"): 2,
+        ("Multi Join Analytics Events", "Route Analytics Result"): 2,
+        # Case -> When edges are routing predicates and intentionally do not
+        # expose call counters. Their execution is proven by the counted
+        # When -> Sink edges below.
+        ("High Value Analytics", "Write High Value Analytics"): 1,
+        ("Standard Analytics", "Write Standard Analytics"): 1,
+    }
+    deadline = time.monotonic() + 30
+    latest: dict[str, int] = {}
+    latest_payload: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(
+                "http://localhost:9093/status/data", timeout=2
+            ) as response:
+                payload = json.load(response)
+            latest_payload = payload
+            names = {
+                node["id"]: node["label"].split("(", 1)[0]
+                for node in payload.get("nodes", [])
+            }
+            actual: dict[tuple[str, str], int] = {}
+            for edge in payload.get("edges", []):
+                source = names.get(edge.get("from"))
+                target = names.get(edge.get("to"))
+                if source is None or target is None:
+                    continue
+                match = re.search(r"calls:\s*(\d+)", edge.get("label", ""))
+                if match:
+                    actual[(source, target)] = int(match.group(1))
+            latest = {
+                f"{source} -> {target}": actual.get((source, target), -1)
+                for source, target in expected
+            }
+            if all(actual.get(edge) == count for edge, count in expected.items()):
+                artifact = ARTIFACTS / f"{implementation.name}.analytics.status.json"
+                artifact.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+                return latest
+            if any(actual.get(edge, 0) > count for edge, count in expected.items()):
+                break
+        except (OSError, urllib.error.URLError, json.JSONDecodeError):
+            pass
+        time.sleep(0.25)
+    if latest_payload is not None:
+        artifact = ARTIFACTS / f"{implementation.name}.analytics.status.json"
+        artifact.write_text(
+            json.dumps(latest_payload, indent=2, sort_keys=True) + "\n"
+        )
+    raise RuntimeError(
+        f"{implementation.name} Analytics operator calls differ: "
+        f"actual={latest}, expected="
+        + str({f"{a} -> {b}": count for (a, b), count in expected.items()})
     )
 
 
@@ -625,11 +697,16 @@ def require_text_response(name: str, response: HttpObservation, status: int) -> 
 def evaluate(implementation: Implementation) -> dict[str, Any]:
     observed: dict[str, Any] = {}
     try:
+        if implementation.name in FRAMEWORK_IMPLEMENTATIONS:
+            run(implementation, "up", "--detach", "--no-deps", "analyticsservice")
         run(implementation, "up", "--detach", "--no-deps", "inventoryservice")
         run(implementation, "up", "--detach", "--no-deps", "orderservice")
         wait_ready(implementation)
         graph_counts: dict[str, int] = {}
         if implementation.name in FRAMEWORK_IMPLEMENTATIONS:
+            observed["analytics_operators"] = wait_analytics_operators(
+                implementation
+            )
             graph_counts = call_semantics_graph(
                 implementation.name, GRAPH_PROFILE
             )
@@ -796,7 +873,11 @@ def semantic_result(result: dict[str, Any]) -> dict[str, Any]:
         }
         for name, observation in result.items()
         if not name.startswith("grpc_")
-        and name not in {"pool_activity", "call_semantics_graph"}
+        and name not in {
+            "analytics_operators",
+            "pool_activity",
+            "call_semantics_graph",
+        }
     }
     grpc = {
         name: {
@@ -818,7 +899,7 @@ def build_implementation(implementation: Implementation) -> None:
             env=environment(implementation),
         )
     elif implementation.name == "cppboost":
-        for service in ("inventoryservice", "orderservice"):
+        for service in ("analyticsservice", "inventoryservice", "orderservice"):
             print(
                 f"+ make -C {service} docker-build USE_LOCAL_MODULES=1",
                 flush=True,
@@ -835,8 +916,11 @@ def build_implementation(implementation: Implementation) -> None:
             env=environment(implementation),
         )
     else:
+        services = ["inventoryservice", "orderservice"]
+        if implementation.name in FRAMEWORK_IMPLEMENTATIONS:
+            services.insert(0, "analyticsservice")
         dependency_environment.run_dependency_command(
-            command(implementation, "build", "inventoryservice", "orderservice"),
+            command(implementation, "build", *services),
             cwd=implementation.example,
             env=environment(implementation),
         )
