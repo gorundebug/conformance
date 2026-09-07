@@ -36,6 +36,20 @@ class MetricsNormalizationTests(unittest.TestCase):
         self.assertEqual(result["service"]["nodes"][0]["opacity"], 1)
         self.assertEqual(result["service"]["nodes"][0]["x"], 2)
 
+    def test_runtime_graph_normalizes_key_value_type_spellings(self) -> None:
+        spellings = (
+            "datastruct.KeyValue[string,*github.com/example/types.AnalyticsEvent]",
+            "KeyValue[string,AnalyticsEvent]",
+            "AnalyticsEvent>",
+            "AnalyticsEvent",
+        )
+        for spelling in spellings:
+            with self.subTest(spelling=spelling):
+                self.assertEqual(
+                    MODULE.normalize_runtime_type_name(spelling),
+                    "AnalyticsEvent",
+                )
+
     def test_observed_zero_duration_keeps_histogram_sum_shape(self) -> None:
         result = MODULE.normalize({
             "service": """# TYPE datasource_endpoint_request_duration_seconds histogram

@@ -360,7 +360,12 @@ def wait_kafka_processing(*, timeout: float = 30) -> None:
         graph = normalize_runtime_graphs({"analyticsservice": latest})[
             "analyticsservice"
         ]
-        if any(edge.get("calls", 0) > 0 for edge in graph["edges"]):
+        if any(
+            edge.get("from", "").startswith("Consume Order Processed(INPUT)")
+            and edge.get("to", "").startswith("Count Order Processed(PROCESS)")
+            and edge.get("calls", 0) > 0
+            for edge in graph["edges"]
+        ):
             return
         time.sleep(0.2)
     raise RuntimeError(
@@ -556,7 +561,9 @@ def normalize_runtime_graphs(raw_by_service: dict[str, str]) -> dict[str, Any]:
                     f"{service} /status/data edge label has invalid type"
                 )
             label_lines = label.split("\n") if label else []
-            type_name = label_lines[0] if label_lines else ""
+            type_name = normalize_runtime_type_name(
+                label_lines[0] if label_lines else ""
+            )
             calls = 0
             side = ""
             if type_name.startswith("calls: "):
@@ -606,6 +613,19 @@ def normalize_runtime_graphs(raw_by_service: dict[str, str]) -> dict[str, Any]:
         )
         normalized[service] = graph
     return normalized
+
+
+def normalize_runtime_type_name(type_name: str) -> str:
+    """Normalize language spellings without discarding the observed value type."""
+    if "KeyValue[" in type_name and "," in type_name:
+        type_name = type_name.rsplit(",", 1)[1].rstrip("]")
+    # C++ and Rust status renderers already reduce KeyValue<K, V> to V but
+    # retain the generic's final closing delimiter.
+    type_name = type_name.rstrip(">")
+    type_name = type_name.lstrip("*")
+    for separator in ("/", "::", "."):
+        type_name = type_name.rsplit(separator, 1)[-1]
+    return type_name
 
 
 def canonicalize_json_numbers(value: Any) -> Any:
