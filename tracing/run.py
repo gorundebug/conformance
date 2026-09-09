@@ -547,7 +547,7 @@ def _normalize_span_events(operation: str, events: list[str]) -> list[str]:
                 available -= 1
 
     require_prefix("send", "result_consumed")
-    require_prefix("result_consumed", "result_received")
+    require_prefix("send", "result_received")
 
     return sorted(
         events,

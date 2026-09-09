@@ -79,10 +79,10 @@ class TraceEventNormalizationTests(unittest.TestCase):
         rust_order = [
             "begin_request",
             "send",
-            "result_consumed",
             "consume_message",
             "eof",
             "result_received",
+            "result_consumed",
         ]
 
         self.assertEqual(
