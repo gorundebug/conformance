@@ -13,19 +13,27 @@
     "datasink/grpc/bidistreaming.hpp": {
       "reason": "asio-grpc generated clients expose AsyncSession instead of userver's callable stream object; the public Rpc alias selects that transport result while every endpoint method remains identical.",
       "canonical_only": [
-        "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >"
+        "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >",
+        "callable|servicelib::BidirectionalStreamingEndpoint::SessionCell|void markReady ( )",
+        "callable|servicelib::BidirectionalStreamingEndpoint::SessionCell|void wait ( )",
+        "type|servicelib::BidirectionalStreamingEndpoint|struct SessionCell final"
       ],
       "boost_only": [
-        "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = typename detail :: BidirectionalStreamingRpcType < ClientFunction > :: type"
+        "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = typename detail :: BidirectionalStreamingRpcType < ClientFunction > :: type",
+        "alias|servicelib::BidirectionalStreamingEndpoint|using SessionCell = detail :: StreamingCell < Session >"
       ]
     },
     "datasink/grpc/clientstreaming.hpp": {
       "reason": "asio-grpc generated clients expose AsyncSession instead of userver's callable stream object; the public Rpc alias selects that transport result while every endpoint method remains identical.",
       "canonical_only": [
-        "alias|servicelib::ClientStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >"
+        "alias|servicelib::ClientStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >",
+        "callable|servicelib::ClientStreamingEndpoint::SessionCell|void markReady ( )",
+        "callable|servicelib::ClientStreamingEndpoint::SessionCell|void wait ( )",
+        "type|servicelib::ClientStreamingEndpoint|struct SessionCell final"
       ],
       "boost_only": [
-        "alias|servicelib::ClientStreamingEndpoint|using Rpc = typename detail :: ClientStreamingRpcType < ClientFunction > :: type"
+        "alias|servicelib::ClientStreamingEndpoint|using Rpc = typename detail :: ClientStreamingRpcType < ClientFunction > :: type",
+        "alias|servicelib::ClientStreamingEndpoint|using SessionCell = detail :: StreamingCell < Session >"
       ]
     },
     "datasink/grpc/common.hpp": {
