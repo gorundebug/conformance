@@ -494,6 +494,69 @@ def _span_events(span: dict[str, Any]) -> list[str]:
     return events
 
 
+_GRPC_INPUT_EVENT_ORDER = {
+    "begin_request": 0,
+    "begin_request.error": 0,
+    "consume_message": 1,
+    "consume_message.error": 1,
+    "eof": 2,
+    "send": 3,
+    "result_consumed": 4,
+    "result_received": 5,
+}
+
+
+def _normalize_span_events(operation: str, events: list[str]) -> list[str]:
+    """Validate causal order and stabilize concurrently recorded events.
+
+    A gRPC input may hand graph processing to an asynchronous caller. Once the
+    task is accepted, the gRPC coroutine records ``consume_message``/``eof``
+    while the pool worker may concurrently record ``send``/``result_consumed``.
+    Their relative timestamps are therefore deliberately not part of the
+    cross-language contract. Order inside each causal chain remains enforced.
+    """
+    if operation != "grpc.input":
+        return events
+
+    positions: dict[str, list[int]] = {}
+    for index, event in enumerate(events):
+        positions.setdefault(event, []).append(index)
+
+    def require_before(left: str, right: str) -> None:
+        if left in positions and right in positions:
+            if positions[left][-1] > positions[right][0]:
+                raise RuntimeError(
+                    f"{operation} event order violates {left} before {right}: "
+                    f"{events!r}"
+                )
+
+    require_before("begin_request", "consume_message")
+    require_before("begin_request", "consume_message.error")
+    require_before("consume_message", "eof")
+    def require_prefix(left: str, right: str) -> None:
+        available = 0
+        for event in events:
+            if event == left:
+                available += 1
+            elif event == right:
+                if available == 0:
+                    raise RuntimeError(
+                        f"{operation} event order violates {left} before {right}: "
+                        f"{events!r}"
+                    )
+                available -= 1
+
+    require_prefix("send", "result_consumed")
+    require_prefix("result_consumed", "result_received")
+
+    return sorted(
+        events,
+        key=lambda event: _GRPC_INPUT_EVENT_ORDER.get(
+            event, len(_GRPC_INPUT_EVENT_ORDER)
+        ),
+    )
+
+
 def normalize(trace: dict[str, Any]) -> dict[str, Any]:
     processes = trace.get("processes", {})
     selected: dict[str, dict[str, Any]] = {}
@@ -513,11 +576,12 @@ def normalize(trace: dict[str, Any]) -> dict[str, Any]:
         if operation not in APPLICATION_OPERATIONS:
             continue
         process = processes.get(span.get("processID"), {})
+        events = _normalize_span_events(operation, _span_events(span))
         selected[span_id] = {
             "operation": operation,
             "service": str(process.get("serviceName", "")).lower().replace(" ", ""),
             "attributes": _span_tags(span),
-            "events": _span_events(span),
+            "events": events,
             "children": [],
             # Jaeger timestamps are used only to retain the observed logical
             # dispatch order. They are removed from normalized output because

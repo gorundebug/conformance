@@ -66,5 +66,45 @@ class CppOtlpConfigTests(unittest.TestCase):
         self.assertEqual(rendered.count("    grpc-otlp-factory:\n"), 1)
 
 
+class TraceEventNormalizationTests(unittest.TestCase):
+    def test_grpc_input_allows_async_result_events_to_race_with_acceptance(self) -> None:
+        go_order = [
+            "begin_request",
+            "consume_message",
+            "eof",
+            "send",
+            "result_consumed",
+            "result_received",
+        ]
+        rust_order = [
+            "begin_request",
+            "send",
+            "result_consumed",
+            "consume_message",
+            "eof",
+            "result_received",
+        ]
+
+        self.assertEqual(
+            MODULE._normalize_span_events("grpc.input", go_order),
+            MODULE._normalize_span_events("grpc.input", rust_order),
+        )
+
+    def test_grpc_input_still_rejects_causal_event_reversal(self) -> None:
+        with self.assertRaisesRegex(
+            RuntimeError, "send before result_consumed"
+        ):
+            MODULE._normalize_span_events(
+                "grpc.input",
+                ["begin_request", "result_consumed", "send"],
+            )
+
+    def test_other_span_event_order_is_not_rewritten(self) -> None:
+        events = ["handle_response", "grpc_call"]
+        self.assertIs(
+            MODULE._normalize_span_events("grpc.output", events), events
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
