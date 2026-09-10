@@ -20,6 +20,8 @@ BUILD_CACHE_LAYOUT_VERSION = "v2"
 CONFORMANCE_DIR = Path(__file__).resolve().parent
 CONTAINER_SOURCE_DIR = "/servicegen-cpp-source-cache"
 SOURCE_DIRECTORIES = {
+    "LIBCRON": "libcron-src",
+    "LIBCRON_DATE": "libcron_date-src",
     "BOOST": "boost-src",
     "YAML-CPP": "yaml-cpp-src",
     "GOOGLETEST": "googletest-src",

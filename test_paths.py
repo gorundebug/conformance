@@ -1438,6 +1438,28 @@ class DependencyRootTest(unittest.TestCase):
             for value in command
         ))
 
+    def test_source_cache_covers_cron_fetch_content_dependencies(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))
+
+        arguments = globals_["cmake_args"](Path("/framework"))
+
+        self.assertIn(
+            "-DFETCHCONTENT_SOURCE_DIR_LIBCRON="
+            "/servicegen-cpp-source-cache/libcron-src",
+            arguments,
+        )
+        self.assertIn(
+            "-DFETCHCONTENT_SOURCE_DIR_LIBCRON_DATE="
+            "/servicegen-cpp-source-cache/libcron_date-src",
+            arguments,
+        )
+        self.assertIn(
+            "libcron-src", globals_["REQUIRED_SOURCE_DIRECTORIES"]
+        )
+        self.assertIn(
+            "libcron_date-src", globals_["REQUIRED_SOURCE_DIRECTORIES"]
+        )
+
     def test_source_cache_uses_docker_proxy_host_on_macos_and_linux(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "cpp_source_cache.py"))
         dependency_root = Path(
