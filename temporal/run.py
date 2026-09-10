@@ -1975,6 +1975,17 @@ def automationservice_logs(
     return result.stdout + result.stderr
 
 
+def workflow_activation_log_count(logs: str, workflow_id: str) -> int:
+    """Count structured activation records for one Workflow execution."""
+
+    lines = logs.splitlines()
+    return sum(
+        workflow_id in "\n".join(lines[index : index + 12])
+        for index, line in enumerate(lines)
+        if "temporal workflow graph started" in line
+    )
+
+
 def verify_tracing(
     language: Language,
     overlay: Path,
@@ -2044,9 +2055,11 @@ def verify_tracing(
         logs_before_replay
     )
     # Schedules and on-demand endpoints share the same worker and may finish
-    # concurrently. Count the activation record for this exact execution,
-    # rather than unrelated records with the same message text.
-    workflow_log_count = logs_before_replay.count(direct[0])
+    # concurrently. Count the structured activation record for this exact
+    # execution rather than unrelated records with the same message text.
+    workflow_log_count = workflow_activation_log_count(
+        logs_before_replay, direct[0]
+    )
     if workflow_log_count != 1:
         raise RuntimeError(
             "direct Workflow replay-safe activation log count is "
