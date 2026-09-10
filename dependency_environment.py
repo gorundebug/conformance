@@ -96,6 +96,42 @@ def for_host(environment: dict[str, str]) -> dict[str, str]:
     }
 
 
+def docker_git_context(
+    environment: dict[str, str], remote_context: str,
+) -> str:
+    """Route a pinned BuildKit Git context through the configured mirror.
+
+    Git's ``insteadOf`` configuration covers Git subprocesses, but BuildKit
+    resolves remote build contexts itself.  Therefore a Docker-facing context
+    must contain the mirror URL explicitly whenever proxy mode is enabled.
+    """
+    if not environment.get("DEPENDENCY_PROXY_DIR"):
+        return remote_context
+
+    mirror = environment.get("DEPENDENCY_GIT_MIRROR_URL")
+    if not mirror:
+        raise RuntimeError(
+            "proxy mode requires DEPENDENCY_GIT_MIRROR_URL for remote Git contexts"
+        )
+    repository, separator, revision = remote_context.partition("#")
+    if not separator or not revision:
+        raise ValueError(f"Git context must contain a pinned revision: {remote_context}")
+    parsed_repository = urlsplit(repository)
+    if not parsed_repository.hostname or not parsed_repository.path:
+        raise ValueError(f"Git context must use an absolute repository URL: {remote_context}")
+
+    proxy_host = environment.get("DEPENDENCY_PROXY_HOST", "localhost")
+    docker_host = environment.get(
+        "DEPENDENCY_PROXY_DOCKER_HOST", "host.docker.internal"
+    )
+    docker_mirror = _docker_value(mirror, proxy_host, docker_host).rstrip("/")
+    repository_path = parsed_repository.path.lstrip("/")
+    return (
+        f"{docker_mirror}/{parsed_repository.hostname}/{repository_path}"
+        f"#{revision}"
+    )
+
+
 def _read_environment(command: list[str]) -> dict[str, str]:
     process = subprocess.run(
         command,

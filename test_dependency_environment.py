@@ -147,6 +147,31 @@ class DependencyEnvironmentTest(unittest.TestCase):
         )
         self.assertEqual(host_environment["UNRELATED"], "kept")
 
+    def test_buildkit_git_context_uses_container_reachable_mirror(self) -> None:
+        environment = {
+            "DEPENDENCY_PROXY_DIR": "/cache",
+            "DEPENDENCY_PROXY_HOST": "localhost",
+            "DEPENDENCY_PROXY_DOCKER_HOST": "host.docker.internal",
+            "DEPENDENCY_GIT_MIRROR_URL": "http://localhost:18084/cgi-bin/git",
+        }
+
+        context = dependency_environment.docker_git_context(
+            environment,
+            "https://github.com/userver-framework/userver.git#revision",
+        )
+
+        self.assertEqual(
+            context,
+            "http://host.docker.internal:18084/cgi-bin/git/"
+            "github.com/userver-framework/userver.git#revision",
+        )
+
+    def test_buildkit_git_context_stays_direct_without_proxy(self) -> None:
+        remote = "https://github.com/userver-framework/userver.git#revision"
+        self.assertEqual(
+            dependency_environment.docker_git_context({}, remote), remote
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -606,7 +606,13 @@ def main() -> int:
     )
     canonical_protobuf_compose = [
         "env", f"SERVICELIB_SOURCE_CONTEXT={CANONICAL}",
-        f"USERVER_SOURCE_CONTEXT={ROOT / 'userver' if (ROOT / 'userver').is_dir() else USERVER_REMOTE_CONTEXT}",
+        "USERVER_SOURCE_CONTEXT=" + (
+            str(ROOT / "userver")
+            if (ROOT / "userver").is_dir()
+            else dependency_environment.docker_git_context(
+                canonical_env, USERVER_REMOTE_CONTEXT
+            )
+        ),
         "docker", "compose",
         "-f", "docker-compose.cmake.generated.yml",
         "-f", str(CONFORMANCE_DIR / "serde/compose.canonical.yml"),

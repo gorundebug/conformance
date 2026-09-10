@@ -147,7 +147,10 @@ def environment(implementation: Implementation) -> dict[str, str]:
         env["USERVER_SOURCE_CONTEXT"] = os.environ.get("USERVER_SOURCE_CONTEXT") or (
             str(userver)
             if userver.is_dir()
-            else "https://github.com/userver-framework/userver.git#c9f77729c0edce7e423def2d4a4450aa7fc9d259"
+            else dependency_environment.docker_git_context(
+                env,
+                "https://github.com/userver-framework/userver.git#c9f77729c0edce7e423def2d4a4450aa7fc9d259",
+            )
         )
         env["USERVER_LTO"] = "ON"
     elif implementation.name == "cppboost":
