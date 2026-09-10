@@ -410,6 +410,18 @@ def wait_analytics_operators(implementation: Implementation) -> dict[str, int]:
         # When -> Sink edges below.
         ("High Value Analytics", "Write High Value Analytics"): 1,
         ("Standard Analytics", "Write Standard Analytics"): 1,
+        # The finite feedback example starts at zero, advances three times,
+        # feeds the first two values back through LinkStream, and lets only
+        # the terminal value leave the cycle. These counters prove both that
+        # the loop is actually closed and that its exit branch terminates it.
+        ("Cycle Analytics Input", "Merge Cycle Analytics"): 1,
+        ("Cycle Analytics Link", "Merge Cycle Analytics"): 2,
+        ("Merge Cycle Analytics", "Advance Cycle Analytics"): 3,
+        ("Advance Cycle Analytics", "Split Cycle Analytics"): 3,
+        ("Split Cycle Analytics", "Continue Cycle Analytics"): 3,
+        ("Split Cycle Analytics", "Complete Cycle Analytics"): 3,
+        ("Continue Cycle Analytics", "Cycle Analytics Link"): 2,
+        ("Complete Cycle Analytics", "Write Cycle Analytics"): 1,
     }
     deadline = time.monotonic() + 30
     latest: dict[str, int] = {}
