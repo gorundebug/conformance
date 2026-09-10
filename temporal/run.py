@@ -2018,10 +2018,6 @@ def verify_tracing(
 
     sdk_before = fetch_text(TEMPORAL_SDK_METRICS_URL)
     workflow_metric_before = workflow_link_metric_total(sdk_before, language)
-    logs_before_workflow = automationservice_logs(language, overlay, env)
-    workflow_logs_before = logs_before_workflow.count(
-        "temporal workflow graph started"
-    )
     direct = start_traced_workflow(
         language,
         overlay,
@@ -2047,10 +2043,10 @@ def verify_tracing(
     (ARTIFACTS / language.name / "workflow-trace.runtime.log").write_text(
         logs_before_replay
     )
-    workflow_log_count = (
-        logs_before_replay.count("temporal workflow graph started")
-        - workflow_logs_before
-    )
+    # Schedules and on-demand endpoints share the same worker and may finish
+    # concurrently. Count the activation record for this exact execution,
+    # rather than unrelated records with the same message text.
+    workflow_log_count = logs_before_replay.count(direct[0])
     if workflow_log_count != 1:
         raise RuntimeError(
             "direct Workflow replay-safe activation log count is "
