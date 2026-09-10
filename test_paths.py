@@ -1234,9 +1234,10 @@ class DependencyRootTest(unittest.TestCase):
             Path(generator_environment["GOWORK"]),
             CONFORMANCE_DIR / ".artifacts" / "transports" / "go.work",
         )
+        self.assertNotIn("DEPENDENCY_CONAN_HOME", generator_environment)
         self.assertEqual(
-            Path(generator_environment["DEPENDENCY_CONAN_HOME"]),
-            CONFORMANCE_DIR / ".conan2-cache",
+            generator_environment["DEPENDENCY_CONAN_VOLUME"],
+            "dependency-conan2",
         )
         generator_workspace = Path(generator_environment["GOWORK"]).read_text()
         self.assertIn(str(globals_["SERVICEGEN"].resolve()), generator_workspace)

@@ -512,12 +512,12 @@ def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[st
             cpp_source_cache.build_volume_name(BOOST)
         )
     environment["GOCACHE"] = "/tmp/servicegen-go-build"
-    # Conan packages are dependency caches, not suite results.  Keeping them
-    # below .artifacts made every graph-profile switch delete many gigabytes
-    # and forced generated transport fixtures to rebuild the same packages.
-    conan_home = CONFORMANCE_DIR / ".conan2-cache"
-    conan_home.mkdir(parents=True, exist_ok=True)
-    environment["DEPENDENCY_CONAN_HOME"] = str(conan_home)
+    # Conan packages are dependency caches, not suite results. Use the shared
+    # Docker volume from the generated dependency contract. A host directory
+    # is unsafe on case-insensitive filesystems: dependencies such as liburing
+    # contain case-distinct files and symlinks.
+    environment.pop("DEPENDENCY_CONAN_HOME", None)
+    environment.setdefault("DEPENDENCY_CONAN_VOLUME", "dependency-conan2")
     go_work = ARTIFACT.parent / "go.work"
     go_work.parent.mkdir(parents=True, exist_ok=True)
     go_work.write_text(go_toolchain.render_workspace(
