@@ -210,6 +210,15 @@ def language_env(language: Any) -> dict[str, str]:
     return env
 
 
+def disable_analytics_schedule(text: str) -> str:
+    """Keep request-driven metric comparisons independent of wall-clock cron runs."""
+    enabled = "  analyticsSchedule:\n    enabled: true"
+    disabled = "  analyticsSchedule:\n    enabled: false"
+    if enabled not in text:
+        raise RuntimeError("analyticsSchedule enabled override was not found")
+    return text.replace(enabled, disabled, 1)
+
+
 def prepare_cpp_configs() -> None:
     output = ARTIFACTS / "cpp"
     output.mkdir(parents=True, exist_ok=True)
@@ -225,6 +234,8 @@ def prepare_cpp_configs() -> None:
             / "config"
             / "overrides.integration.generated.yaml"
         ).read_text()
+        if service == "analyticsservice":
+            override = disable_analytics_schedule(override)
         override = override.replace(
             'environment: ""', "environment: debug", 1
         )
@@ -254,6 +265,8 @@ def prepare_python_configs() -> None:
         text = source.read_text().replace(
             'environment: ""', "environment: debug", 1
         )
+        if service == "analyticsservice":
+            text = disable_analytics_schedule(text)
         if service == "orderservice":
             text = text.rstrip() + "\n" + "endpoints:\n  orderProcessed:\n    enabled: true\n"
         (output / f"{service}.overrides.yaml").write_text(text)
@@ -275,6 +288,8 @@ def prepare_cppboost_configs() -> None:
             .replace('environment: ""', "environment: debug", 1)
             .replace("dns:///localhost:9202", "dns:///inventoryservice:9202")
         )
+        if service == "analyticsservice":
+            text = disable_analytics_schedule(text)
         if service == "orderservice":
             text = text.replace("enabled: false", "enabled: true")
         (output / f"{service}.overrides.yaml").write_text(text)

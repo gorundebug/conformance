@@ -13,6 +13,16 @@ SPEC.loader.exec_module(MODULE)
 
 
 class MetricsNormalizationTests(unittest.TestCase):
+    def test_metrics_fixture_disables_wall_clock_cron(self) -> None:
+        source = "endpoints:\n  analyticsSchedule:\n    enabled: true\n"
+        self.assertEqual(
+            MODULE.disable_analytics_schedule(source),
+            "endpoints:\n  analyticsSchedule:\n    enabled: false\n",
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "enabled override was not found"):
+            MODULE.disable_analytics_schedule("endpoints: {}\n")
+
     def test_cpp_uses_exact_workspace_binary_overlay(self) -> None:
         example = Path("/tmp/cppexample")
         language = SimpleNamespace(

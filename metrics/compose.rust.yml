@@ -2,6 +2,7 @@ services:
   analyticsservice:
     environment:
       ANALYTICS_SERVICE_ENVIRONMENT: debug
+      ANALYTICS_SCHEDULE_ENABLED: "false"
       ORDER_EVENTS_BROKERS: redpanda:9092
       RUST_LOG: info
 
