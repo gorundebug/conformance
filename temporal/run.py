@@ -2300,7 +2300,6 @@ def exercise(language: Language, *, skip_build: bool, jobs: int) -> dict[str, ob
                 "temporal-schema",
                 "temporal",
                 "temporal-create-namespace",
-                "temporal-ui",
                 "jaeger",
                 "otel-collector",
                 "prometheus",
