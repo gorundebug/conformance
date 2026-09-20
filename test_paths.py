@@ -192,6 +192,22 @@ class DependencyRootTest(unittest.TestCase):
                 (destination / "tools" / "protoc").read_text(), "cached\n"
             )
 
+    def test_profile_workspace_preserves_build_prefixed_source_files(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            destination = root / "profile"
+            source.mkdir()
+            (source / "build_substream_result.rs").write_text("source\n")
+            (source / "build-release").mkdir()
+            (source / "build-release/artifact").write_text("generated\n")
+
+            globals_["copy_example"](source, destination)
+
+            self.assertTrue((destination / "build_substream_result.rs").is_file())
+            self.assertFalse((destination / "build-release").exists())
+
     def test_profile_workspace_preserves_release_tags_on_generated_snapshot(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
         with tempfile.TemporaryDirectory() as directory:

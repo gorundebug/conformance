@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import shutil
@@ -75,31 +76,33 @@ def run(
     )
 
 
+_COPY_IGNORE = shutil.ignore_patterns(
+    ".git", ".servicegen", ".artifacts", ".cache", ".ccache", ".idea",
+    ".mypy_cache", ".pyservicelib", ".pytest_cache", ".ruff_cache",
+    ".venv", "bin", "node_modules", "target", "tools", "tmp",
+    "__pycache__",
+)
+
+
+def ignore_copy_artifacts(directory: str, names: list[str]) -> set[str]:
+    ignored = set(_COPY_IGNORE(directory, names))
+    ignored.update(
+        name
+        for name in names
+        if (Path(directory) / name).is_dir()
+        and any(
+            fnmatch.fnmatchcase(name, pattern)
+            for pattern in ("build*", "dist*")
+        )
+    )
+    return ignored
+
+
 def copy_example(source: Path, destination: Path) -> None:
     shutil.copytree(
         source,
         destination,
-        ignore=shutil.ignore_patterns(
-            ".git",
-            ".servicegen",
-            ".artifacts",
-            ".cache",
-            ".ccache",
-            ".idea",
-            ".mypy_cache",
-            ".pyservicelib",
-            ".pytest_cache",
-            ".ruff_cache",
-            ".venv",
-            "bin",
-            "build*",
-            "dist*",
-            "node_modules",
-            "target",
-            "tools",
-            "tmp",
-            "__pycache__",
-        ),
+        ignore=ignore_copy_artifacts,
     )
 
 
