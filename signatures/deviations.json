@@ -75,14 +75,17 @@
         "callable|servicelib::AsyncCompletionToken|~ AsyncCompletionToken ( )",
         "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withCompletion ( std :: shared_ptr < AsyncCompletionState > ) &&",
         "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withCompletion ( std :: shared_ptr < AsyncCompletionState > ) const &",
+        "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withExecutionScope ( std :: shared_ptr < const LocalExecutionScope > ) &&",
         "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withoutCompletion ( ) &&",
         "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withoutCompletion ( ) const &",
+        "callable|servicelib::MessageContext|[[ nodiscard ]] const std :: shared_ptr < const LocalExecutionScope > & executionScope ( ) const noexcept",
         "callable|servicelib::MessageContext|[[ nodiscard ]] std :: shared_ptr < AsyncCompletionToken > retainCompletion ( ) const",
         "callable|servicelib|inline AsyncCompletionToken :: AsyncCompletionToken ( std :: shared_ptr < AsyncCompletionState > ) noexcept",
         "callable|servicelib|inline AsyncCompletionToken :: ~ AsyncCompletionToken ( )",
         "type|servicelib|class AsyncCompletionState",
         "type|servicelib|class AsyncCompletionState final : public std :: enable_shared_from_this < AsyncCompletionState >",
-        "type|servicelib|class AsyncCompletionToken final"
+        "type|servicelib|class AsyncCompletionToken final",
+        "type|servicelib|struct LocalExecutionScope"
       ]
     },
     "runtime/detail/kafka_admin.hpp": {
