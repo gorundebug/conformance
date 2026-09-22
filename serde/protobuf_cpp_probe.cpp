@@ -46,6 +46,8 @@ Message Parse(std::string_view wire) {
 
 }  // namespace
 
+namespace processorderitem = inventoryserviceapi::processorderitem;
+
 int main() {
   processorderitem::ProcessOrderItemRequest request;
   request.set_order_id(

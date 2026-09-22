@@ -1426,6 +1426,13 @@ class DependencyRootTest(unittest.TestCase):
         self.assertTrue((CONFORMANCE_DIR / "serde/python_probe.py").is_file())
         self.assertTrue((CONFORMANCE_DIR / "serde/typescript_probe.mjs").is_file())
         self.assertTrue((serde["RUST"] / "examples/serde_wire_probe.rs").is_file())
+        protobuf_cpp_probe = (
+            CONFORMANCE_DIR / "serde/protobuf_cpp_probe.cpp"
+        ).read_text()
+        self.assertIn(
+            "namespace processorderitem = inventoryserviceapi::processorderitem;",
+            protobuf_cpp_probe,
+        )
         self.assertIn("compare_wire_fixtures(go_fixtures", source)
         self.assertIn(
             "name: cppexample_cpp-conan2",
