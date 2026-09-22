@@ -54,7 +54,6 @@
     ],
     "changed_shared_paths": [
       "api/generate.py",
-      "api/serviceapi.hpp",
       "api/serviceapi_parse.hpp",
       "datasink/grpc/bidistreaming.hpp",
       "datasink/grpc/clientstreaming.hpp",
@@ -166,6 +165,8 @@
     "omitted_userver_boundaries": [
       "analyticsservice/config/config_vars.integration.yaml",
       "analyticsservice/config/config_vars.yaml",
+      "analyticsservice/internal/app/clients.generated.cpp",
+      "analyticsservice/internal/app/connectors.generated.cpp",
       "analyticsservice/static_config.yaml",
       "analyticsservice/docker/userver-packages.txt",
       "analyticsservice/docker/userver-tsan-ignorelist.generated.txt",
@@ -174,23 +175,31 @@
       "docker/userver-tsan-ignorelist.generated.txt",
       "inventoryservice/config/config_vars.integration.yaml",
       "inventoryservice/config/config_vars.yaml",
+      "inventoryservice/internal/app/clients.generated.cpp",
+      "inventoryservice/internal/app/connectors.generated.cpp",
       "inventoryservice/static_config.yaml",
       "inventoryservice/docker/userver-packages.txt",
       "inventoryservice/docker/userver-tsan-ignorelist.generated.txt",
       "orderservice/config/config_vars.integration.yaml",
       "orderservice/config/config_vars.yaml",
+      "orderservice/internal/app/clients.generated.cpp",
+      "orderservice/internal/app/connectors.generated.cpp",
       "orderservice/static_config.yaml",
       "orderservice/docker/userver-packages.txt",
       "orderservice/docker/userver-tsan-ignorelist.generated.txt"
     ],
     "boost_boundary_replacements": [
       "analyticsservice/docker/cppboost-packages.txt",
+      "analyticsservice/internal/app/servers.generated.cpp",
       "docker-compose.cppboost-runtime.generated.yml",
       "docker/cppboost-packages.txt",
       "inventoryservice/docker/cppboost-packages.txt",
+      "inventoryservice/internal/app/servers.generated.cpp",
       "order_service_api/include/handlers/order_service_api/processorder/requests.hpp",
       "order_service_api/include/handlers/order_service_api/processorder/responses.hpp",
       "orderservice/docker/cppboost-packages.txt",
+      "orderservice/internal/app/servers.generated.cpp",
+      "orderservice/internal/functions/order/soft_deadline_config_test.cpp",
       "scripts/quickstart.generated.sh"
     ],
     "changed_interface_boundaries": [
