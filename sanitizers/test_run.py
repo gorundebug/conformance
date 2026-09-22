@@ -126,6 +126,21 @@ class SanitizerConformanceTest(unittest.TestCase):
         self.assertEqual(env["SANITIZER_STOP_TIMEOUT"], "7")
         self.assertEqual(env["RACE_STOP_TIMEOUT"], "7")
 
+    def test_supporting_infrastructure_uses_docker_allocated_host_ports(self) -> None:
+        variables = (
+            "REDPANDA_PORT",
+            "TEMPORAL_PORT",
+            "TEMPORAL_UI_PORT",
+            "PROMETHEUS_PORT",
+            "GRAFANA_PORT",
+        )
+        inherited = {variable: "8080" for variable in variables}
+        with mock.patch.dict(os.environ, inherited, clear=True):
+            env = RUN.implementation_env("go")
+        for variable in variables:
+            with self.subTest(variable=variable):
+                self.assertEqual(env[variable], "0")
+
     def test_concurrent_shutdown_waits_on_one_shared_container_set(self) -> None:
         observations = [
             mock.Mock(returncode=0, stdout="true\nfalse\n"),

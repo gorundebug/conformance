@@ -477,6 +477,19 @@ def implementation_env(language: str) -> dict[str, str]:
     env.setdefault("SANITIZER_STOP_TIMEOUT", "7")
     env.setdefault("RACE_STOP_TIMEOUT", "7")
     env.setdefault("LIFECYCLE_STOP_TIMEOUT", "7")
+    # The gate talks to application services through their declared host
+    # ports, but all supporting infrastructure is reached by service name on
+    # the Compose network. Ask Docker to allocate those host ports so an
+    # unrelated local Temporal, Kafka, Prometheus, or Grafana instance cannot
+    # make an otherwise isolated sanitizer run fail to start.
+    for variable in (
+        "REDPANDA_PORT",
+        "TEMPORAL_PORT",
+        "TEMPORAL_UI_PORT",
+        "PROMETHEUS_PORT",
+        "GRAFANA_PORT",
+    ):
+        env[variable] = "0"
     # Canonical projects use the Go Automation Service as the Temporal fallback
     # whenever their primary language has no supported Temporal SDK. Local-mode
     # verification therefore always needs the Go framework context as well as
