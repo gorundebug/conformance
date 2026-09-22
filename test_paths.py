@@ -228,6 +228,21 @@ class DependencyRootTest(unittest.TestCase):
             self.assertNotIn(business.name, ignored)
             self.assertIn(artifact.name, ignored)
 
+    def test_generation_requires_current_typescript_http_module_layout(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "generation/run.py"))
+        required = globals_["TYPESCRIPT_REQUIRED_ARCHIVE_SUFFIXES"]
+
+        self.assertIn(
+            "/order_service_api/openapi-ts.orderserviceapi.config.generated.mjs",
+            required,
+        )
+        self.assertIn(
+            "/order_service_api/src/generated/http/orderserviceapi/"
+            "types.generated.ts",
+            required,
+        )
+        self.assertNotIn("/order_service_api/openapi-ts.config.generated.mjs", required)
+
     def test_profile_workspace_preserves_release_tags_on_generated_snapshot(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
         with tempfile.TemporaryDirectory() as directory:
