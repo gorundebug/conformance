@@ -60,6 +60,22 @@ class MetricsNormalizationTests(unittest.TestCase):
                     "AnalyticsEvent",
                 )
 
+    def test_runtime_graph_normalizes_native_error_carriers(self) -> None:
+        result = MODULE.normalize_runtime_graphs(
+            {
+                "service": """{
+  "nodes": [
+    {"id": -1, "label": "Failed(ERROR)\\n[Service]"},
+    {"id": 2, "label": "Recover(MAP)\\n[Service]"}
+  ],
+  "edges": [
+    {"from": -1, "to": 2, "label": "exception_ptr\\ncalls: 0"}
+  ]
+}"""
+            }
+        )
+        self.assertEqual(result["service"]["edges"][0]["type"], "error")
+
     def test_observed_zero_duration_keeps_histogram_sum_shape(self) -> None:
         result = MODULE.normalize({
             "service": """# TYPE datasource_endpoint_request_duration_seconds histogram

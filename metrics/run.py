@@ -579,6 +579,13 @@ def normalize_runtime_graphs(raw_by_service: dict[str, str]) -> dict[str, Any]:
             type_name = normalize_runtime_type_name(
                 label_lines[0] if label_lines else ""
             )
+            # Error branches intentionally use each language's native error
+            # carrier (error, exception_ptr, Exception, String, or a generated
+            # TypeScript error). The ERROR source node is the cross-language
+            # semantic contract, so compare that contract rather than the
+            # implementation-specific carrier spelling.
+            if source.split("\n", 1)[0].endswith("(ERROR)"):
+                type_name = "error"
             calls = 0
             side = ""
             if type_name.startswith("calls: "):
