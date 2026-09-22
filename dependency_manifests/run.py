@@ -48,7 +48,7 @@ RUST_PROJECTS = {
     ),
 }
 RUST_TOOLCHAIN_IMAGE = os.environ.get(
-    "RUST_TOOLCHAIN_IMAGE", "rust:1.97-bookworm"
+    "RUST_TOOLCHAIN_IMAGE", "rust:1.98.1-bookworm"
 )
 PYTHON_PROJECTS = ("pyservicelib", "pyexample")
 TYPESCRIPT_PROJECTS = ("tsservicelib", "tsnativeexample", "tsexample")
