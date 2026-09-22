@@ -1284,6 +1284,17 @@ class DependencyRootTest(unittest.TestCase):
             self.assertIn("cmake --fresh --preset docker", script)
             self.assertIn("CMAKE_TOOLCHAIN_FILE", script)
 
+    def test_local_runtime_images_are_refreshed_before_use(self) -> None:
+        transports = (CONFORMANCE_DIR / "transports/run.py").read_text()
+        serde = (CONFORMANCE_DIR / "serde/run.py").read_text()
+
+        for source in (transports, serde):
+            self.assertNotIn("docker_image_exists", source)
+        self.assertIn('"rust-toolchain-image"', transports)
+        self.assertIn('"python-development-image"', transports)
+        self.assertIn('"rust-serde-toolchain-image"', serde)
+        self.assertIn('"python-serde-runtime-image"', serde)
+
     def test_all_canonical_cpp_runners_use_conan_configuration(self) -> None:
         for relative in (
             "logging/run.py",

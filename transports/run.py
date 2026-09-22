@@ -397,15 +397,6 @@ def execute(name: str, command: list[str], cwd: Path,
     }
 
 
-def docker_image_exists(name: str) -> bool:
-    return subprocess.run(
-        ["docker", "image", "inspect", name],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    ).returncode == 0
-
-
 def python_image_build() -> tuple[list[str], dict[str, str]]:
     return (
         [
@@ -651,12 +642,11 @@ def main() -> int:
 
     source_matrix = verify_sources()
     runs: list[dict[str, object]] = []
-    if not docker_image_exists("inventoryservice-python-development:local"):
+    if not args.skip_build:
         command, environment = python_image_build()
         runs.append(execute(
             "python-development-image", command, ROOT / "pyexample", environment,
         ))
-    if not docker_image_exists("rustservicelib-toolchain:local"):
         runs.append(execute(
             "rust-toolchain-image",
             [

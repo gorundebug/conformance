@@ -159,31 +159,21 @@ def compare_wire_fixtures(
     )
 
 
-def docker_image_exists(name: str) -> bool:
-    return subprocess.run(
-        ["docker", "image", "inspect", name],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    ).returncode == 0
-
-
 def python_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict[str, object]]]:
     setup_runs: list[dict[str, object]] = []
-    if not docker_image_exists("inventoryservice-python:local"):
-        setup_runs.append(
-            execute(
-                "python-serde-runtime-image",
-                [
-                    "docker", "compose",
-                    "--project-directory", str(PYTHON_EXAMPLE),
-                    "--file", str(PYTHON_EXAMPLE / "docker-compose.yml"),
-                    "build", "inventoryservice",
-                ],
-                PYTHON_EXAMPLE,
-                env={**os.environ, "PYSERVICELIB_SOURCE_CONTEXT": str(PYTHON)},
-            )
+    setup_runs.append(
+        execute(
+            "python-serde-runtime-image",
+            [
+                "docker", "compose",
+                "--project-directory", str(PYTHON_EXAMPLE),
+                "--file", str(PYTHON_EXAMPLE / "docker-compose.yml"),
+                "build", "inventoryservice",
+            ],
+            PYTHON_EXAMPLE,
+            env={**os.environ, "PYSERVICELIB_SOURCE_CONTEXT": str(PYTHON)},
         )
+    )
     fixtures, run = fixture_probe(
         "python-serde-wire-probe",
         [
@@ -205,14 +195,13 @@ def python_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict
 def rust_fixture_probe() -> tuple[dict[str, str], dict[str, object], list[dict[str, object]]]:
     setup_runs: list[dict[str, object]] = []
     image = "rustservicelib-toolchain:local"
-    if not docker_image_exists(image):
-        setup_runs.append(
-            execute(
-                "rust-serde-toolchain-image",
-                ["docker", "build", "--target", "toolchain", "--tag", image, "."],
-                RUST,
-            )
+    setup_runs.append(
+        execute(
+            "rust-serde-toolchain-image",
+            ["docker", "build", "--target", "toolchain", "--tag", image, "."],
+            RUST,
         )
+    )
     fixtures, run = fixture_probe(
         "rust-serde-wire-probe",
         [
