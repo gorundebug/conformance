@@ -196,6 +196,28 @@ class StandaloneComponentTest(unittest.TestCase):
             {"go", "cpp", "cppboost", "python", "rust", "typescript"},
         )
 
+    def test_typescript_module_generates_openapi_before_build(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            module = target / "order_service_api"
+            module.mkdir()
+            (module / "package.json").write_text(
+                json.dumps({"name": "@gorundebug/order-service-api"})
+            )
+            (module / "generate-openapi.generated.sh").write_text(
+                "#!/usr/bin/env bash\n"
+            )
+            with mock.patch.object(run, "run_command") as invoke:
+                run.build_typescript(target, "order_service_api")
+
+        script = invoke.call_args.args[0][-1]
+        generation = (
+            "(cd /workspace/order_service_api && "
+            "./generate-openapi.generated.sh)"
+        )
+        self.assertIn(generation, script)
+        self.assertLess(script.index(generation), script.index(" build"))
+
     def test_copy_source_removes_git_and_build_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

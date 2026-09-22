@@ -830,14 +830,28 @@ def build_rust(target: Path, component: str) -> None:
 def build_typescript(target: Path, component: str) -> None:
     component_dir = component_directory("typescript", component)
     package = component_package_name("typescript", target / component_dir)
+    generation_commands: list[str] = []
+    for item in (*DECLARED_MODULES[component], component):
+        item_dir = component_directory("typescript", item)
+        generator = target / item_dir / "generate-openapi.generated.sh"
+        if generator.is_file():
+            quoted_dir = shlex.quote(f"/workspace/{item_dir}")
+            generation_commands.append(
+                f"(cd {quoted_dir} && ./generate-openapi.generated.sh)"
+            )
+    generation = " && ".join(generation_commands)
     script = (
         "corepack enable && "
         "corepack pnpm config set store-dir /pnpm/store && "
         "/workspace/dependency-download-env.generated.sh --retry "
         "corepack pnpm --config.registry=\"${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}\" "
-        "install --no-frozen-lockfile && "
-        f"corepack pnpm --filter {package}... build && "
-        f"corepack pnpm --filter {package} test"
+        "install --no-frozen-lockfile"
+    )
+    if generation:
+        script += f" && {generation}"
+    script += (
+        f" && corepack pnpm --filter {package}... build"
+        f" && corepack pnpm --filter {package} test"
     )
     name = container_name("typescript", component)
     run_command(
