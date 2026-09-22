@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -49,6 +50,27 @@ GENERATOR_PREFLIGHT = (
     "TestExampleExecutableFilesAreReplaceable)$"
 )
 SUPPORTED_EXAMPLE_PROFILES = {"function-call", "current"}
+
+_COPY_IGNORE = shutil.ignore_patterns(
+    ".git", ".servicegen", ".artifacts", ".cache", ".ccache", ".idea",
+    ".mypy_cache", ".pyservicelib", ".pytest_cache", ".ruff_cache",
+    ".venv", "bin", "node_modules", "target", "tools", "tmp",
+    "__pycache__",
+)
+
+
+def ignore_copy_artifacts(directory: str, names: list[str]) -> set[str]:
+    ignored = set(_COPY_IGNORE(directory, names))
+    ignored.update(
+        name
+        for name in names
+        if (Path(directory) / name).is_dir()
+        and any(
+            fnmatch.fnmatchcase(name, pattern)
+            for pattern in ("build*", "dist*")
+        )
+    )
+    return ignored
 
 
 def active_example_profile() -> str:
@@ -447,12 +469,7 @@ def verify_canonical_examples_are_generated(
         shutil.copytree(
             canonical,
             candidate,
-            ignore=shutil.ignore_patterns(
-                ".git", ".servicegen", "build", "build-*", "dist",
-                "node_modules", "target", "tmp", "tools", ".venv",
-                "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache",
-                "conformance",
-            ),
+            ignore=ignore_copy_artifacts,
         )
         # Archive paths are generator output even when the canonical root
         # intentionally ignores independently publishable service modules.
@@ -716,14 +733,12 @@ def main() -> int:
     archive_dir.mkdir()
     shutil.copytree(
         CANONICAL, merged,
-        ignore=shutil.ignore_patterns(".git", "build", "tmp"),
+        ignore=ignore_copy_artifacts,
     )
     shutil.copytree(
         TYPESCRIPT_CANONICAL,
         typescript_merged,
-        ignore=shutil.ignore_patterns(
-            ".git", ".servicegen", "build", "dist", "dist-test", "node_modules", "tmp"
-        ),
+        ignore=ignore_copy_artifacts,
     )
 
     summary: dict[str, object] = {

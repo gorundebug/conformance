@@ -212,6 +212,22 @@ class DependencyRootTest(unittest.TestCase):
             self.assertTrue((destination / "build_substream_result.rs").is_file())
             self.assertFalse((destination / "build-release").exists())
 
+    def test_generation_preserves_build_prefixed_business_files(self) -> None:
+        globals_ = runpy.run_path(str(CONFORMANCE_DIR / "generation/run.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            business = root / "build-substream-analytics-result.ts"
+            artifact = root / "build-release"
+            business.write_text("source\n")
+            artifact.mkdir()
+
+            ignored = globals_["ignore_copy_artifacts"](
+                str(root), [business.name, artifact.name]
+            )
+
+            self.assertNotIn(business.name, ignored)
+            self.assertIn(artifact.name, ignored)
+
     def test_profile_workspace_preserves_release_tags_on_generated_snapshot(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
         with tempfile.TemporaryDirectory() as directory:
