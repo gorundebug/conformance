@@ -953,6 +953,8 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn('record_status "$gate" FAIL', runner)
         self.assertIn('exit "$status"', runner)
         self.assertIn('if [ "$resume" -eq 1 ] && passed "$gate"', runner)
+        self.assertIn('required_gate_artifact_present "$gate"', runner)
+        self.assertIn('REPLAY PASS $index/$total $gate (required artifact is absent)', runner)
         self.assertIn('tee -a "$log_file"', runner)
         self.assertIn('tail -n 200 "$gate_log"', runner)
         self.assertIn('$state_dir/$profile/runs/$run_id', runner)

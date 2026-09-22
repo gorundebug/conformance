@@ -172,6 +172,20 @@ passed() {
   awk -F '\t' -v gate="$gate" '$1 == gate && $2 == "PASS" { found = 1 } END { exit !found }' "$state_file"
 }
 
+required_gate_artifact_present() {
+  local gate="$1"
+  local artifact=""
+  case "$gate" in
+    transports|kafka|temporal|tracing|metrics)
+      artifact="$root/.artifacts/$gate/summary.json"
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+  [ -f "$artifact" ]
+}
+
 baseline_containers="$(mktemp "${TMPDIR:-/tmp}/conformance-cold-containers.XXXXXX")"
 current_containers="$(mktemp "${TMPDIR:-/tmp}/conformance-cold-containers.XXXXXX")"
 new_containers="$(mktemp "${TMPDIR:-/tmp}/conformance-cold-containers.XXXXXX")"
@@ -199,8 +213,11 @@ index=0
 for gate in "${gates[@]}"; do
   index=$((index + 1))
   if [ "$resume" -eq 1 ] && passed "$gate"; then
-    echo "==> [cold-gates:$profile] SKIP PASS $index/$total $gate"
-    continue
+    if required_gate_artifact_present "$gate"; then
+      echo "==> [cold-gates:$profile] SKIP PASS $index/$total $gate"
+      continue
+    fi
+    echo "==> [cold-gates:$profile] REPLAY PASS $index/$total $gate (required artifact is absent)"
   fi
 
   echo "==> [cold-gates:$profile] START $index/$total $gate"
