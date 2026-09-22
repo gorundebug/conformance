@@ -1090,27 +1090,26 @@ def benchmark_language(
             args.cores,
         )
         verify_live_service_graph_profile(language, "inventoryservice", 9092)
-        if not args.grpc_only:
-            run(
-                compose_command(
-                    language, "up", "--detach", "--no-deps", "orderservice"
-                ),
-                cwd=language.example,
-                env=env,
-            )
-            wait_for_service(
-                language,
-                "orderservice",
-                "http://localhost:9091/status/data",
-                env,
-            )
-            verify_configured_pool_size(
-                language,
-                "orderservice",
-                9091,
-                args.cores,
-            )
-            verify_live_service_graph_profile(language, "orderservice", 9091)
+        run(
+            compose_command(
+                language, "up", "--detach", "--no-deps", "orderservice"
+            ),
+            cwd=language.example,
+            env=env,
+        )
+        wait_for_service(
+            language,
+            "orderservice",
+            "http://localhost:9091/status/data",
+            env,
+        )
+        verify_configured_pool_size(
+            language,
+            "orderservice",
+            9091,
+            args.cores,
+        )
+        verify_live_service_graph_profile(language, "orderservice", 9091)
 
         if args.warmup != "0" and args.warmup != "0s":
             load(

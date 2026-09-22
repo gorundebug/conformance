@@ -55,6 +55,13 @@ class DependencyEnvironmentTest(unittest.TestCase):
 
 
 class BenchmarkInputContractTest(unittest.TestCase):
+    def test_primary_scenario_always_starts_both_services(self) -> None:
+        source = Path(benchmark.__file__).read_text()
+
+        self.assertNotIn("args.grpc_only", source)
+        self.assertIn('"--no-deps", "inventoryservice"', source)
+        self.assertIn('"--no-deps", "orderservice"', source)
+
     def test_native_baselines_use_the_shared_pinned_tooling_checkout(self) -> None:
         native = [
             language for language in benchmark.LANGUAGES
