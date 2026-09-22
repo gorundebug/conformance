@@ -22,6 +22,10 @@ class DependencyRootTest(unittest.TestCase):
     def test_custom_cpp_serde_probe_uses_language_suffixed_model_module(self) -> None:
         probe = (CONFORMANCE_DIR / "serde/custom_cpp_probe.cpp").read_text()
         self.assertIn("<model_cpp/include/example/model/", probe)
+        canonical_probe = (CONFORMANCE_DIR / "serde/canonical_probe.cmake").read_text()
+        self.assertIn("/repo/cppexample/model_cpp/include", canonical_probe)
+        serde_runner = (CONFORMANCE_DIR / "serde/run.py").read_text()
+        self.assertIn("/repo/cppboostexample/model_cpp/include", serde_runner)
         self.assertNotIn("<model/include/example/model/", probe)
 
     def test_typescript_installs_enforce_proxy_and_binary_mirror(self) -> None:

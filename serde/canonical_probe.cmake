@@ -5,7 +5,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     target_compile_definitions(servicelib_custom_serde_probe PRIVATE
         SERVICELIB_CUSTOM_SERDE_CANONICAL=1)
     target_include_directories(servicelib_custom_serde_probe PRIVATE
-        /repo/cppexample)
+        /repo/cppexample
+        /repo/cppexample/model_cpp/include)
     target_link_libraries(servicelib_custom_serde_probe PRIVATE
         servicelib userver::core)
   endfunction()

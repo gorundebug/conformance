@@ -557,6 +557,7 @@ def main() -> int:
         "-lc",
         "c++ -std=c++20 -DSERVICELIB_CUSTOM_SERDE_BOOST=1 "
         "-I/repo/cppboostservicelib/include -I/repo/cppboostexample "
+        "-I/repo/cppboostexample/model_cpp/include "
         "/repo/conformance/serde/custom_cpp_probe.cpp -lboost_json "
         "-o /tmp/custom-serde-boost && /tmp/custom-serde-boost",
     ]
