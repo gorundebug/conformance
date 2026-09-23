@@ -599,6 +599,26 @@ class CppComposeIsolationTest(unittest.TestCase):
 
 
 class CppTelemetryBaselineTest(unittest.TestCase):
+    def test_replaces_generated_http_pipeline_without_duplicate_key(self) -> None:
+        config = (
+            "components_manager:\n"
+            "  components:\n"
+            "    server:\n"
+            "      middleware-pipeline-builder: servicelib-server-middlewares\n"
+            "      listener:\n"
+            "        port: 9091\n"
+        )
+
+        prepared = benchmark._disable_userver_request_middlewares(
+            config, "orderservice"
+        )
+
+        self.assertEqual(prepared.count("middleware-pipeline-builder:"), 1)
+        self.assertIn(
+            "middleware-pipeline-builder: servicelib-disabled-server-middlewares",
+            prepared,
+        )
+
     def test_disables_http_and_grpc_client_request_middlewares(self) -> None:
         config = (
             "components_manager:\n"

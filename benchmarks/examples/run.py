@@ -510,11 +510,24 @@ def _set_worker_threads(static_config: str, processor: str, threads: int) -> str
 def _disable_userver_request_middlewares(
     static_config: str, service: str
 ) -> str:
+    static_config, configured_count = re.subn(
+        r"(?m)^(      middleware-pipeline-builder:) [^\n]+$",
+        r"\1 servicelib-disabled-server-middlewares",
+        static_config,
+    )
+    if configured_count > 1:
+        raise RuntimeError(
+            f"{service} defines multiple userver server middleware pipelines"
+        )
+    server_replacement = "    server:\n"
+    if not configured_count:
+        server_replacement += (
+            "      middleware-pipeline-builder: "
+            "servicelib-disabled-server-middlewares\n"
+        )
     static_config, server_count = re.subn(
         r"(?m)^    server:\n",
-        "    server:\n"
-        "      middleware-pipeline-builder: "
-        "servicelib-disabled-server-middlewares\n",
+        server_replacement,
         static_config,
     )
     if server_count != 1:
