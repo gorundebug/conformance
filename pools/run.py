@@ -47,7 +47,8 @@ REQUIRED_SOURCE_CASES = {
     ),
     CANONICAL / "tests/taskpool_test.cpp": (
         "LifecycleFifoAndMetrics",
-        "CancelledContextIsRejectedAndTaskFailureIsIsolated",
+        "CancelledContextIsRejectedAndInterruptedWaitIsNonfatal",
+        "UnhandledFailureTerminatesProcess",
         "DeadlineMovesQueuedTaskToFront",
         "EarlierDeadlinePrecedesLaterExplicitCancellation",
         "ExternalCancellationMovesQueuedTaskToFront",
