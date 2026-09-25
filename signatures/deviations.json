@@ -39,9 +39,12 @@
       ]
     },
     "datasink/grpc/common.hpp": {
-      "reason": "Boost owns a transport-neutral CallOptions value instead of userver's client CallOptions type.",
-      "canonical_only": [],
+      "reason": "Boost owns a transport-neutral CallOptions value and retains the existing optional tracingEnabled argument; userver uses its client CallOptions type and requires that argument explicitly.",
+      "canonical_only": [
+        "callable|servicelib|inline CallOptions callOptions ( const MessageContext & , bool )"
+      ],
       "boost_only": [
+        "callable|servicelib|inline CallOptions callOptions ( const MessageContext & , bool = true )",
         "type|servicelib|struct CallOptions final"
       ]
     },
