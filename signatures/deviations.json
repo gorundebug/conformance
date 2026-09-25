@@ -11,7 +11,7 @@
   },
   "signature_deviations": {
     "datasink/grpc/bidistreaming.hpp": {
-      "reason": "asio-grpc generated clients expose AsyncSession instead of userver's callable stream object; the public Rpc alias selects that transport result while every endpoint method remains identical.",
+      "reason": "Boost Asio streaming holds deferred responses until its completion token is released; userver uses its task runtime for the same response lifetime.",
       "canonical_only": [
         "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >",
         "callable|servicelib::BidirectionalStreamingEndpoint::SessionCell|void markReady ( )",
@@ -20,7 +20,9 @@
       ],
       "boost_only": [
         "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = typename detail :: BidirectionalStreamingRpcType < ClientFunction > :: type",
-        "alias|servicelib::BidirectionalStreamingEndpoint|using SessionCell = detail :: StreamingCell < Session >"
+        "alias|servicelib::BidirectionalStreamingEndpoint|using SessionCell = detail :: StreamingCell < Session >",
+        "callable|servicelib::BidirectionalStreamingEndpoint::DeferredResponse|DeferredResponse ( Res , std :: shared_ptr < detail :: StreamingActivity :: Token > )",
+        "type|servicelib::BidirectionalStreamingEndpoint|struct DeferredResponse final"
       ]
     },
     "datasink/grpc/clientstreaming.hpp": {
@@ -37,7 +39,7 @@
       ]
     },
     "datasink/grpc/common.hpp": {
-      "reason": "The external userver CallOptions type is replaced by an owned transport-neutral value type.",
+      "reason": "Boost owns a transport-neutral CallOptions value instead of userver's client CallOptions type.",
       "canonical_only": [],
       "boost_only": [
         "type|servicelib|struct CallOptions final"
@@ -60,32 +62,36 @@
       ]
     },
     "runtime/context.hpp": {
-      "reason": "The Boost transport needs an explicit reference-counted completion token to preserve canonical request-completion ordering across Asio coroutine and pooled execution boundaries; userver provides the equivalent lifetime tracking through its task runtime.",
+      "reason": "Boost tracks completion across Asio coroutines and pooled work with explicit reference-counted tokens; userver relies on task-runtime lifetime tracking.",
       "canonical_only": [],
       "boost_only": [
+        "callable|servicelib::AsyncCompletionState|[[ nodiscard ]] AsyncCompletionToken retainToken ( )",
         "callable|servicelib::AsyncCompletionState|[[ nodiscard ]] static std :: shared_ptr < AsyncCompletionState > make ( std :: function < void ( ) > , std :: shared_ptr < AsyncCompletionToken > = { } )",
         "callable|servicelib::AsyncCompletionState|[[ nodiscard ]] std :: shared_ptr < AsyncCompletionToken > retain ( )",
         "callable|servicelib::AsyncCompletionState|explicit AsyncCompletionState ( std :: function < void ( ) > , std :: shared_ptr < AsyncCompletionToken > = { } )",
         "callable|servicelib::AsyncCompletionState|void release ( ) noexcept",
-        "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken & operator = ( AsyncCompletionToken && ) noexcept = default",
+        "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken & operator = ( AsyncCompletionToken && ) noexcept",
         "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken & operator = ( const AsyncCompletionToken & ) = delete",
+        "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken ( ) noexcept = default",
         "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken ( AsyncCompletionToken && ) noexcept = default",
         "callable|servicelib::AsyncCompletionToken|AsyncCompletionToken ( const AsyncCompletionToken & ) = delete",
+        "callable|servicelib::AsyncCompletionToken|[[ nodiscard ]] explicit operator bool ( ) const noexcept",
         "callable|servicelib::AsyncCompletionToken|explicit AsyncCompletionToken ( std :: shared_ptr < AsyncCompletionState > ) noexcept",
+        "callable|servicelib::AsyncCompletionToken|void reset ( ) noexcept",
         "callable|servicelib::AsyncCompletionToken|~ AsyncCompletionToken ( )",
+        "callable|servicelib::MessageContext|[[ nodiscard ]] AsyncCompletionToken retainCompletionToken ( ) const",
         "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withCompletion ( std :: shared_ptr < AsyncCompletionState > ) &&",
         "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withCompletion ( std :: shared_ptr < AsyncCompletionState > ) const &",
-        "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withExecutionScope ( std :: shared_ptr < const LocalExecutionScope > ) &&",
         "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withoutCompletion ( ) &&",
         "callable|servicelib::MessageContext|[[ nodiscard ]] MessageContext withoutCompletion ( ) const &",
-        "callable|servicelib::MessageContext|[[ nodiscard ]] const std :: shared_ptr < const LocalExecutionScope > & executionScope ( ) const noexcept",
         "callable|servicelib::MessageContext|[[ nodiscard ]] std :: shared_ptr < AsyncCompletionToken > retainCompletion ( ) const",
+        "callable|servicelib|inline AsyncCompletionToken & AsyncCompletionToken :: operator = ( AsyncCompletionToken && ) noexcept",
         "callable|servicelib|inline AsyncCompletionToken :: AsyncCompletionToken ( std :: shared_ptr < AsyncCompletionState > ) noexcept",
         "callable|servicelib|inline AsyncCompletionToken :: ~ AsyncCompletionToken ( )",
+        "callable|servicelib|inline void AsyncCompletionToken :: reset ( ) noexcept",
         "type|servicelib|class AsyncCompletionState",
-        "type|servicelib|class AsyncCompletionState final : public std :: enable_shared_from_this < AsyncCompletionState >",
-        "type|servicelib|class AsyncCompletionToken final",
-        "type|servicelib|struct LocalExecutionScope"
+        "type|servicelib|class AsyncCompletionState : public std :: enable_shared_from_this < AsyncCompletionState >",
+        "type|servicelib|class AsyncCompletionToken final"
       ]
     },
     "runtime/detail/kafka_admin.hpp": {
@@ -103,6 +109,63 @@
         "callable|servicelib|inline tracing :: Tracing & createUserverTracing ( )"
       ],
       "boost_only": []
+    },
+    "datasource/grpc/common.hpp": {
+      "reason": "Userver awaits graph completion with its SingleUseEvent; Boost uses an Asio-compatible completion path.",
+      "canonical_only": [
+        "callable|servicelib|inline void waitForResult ( const MessageContext & , userver :: engine :: SingleUseEvent & )"
+      ],
+      "boost_only": []
+    },
+    "datasource/localsource/custom.hpp": {
+      "reason": "The Boost local source runs its handler inline in its Asio execution model; userver can dispatch to a task processor, so the processInline default differs.",
+      "canonical_only": [
+        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = false )",
+        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = false , std :: string = \"local.input\" )"
+      ],
+      "boost_only": [
+        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = true )",
+        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = true , std :: string = \"local.input\" )"
+      ]
+    },
+    "runtime/common.hpp": {
+      "reason": "Userver identifies task cancellation with OperationCancelledError for its detached callback boundary; Boost uses its own cancellation handling.",
+      "canonical_only": [
+        "alias|servicelib::OperationCancelledError|using std :: runtime_error :: runtime_error",
+        "type|servicelib|class OperationCancelledError : public std :: runtime_error"
+      ],
+      "boost_only": []
+    },
+    "runtime/pool/pool.hpp": {
+      "reason": "Userver derives pool cancellation from its task cancellation exception; Boost uses std::runtime_error at its Asio boundary.",
+      "canonical_only": [
+        "type|servicelib|class PoolCancelledError final : public OperationCancelledError"
+      ],
+      "boost_only": [
+        "type|servicelib|class PoolCancelledError final : public std :: runtime_error"
+      ]
+    },
+    "runtime/serviceapp.hpp": {
+      "reason": "Boost retains a shutdown lifetime and waits for Asio completion; userver's component runtime owns the service lifecycle.",
+      "canonical_only": [
+        "type|servicelib|template < typename TService , typename TDataTypeFactory > class ServiceApp : public ServiceExecutionEnvironment < TService , TDataTypeFactory > , public status :: Provider"
+      ],
+      "boost_only": [
+        "callable|servicelib::ServiceApp|[[ nodiscard ]] std :: shared_ptr < void > getShutdownLifetime ( )",
+        "callable|servicelib::ServiceApp|void setShutdownLifetime ( const std :: shared_ptr < void > & )",
+        "callable|servicelib::ServiceApp|void waitForShutdown ( )",
+        "callable|servicelib::ServiceLifecycle|bool hasPendingShutdown ( ) const",
+        "callable|servicelib::ServiceLifecycle|void finishShutdown ( log :: Logger & = log :: NoopLogger :: instance ( ) )",
+        "type|servicelib|template < typename TService , typename TDataTypeFactory > class ServiceApp : public ServiceExecutionEnvironment < TService , TDataTypeFactory > , public std :: enable_shared_from_this < TService > , public status :: Provider"
+      ]
+    },
+    "runtime/store/rotatingmap.hpp": {
+      "reason": "Boost supports heterogeneous lookup with its std::unordered_map shards; userver uses its task-runtime storage implementation.",
+      "canonical_only": [],
+      "boost_only": [
+        "callable|servicelib::RotatingMap|[[ nodiscard ]] std :: optional < V > get ( const Lookup & ) const",
+        "callable|servicelib::RotatingMap|template < typename Lookup > requires std :: copy_constructible < V > && requires ( const Hash & hash , const std :: unordered_map < K , V , Hash , Equal > & entries , const Lookup & key )"
+      ]
     }
   }
 }
