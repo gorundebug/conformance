@@ -1266,6 +1266,13 @@ class DependencyRootTest(unittest.TestCase):
         )
         self.assertIn("/servicegen-cpp-source-cache/grpc-src", grpc)
         self.assertIn("/servicegen-cpp-source-cache/librdkafka-src", kafka)
+        for command in (
+            globals_["boost_command"]("build/grpc-test", True, False)[-1],
+            kafka,
+        ):
+            self.assertIn("-DBOOST_CONTEXT_IMPLEMENTATION=ucontext", command)
+            self.assertIn("-DCMAKE_CXX_FLAGS=-DBOOST_USE_ASAN", command)
+        self.assertNotIn("BOOST_CONTEXT_IMPLEMENTATION=ucontext", grpc)
         self.assertIn(
             "/servicegen-cpp-source-cache/opentelemetry-cpp-src",
             source_arguments,

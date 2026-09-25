@@ -490,6 +490,17 @@ def boost_source_cache_command() -> list[str]:
     return cpp_source_cache.prepare_command(BOOST)
 
 
+def boost_sanitizer_cmake_flags() -> str:
+    # Boost.Context fcontext does not register fiber stack switches with ASan.
+    # Its supported ucontext backend does so when BOOST_USE_ASAN is defined.
+    # Keep Release on fcontext; only sanitizer builds need this backend.
+    return (
+        " -DCPPBOOSTSERVICELIB_ASAN=ON -DCPPBOOSTSERVICELIB_UBSAN=ON"
+        " -DBOOST_CONTEXT_IMPLEMENTATION=ucontext"
+        " -DCMAKE_CXX_FLAGS=-DBOOST_USE_ASAN"
+    )
+
+
 def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[str, str]:
     environment = dependency_environment.from_framework(BOOST)
     environment["SERVICEGEN_RUN_DOCKER_TESTS"] = "1"
@@ -532,10 +543,7 @@ def boost_command(build_dir: str, sanitizer: bool,
             "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 " + run
         )
     if not skip_build:
-        sanitizer_flags = (
-            " -DCPPBOOSTSERVICELIB_ASAN=ON -DCPPBOOSTSERVICELIB_UBSAN=ON"
-            if sanitizer else ""
-        )
+        sanitizer_flags = boost_sanitizer_cmake_flags() if sanitizer else ""
         run = (
             "cmake -U'FETCHCONTENT_SOURCE_DIR_OPENTELEMETRY-CPP' "
             f"-S . -B {build_dir} -G Ninja "
@@ -577,10 +585,7 @@ def boost_kafka_command(build_dir: str, sanitizer: bool,
             "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 " + run
         )
     if not skip_build:
-        sanitizer_flags = (
-            " -DCPPBOOSTSERVICELIB_ASAN=ON -DCPPBOOSTSERVICELIB_UBSAN=ON"
-            if sanitizer else ""
-        )
+        sanitizer_flags = boost_sanitizer_cmake_flags() if sanitizer else ""
         run = (
             f"cmake -S . -B {build_dir} -G Ninja "
             f"-DCMAKE_BUILD_TYPE={'Debug' if sanitizer else 'Release'} "
