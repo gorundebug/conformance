@@ -669,6 +669,7 @@ def published_context_arguments(
 
 def docker_environment_arguments(port: int) -> list[str]:
     environment = standalone.docker_process_environment()
+    environment.update(standalone.dependency_download_mirrors.docker_environment())
     environment.update(
         mirror_environment(
             port,
@@ -780,7 +781,8 @@ def build_python_module(module: Path, port: int, name: str) -> None:
 def rust_module_build_command(module: Path) -> list[str]:
     make_contract = (module / "make.generated.mk").read_text()
     if "cargo $(DEPENDENCY_CARGO_CONFIG_ARGS)" in make_contract:
-        return ["make", "test"]
+        config = shlex.join(standalone.rust_cargo_arguments()[1:])
+        return ["make", "test", f"DEPENDENCY_CARGO_CONFIG_ARGS={config}"]
 
     # API modules are shared repository identities. Their repository-level
     # Makefile may be owned by the Go scaffold while a Rust binding lives
