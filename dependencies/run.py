@@ -41,11 +41,11 @@ BINARIES = {
 CPPBOOST_BUILD_IMAGE = "cppboostexample-cpp-build:local"
 NATIVE_BINARIES = {
     "orderservice-native": (
-        "cppboostnativeexample-orderservice:local",
+        f"cppboostnativeexample-orderservice:{os.environ.get('DOCKER_IMAGE_TAG', 'local')}",
         "/usr/local/bin/orderservice",
     ),
     "inventoryservice-native": (
-        "cppboostnativeexample-inventoryservice:local",
+        f"cppboostnativeexample-inventoryservice:{os.environ.get('DOCKER_IMAGE_TAG', 'local')}",
         "/usr/local/bin/inventoryservice",
     ),
 }

@@ -307,6 +307,7 @@ fi
 mkdir -p "$CONFORMANCE_ROOT/.artifacts"
 printf '%s\n' "$EXAMPLE_PROFILE" > "$PROFILE_MARKER"
 export EXAMPLE_PROFILE="$EXAMPLE_PROFILE"
+export DOCKER_IMAGE_TAG="conformance-$EXAMPLE_PROFILE"
 
 if [ "$EXAMPLE_PROFILE" = "current" ]; then
   PROFILE_TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/servicelib-conformance-current.XXXXXX")"

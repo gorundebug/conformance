@@ -937,6 +937,8 @@ class DependencyRootTest(unittest.TestCase):
         quickstart = (CONFORMANCE_DIR / "quickstart.sh").read_text()
         self.assertIn('--profile)', quickstart)
         self.assertIn('EXAMPLE_PROFILE="$EXAMPLE_PROFILE"', quickstart)
+        self.assertIn('DOCKER_IMAGE_TAG="conformance-$EXAMPLE_PROFILE"', quickstart)
+        self.assertIn('DOCKER_IMAGE_TAG ?= conformance-', (CONFORMANCE_DIR / "Makefile").read_text())
         self.assertIn('profile_workspace.py', quickstart)
         self.assertIn("export DEPENDENCIES_DIR", quickstart)
 

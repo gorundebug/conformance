@@ -1,3 +1,6 @@
+DOCKER_IMAGE_TAG ?= conformance-$(if $(EXAMPLE_PROFILE),$(EXAMPLE_PROFILE),current)
+export DOCKER_IMAGE_TAG
+
 ifneq ($(strip $(DEPENDENCY_PROXY_DIR)),)
 DEPENDENCY_PROXY_HOST ?= localhost
 DEPENDENCY_PROXY_DOCKER_HOST ?= host.docker.internal
