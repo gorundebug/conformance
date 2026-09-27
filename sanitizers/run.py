@@ -37,6 +37,7 @@ IMPLEMENTATIONS = {
     "go": ROOT / "goexample",
     "cpp": ROOT / "cppexample",
     "cppboost": ROOT / "cppboostexample",
+    "cppcoro": ROOT / "cppcoroexample",
     "python": ROOT / "pyexample",
     "rust": ROOT / "rustexample",
     "typescript": ROOT / "tsexample",
@@ -45,6 +46,7 @@ IMPLEMENTATION_LANGUAGES = {
     "go": "golang",
     "cpp": "cppUserver",
     "cppboost": "cppBoost",
+    "cppcoro": "cppBoost",
     "python": "python",
     "rust": "rust",
     "typescript": "typescript",
@@ -53,6 +55,7 @@ IMPLEMENTATION_SANITIZERS = {
     "go": ("race",),
     "cpp": ("runtime", "asan", "tsan"),
     "cppboost": ("runtime", "asan", "tsan"),
+    "cppcoro": ("runtime", "asan", "tsan"),
     "python": ("runtime",),
     "rust": ("runtime",),
     "typescript": ("runtime",),
@@ -252,6 +255,11 @@ RUNTIME_FAILURE_MARKERS = {
         "Segmentation fault",
     ),
     "cppboost": (
+        "terminate called after throwing",
+        "Assertion failed",
+        "Segmentation fault",
+    ),
+    "cppcoro": (
         "terminate called after throwing",
         "Assertion failed",
         "Segmentation fault",
@@ -502,6 +510,8 @@ def implementation_env(language: str) -> dict[str, str]:
     elif language == "cppboost":
         source = str(ROOT / "cppboostservicelib")
         env["SERVICELIB_SOURCE_CONTEXT"] = source
+    elif language == "cppcoro":
+        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
     elif language == "python":
         env["PYSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "pyservicelib")
     elif language == "rust":

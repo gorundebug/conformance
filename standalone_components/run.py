@@ -165,6 +165,7 @@ MODULE_LANGUAGE_SUFFIX = {
     "go": "go",
     "cpp": "cpp",
     "cppboost": "cpp",
+    "cppcoro": "cpp",
     "python": "python",
     "rust": "rust",
     "typescript": "ts",
@@ -203,6 +204,7 @@ LANGUAGES: dict[str, Language] = {
     "go": Language("go", "goexample", "servicelib"),
     "cpp": Language("cpp", "cppexample", "cppservicelib"),
     "cppboost": Language("cppboost", "cppboostexample", "cppboostservicelib"),
+    "cppcoro": Language("cppcoro", "cppcoroexample", "cppcoroservicelib"),
     "python": Language("python", "pyexample", "pyservicelib"),
     "rust": Language("rust", "rustexample", "rustservicelib"),
     "typescript": Language("typescript", "tsexample", "tsservicelib"),
@@ -524,6 +526,7 @@ MATERIALIZERS = {
     "go": materialize_go,
     "cpp": materialize_cpp,
     "cppboost": materialize_cpp,
+    "cppcoro": materialize_cpp,
     "python": materialize_python,
     "rust": materialize_rust,
     "typescript": materialize_typescript,
@@ -887,6 +890,10 @@ def build_service_with_make(
             "SERVICELIB_SOURCE_CONTEXT",
             root / "cppboostservicelib",
         ),
+        "cppcoro": (
+            "SERVICELIB_SOURCE_CONTEXT",
+            root / "cppcoroservicelib",
+        ),
         "rust": ("RUSTSERVICELIB_SOURCE_CONTEXT", root / "rustservicelib"),
         "typescript": ("TSSERVICELIB_SOURCE_CONTEXT", root / "tsservicelib"),
     }
@@ -931,9 +938,9 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
     })
     env = docker_process_environment(framework_environment)
     source_cache: Path | None = None
-    if language_name == "cppboost":
+    if language_name in {"cppboost", "cppcoro"}:
         source_cache = cpp_source_cache.configure_environment(
-            env, root / language.framework, "cppboostexample",
+            env, root / language.framework, language.example,
         )
     else:
         configure_userver_source_context(env, root)
@@ -1284,7 +1291,7 @@ def main() -> int:
                 continue
             if (
                 not args.prepare_only
-                and language_name in {"cpp", "cppboost"}
+                and language_name in {"cpp", "cppboost", "cppcoro"}
                 and language_name in {
                     implementation_language(root, language_name, component)
                     for component in language_components
@@ -1328,7 +1335,7 @@ def main() -> int:
                                 implementation,
                                 component,
                             )
-                        elif implementation in {"cpp", "cppboost"}:
+                        elif implementation in {"cpp", "cppboost", "cppcoro"}:
                             build_cpp(
                                 root,
                                 target,

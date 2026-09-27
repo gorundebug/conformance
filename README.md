@@ -581,8 +581,9 @@ Results are written to
 
 ## Profiling conformance and profiling toolkit
 
-The explicit profiling target runs all twelve framework/native implementations
-with the same scenario, VUs, duration, warm-up and service/load-generator CPU
+The explicit profiling target runs the framework/native matrix, including the
+coroutine C++ implementation in `function-call` mode, with the same scenario,
+VUs, duration, warm-up and service/load-generator CPU
 quotas. It captures CPU, allocation, scheduler and off-CPU profiles for Order
 and Inventory and validates the complete CPU matrix. The Boost pair additionally
 gets deep schema/content validation for every derived artifact and timestamped
@@ -647,11 +648,14 @@ both graph profiles.
 ## Comparative benchmarks
 
 The former standalone benchmark toolkit now lives in `benchmarks/examples/`.
-The conformance target runs the complete twelve-variant framework/native
+The conformance target runs the complete framework/native
 matrix sequentially with 2 service cores, 6 load-generator cores, 256 VUs and
 three 20-second measurements. For each implementation the complete row comes
 from the single run with the highest throughput; percentiles are never mixed
 between runs.
+Both benchmark profiles include `cpp-coro`; the `current` workspace updates
+only the adapted example's generated graph/config declarations and verifies
+the pooled profile before running it.
 
 ```bash
 bash ./quickstart.sh -- benchmarks
@@ -932,7 +936,11 @@ not yet have a coroutine backend: do not regenerate it with the synchronous
 Boost backend. A requested graph profile must still match the actual graph;
 incompatible profiles are not silently accepted.
 
-Live scenario, Kafka, metrics and tracing runners accept `--language cppcoro`.
-`make cppcoro-runtime` runs the library's complete stock Docker test suite in
-Debug and Release; it is also included in `make fast`. This does not claim
-that generation or published-package conformance exists for this backend.
+Live scenario, Kafka, metrics, tracing, dashboards, logging, sanitizer and
+Kubernetes runners include `cppcoro`. `make cppcoro-runtime` runs the library's
+complete stock Docker test suite in Debug and Release and asserts that the
+config, pools, operators, serde, transports, telemetry and lifecycle tests
+actually ran. This is the coroutine runtime's coverage for those stages,
+without rebuilding the same library separately in each gate. It is included in
+`make fast`, the cold-gate sequence and the aggregate report. Generation and
+published-package conformance still require a coroutine generator backend.

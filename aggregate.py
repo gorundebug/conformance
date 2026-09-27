@@ -18,11 +18,12 @@ SUITES = (
     "dependencies", "standalone-components", "published-components", "pools",
     "operators", "serde", "transports", "kafka", "temporal", "tracing", "metrics",
     "dashboards", "logging",
-    "scenarios", "call-semantics", "sanitizers", "generation", "kubernetes",
+    "scenarios", "call-semantics", "sanitizers", "cppcoro-runtime", "generation", "kubernetes",
 )
 LANGUAGE_SUITES = {
+    "cppcoro-runtime": {"cppcoro"},
     "standalone-components": {
-        "go", "cpp", "cppboost", "python", "rust", "typescript",
+        "go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript",
     },
     "published-components": {
         "go", "cpp", "cppboost", "python", "rust", "typescript",
@@ -39,8 +40,8 @@ LANGUAGE_SUITES = {
     "temporal": {"go", "python", "typescript"},
     "tracing": {"go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript"},
     "metrics": {"go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript"},
-    "dashboards": {"go", "cpp", "cppboost", "python", "rust", "typescript"},
-    "logging": {"go", "cpp", "cppboost", "python", "rust", "typescript"},
+    "dashboards": {"go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript"},
+    "logging": {"go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript"},
     "scenarios": {
         "go", "go-native",
         "cpp", "cpp-native", "cppboost", "cppboost-native", "cppcoro",
@@ -54,10 +55,11 @@ LANGUAGE_SUITES = {
         "go-race",
         "cpp-runtime", "cpp-asan", "cpp-tsan",
         "cppboost-runtime", "cppboost-asan", "cppboost-tsan",
+        "cppcoro-runtime", "cppcoro-asan", "cppcoro-tsan",
         "python-runtime", "rust-runtime", "typescript-runtime",
     },
     "kubernetes": {
-        "go", "cpp", "cppboost", "python", "rust", "typescript",
+        "go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript",
     },
 }
 

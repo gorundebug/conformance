@@ -21,11 +21,12 @@ TRANSPORTS_ARTIFACT = CONFORMANCE / ".artifacts" / "transports" / "summary.json"
 TEMPORAL_ARTIFACT = CONFORMANCE / ".artifacts" / "temporal" / "summary.json"
 ARTIFACT = CONFORMANCE / ".artifacts" / "dashboards" / "summary.json"
 SERVICES = ("analyticsservice", "inventoryservice", "orderservice")
-LANGUAGES = ("go", "cpp", "cppboost", "python", "rust", "typescript")
+LANGUAGES = ("go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript")
 EXAMPLES = {
     "go": "goexample",
     "cpp": "cppexample",
     "cppboost": "cppboostexample",
+    "cppcoro": "cppcoroexample",
     "python": "pyexample",
     "rust": "rustexample",
     "typescript": "tsexample",
@@ -122,6 +123,7 @@ CHECKS = {
         DashboardCheck("12_kafka_client", "orderservice", "kafka_client_consumer_lag", "kafka_client_brokers", "live"),
     ),
 }
+CHECKS["cppcoro"] = CHECKS["cppboost"]
 
 
 def metric_names(raw: str) -> set[str]:
@@ -368,6 +370,7 @@ def validate_temporal_dashboard() -> dict[str, object]:
         "go": "seconds-suffixed",
         "cpp": "seconds-suffixed",
         "cppboost": "seconds-suffixed",
+        "cppcoro": "seconds-suffixed",
         "rust": "seconds-suffixed",
         "python": "unsuffixed",
         "typescript": "unsuffixed",

@@ -26,7 +26,7 @@ RUNNER_ARTIFACTS = BENCHMARKS / "examples" / ".artifacts"
 ARTIFACTS = CONFORMANCE / ".artifacts" / "benchmarks"
 LANGUAGES = {
     "go", "go-native", "cpp", "cpp-native", "cpp-boost",
-    "cpp-boost-native", "python", "python-native", "rust", "rust-native",
+    "cpp-boost-native", "cpp-coro", "python", "python-native", "rust", "rust-native",
     "typescript", "typescript-native",
 }
 
@@ -76,11 +76,12 @@ def validate(results: dict[str, Any], args: argparse.Namespace) -> None:
     actual = {
         row.get("language") for row in rows if isinstance(row, dict)
     }
-    require(actual == LANGUAGES,
+    languages = LANGUAGES
+    require(actual == languages,
             f"benchmark language matrix differs: {sorted(actual)}")
     logs = results.get("logs")
     require(isinstance(logs, dict), "benchmark per-language logs are missing")
-    require(set(logs) == LANGUAGES, "benchmark log language matrix differs")
+    require(set(logs) == languages, "benchmark log language matrix differs")
     for language, path in logs.items():
         require(Path(path).is_file(), f"{language}: benchmark log is missing: {path}")
     for row in rows:
@@ -107,10 +108,11 @@ def main() -> int:
     parser.add_argument("--skip-run", action="store_true")
     args = parser.parse_args()
 
+    profile = os.environ.get("EXAMPLE_PROFILE", "function-call")
     command = [
         sys.executable, str(RUNNER),
         "--graph-profile",
-        os.environ.get("EXAMPLE_PROFILE", "function-call"),
+        profile,
         "--cores", str(args.cores),
         "--loadgen-cores", str(args.loadgen_cores),
         "--grpc-connections", str(args.grpc_connections or args.cores),
@@ -120,6 +122,8 @@ def main() -> int:
         "--runs", str(args.runs),
         "--max-map-count", str(args.max_map_count),
     ]
+    for language in sorted(LANGUAGES):
+        command.extend(("--language", language))
     if args.skip_build:
         command.append("--skip-build")
     if not args.skip_run:

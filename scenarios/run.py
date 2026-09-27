@@ -997,6 +997,9 @@ def main() -> int:
             summary["implementations"][implementation.name][
                 "call_semantics_graph"
             ] = result["call_semantics_graph"]
+            summary["implementations"][implementation.name][
+                "call_semantics_profile"
+            ] = GRAPH_PROFILE
         if REQUIRE_POOL_ACTIVITY and "pool_activity" in result:
             summary["implementations"][implementation.name]["pool_activity"] = result[
                 "pool_activity"

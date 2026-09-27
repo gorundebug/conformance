@@ -19,6 +19,37 @@ CONFORMANCE_DIR = Path(__file__).resolve().parent
 
 
 class DependencyRootTest(unittest.TestCase):
+    def test_coroutine_runtime_requires_each_boost_equivalent_stage(self) -> None:
+        gate = runpy.run_path(str(CONFORMANCE_DIR / "cppcoro_runtime.py"))
+        stages = gate["STAGE_TESTS"]
+        self.assertEqual(
+            set(stages),
+            {"config", "pools", "operators", "serde", "transports", "telemetry", "lifecycle"},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "ctest.log"
+            names = sorted(set().union(*stages.values()))
+            log.write_text(
+                "\n".join(
+                    f"{index}/{len(names)} Test #{index}: {name} ... Passed 0.01 sec"
+                    for index, name in enumerate(names, 1)
+                ) + f"\n100% tests passed, 0 tests failed out of {len(names)}\n"
+            )
+            self.assertEqual(gate["passed_tests"](log), set(names))
+
+    def test_coroutine_coverage_is_explicit_in_benchmark_profiles(self) -> None:
+        benchmark_gate = runpy.run_path(
+            str(CONFORMANCE_DIR / "benchmarks/run.py")
+        )
+        self.assertIn("cpp-coro", benchmark_gate["LANGUAGES"])
+        self.assertIn("cppcoro", runpy.run_path(
+            str(CONFORMANCE_DIR / "kubernetes/run.py")
+        )["EXAMPLES"])
+
+    def test_coroutine_profiling_follows_available_graph_profiles(self) -> None:
+        profiling_gate = runpy.run_path(str(CONFORMANCE_DIR / "profiling/run.py"))
+        self.assertIn("cppcoro", profiling_gate["ALL_LANGUAGES"])
+
     def test_custom_cpp_serde_probe_uses_language_suffixed_model_module(self) -> None:
         probe = (CONFORMANCE_DIR / "serde/custom_cpp_probe.cpp").read_text()
         self.assertIn("<model_cpp/include/example/model/", probe)

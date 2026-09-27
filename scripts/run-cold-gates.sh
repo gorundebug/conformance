@@ -44,6 +44,7 @@ gates=(
   scenarios
   call-semantics
   sanitizers
+  cppcoro-runtime
   generation
   kubernetes
   benchmarks

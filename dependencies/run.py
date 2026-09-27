@@ -24,6 +24,8 @@ SOURCE_ROOTS = (
     ROOT / "cppboostservicelib",
     ROOT / "cppboostexample",
     ROOT / "cppboostnativeexample",
+    ROOT / "cppcoroservicelib",
+    ROOT / "cppcoroexample",
     ROOT / "servicegen" / "internal" / "codegenerator" / "templates" / "cppboost",
 )
 BUILD_FILENAMES = {"CMakeLists.txt", "Dockerfile", "Dockerfile.cmake"}

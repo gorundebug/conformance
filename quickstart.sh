@@ -26,7 +26,7 @@ set -euo pipefail
 #   ./quickstart.sh -- standalone-components         # isolated local builds
 #   ./quickstart.sh -- published-components          # isolated repository builds
 #   ./quickstart.sh -- kubernetes                    # Helm + local k3s rollout
-#   ./quickstart.sh -- benchmarks                    # full 12-variant benchmark
+#   ./quickstart.sh -- benchmarks                    # full framework/native matrix (13 variants in function-call)
 #   ./quickstart.sh -- profiling-all                 # CPU profiles for all variants
 #   ./quickstart.sh -- fast                          # fast development gate
 #   ./quickstart.sh -- integration                   # runtime/integration gate
