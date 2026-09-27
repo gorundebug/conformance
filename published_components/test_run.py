@@ -10,6 +10,50 @@ from published_components import run
 
 
 class PublishedComponentsTest(unittest.TestCase):
+    def test_coroutine_services_use_independent_cpp_publication_contract(self) -> None:
+        self.assertEqual(
+            run.service_repository_name("cppcoro", "orderservice"),
+            "cppcoroexample-orderservice",
+        )
+        self.assertEqual(
+            run.service_package_script("cppcoro", "orderservice"),
+            "scripts/package-cpp-service.generated.sh",
+        )
+        self.assertIsNone(
+            run.service_package_script("cppcoro", "automationservice")
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            checkout_root = Path(directory)
+            owner_root = checkout_root / "gorundebug"
+            for repository in (
+                "servicelib", "model_go", "cppcoroservicelib",
+                "cppcoroexample",
+            ):
+                (owner_root / repository / "v1.2.3").mkdir(parents=True)
+            service = checkout_root / "service"
+            service.mkdir()
+            (service / "make.generated.mk").write_text(
+                "SERVICELIB_SOURCE_CONTEXT MODEL_GO_SOURCE_CONTEXT "
+                "MODULE_MODEL_CPP_SOURCE_CONTEXT\n"
+            )
+            for module in (
+                "model_cpp", "inventory_service_api", "order_service_api"
+            ):
+                (owner_root / "cppcoroexample/v1.2.3" / module).mkdir()
+            contexts = run.published_context_arguments(
+                "cppcoro", service, checkout_root, "v1.2.3"
+            )
+            self.assertIn(
+                "SERVICELIB_SOURCE_CONTEXT="
+                f"{owner_root / 'cppcoroservicelib/v1.2.3'}",
+                contexts,
+            )
+            self.assertNotIn(
+                "SERVICELIB_SOURCE_CONTEXT="
+                f"{owner_root / 'cppboostservicelib/v1.2.3'}",
+                contexts,
+            )
+
     def test_shared_rust_module_uses_direct_cargo_without_proxy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             module = Path(directory)
