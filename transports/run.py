@@ -24,6 +24,7 @@ ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expandus
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "transports" / "summary.json"
 CANONICAL = ROOT / "cppservicelib"
 BOOST = ROOT / "cppboostservicelib"
+CORO = ROOT / "cppcoroservicelib"
 SERVICEGEN = ROOT / "servicegen"
 TYPESCRIPT = ROOT / "tsservicelib"
 GO = ROOT / "servicelib"
@@ -640,6 +641,41 @@ def boost_http_custom_command(skip_build: bool) -> list[str]:
     ]
 
 
+def coro_http_custom_command(skip_build: bool) -> list[str]:
+    build_dir = "build/http-conformance-release"
+    tests = (
+        "^(cppboostservicelib_http_endpoints_test|"
+        "cppboostservicelib_custom_endpoints_test)$"
+    )
+    run = f"ctest --test-dir {build_dir} --output-on-failure -R '{tests}'"
+    if not skip_build:
+        run = (
+            f"cmake -S . -B {build_dir} -G Ninja "
+            "-DCMAKE_BUILD_TYPE=Release "
+            "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=FETCH "
+            "-DCPPBOOSTSERVICELIB_ENABLE_GRPC=OFF "
+            "-DCPPBOOSTSERVICELIB_ENABLE_KAFKA=OFF "
+            "-DCPPBOOSTSERVICELIB_ENABLE_OTEL=OFF "
+            "-DCPPBOOSTSERVICELIB_ENABLE_CRON=OFF "
+            "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
+            f"{cpp_source_cache.cmake_args(CORO)} && "
+            f"cmake --build {build_dir} --parallel --target "
+            "cppboostservicelib_http_endpoints_test "
+            "cppboostservicelib_custom_endpoints_test && " + run
+        )
+    return [
+        "docker", "run", "--rm",
+        *dependency_environment.docker_arguments(CORO),
+        "-v", cpp_source_cache.source_mount(CORO),
+        "-v", f"{CORO}:/workspace",
+        *cpp_source_cache.build_volume_mount_args(
+            CORO, "cppcoroservicelib-transports"
+        ),
+        "-w", "/workspace", "cppcoroservicelib-build:local",
+        "/bin/bash", "-lc", run,
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-build", action="store_true")
@@ -819,6 +855,22 @@ def main() -> int:
         BOOST,
     ))
 
+    if not args.skip_build:
+        runs.append(execute(
+            "coro-build-image",
+            ["docker", "build", "-f", "Dockerfile.cmake", "-t",
+             "cppcoroservicelib-build:local", "."],
+            CORO, dependency_environment.from_framework(CORO),
+        ))
+        runs.append(execute(
+            "coro-source-cache",
+            cpp_source_cache.prepare_command(CORO), CORO,
+        ))
+    runs.append(execute(
+        "coro-http-and-custom-lifecycle",
+        coro_http_custom_command(args.skip_build), CORO,
+    ))
+
     generator_env = boost_generator_environment()
     generated_run_name = "generated-four-method-workspace"
     if args.skip_build:
@@ -848,7 +900,7 @@ def main() -> int:
     summary = {
         "status": "pass",
         "languages": [
-            "go", "canonical-cpp", "cppboost", "python", "rust",
+            "go", "canonical-cpp", "cppboost", "cppcoro", "python", "rust",
             "typescript",
         ],
         "source_matrix": source_matrix,
@@ -883,6 +935,7 @@ def main() -> int:
             "go": "go-http-client-metrics-real-transport",
             "cpp": "canonical-cpp-http-lifecycle",
             "cppboost": "boost-http-and-custom-lifecycle",
+            "cppcoro": "coro-http-and-custom-lifecycle",
             "python": "python-http-client-metrics-real-transport",
             "rust": "rust-http-client-metrics-real-transport",
             "typescript": "typescript-http-grpc-kafka-endpoint-semantics",
