@@ -19,6 +19,49 @@ CONFORMANCE_DIR = Path(__file__).resolve().parent
 
 
 class DependencyRootTest(unittest.TestCase):
+    def test_coroutine_profile_copies_have_published_git_identity(self) -> None:
+        profile = runpy.run_path(str(CONFORMANCE_DIR / "profile_workspace.py"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_root = root / "source"
+            script = source_root / "servicegen/scripts/cppcoro_profile.py"
+            script.parent.mkdir(parents=True)
+            script.write_text("pass\n")
+            for name in ("cppcoroexample", "cppcoroservicelib"):
+                source = source_root / name
+                source.mkdir()
+                (source / "source.txt").write_text(name)
+
+            workspace = root / "workspace"
+            globals_ = profile["prepare"].__globals__
+            with mock.patch.dict(
+                globals_,
+                {
+                    "VARIANTS": {},
+                    "FRAMEWORK_REPOSITORIES": set(),
+                    "ARTIFACTS": root / "artifacts",
+                    "generate_archives": lambda *_: "generated",
+                    "release_tags_at_head": lambda *_: ["v0.2.148"],
+                    "verify_current_graph": lambda *_: {},
+                },
+            ):
+                profile["prepare"](source_root, workspace, "current")
+
+            for name in ("cppcoroexample", "cppcoroservicelib"):
+                copied = workspace / name
+                self.assertTrue((copied / ".git").is_dir())
+                self.assertEqual(
+                    subprocess.check_output(
+                        ["git", "tag", "--points-at", "HEAD"],
+                        cwd=copied, text=True,
+                    ).strip(),
+                    "v0.2.148",
+                )
+                subprocess.run(
+                    ["git", "ls-files", "-z"], cwd=copied, check=True,
+                    capture_output=True,
+                )
+
     def test_coroutine_runtime_requires_each_boost_equivalent_stage(self) -> None:
         gate = runpy.run_path(str(CONFORMANCE_DIR / "cppcoro_runtime.py"))
         stages = gate["STAGE_TESTS"]

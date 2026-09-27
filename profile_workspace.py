@@ -306,6 +306,7 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
             # Preserve the coroutine implementation while applying the
             # profile-owned graph/config delta from generated declarations.
             if source.name == "cppcoroexample":
+                release_tags = release_tags_at_head(source)
                 copy_example(source, destination)
                 run(
                     ["python3", str(source_root / "servicegen/scripts/cppcoro_profile.py"),
@@ -315,9 +316,14 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
                     cwd=source_root / "servicegen",
                 )
                 generated["cppcoro"] = verify_current_graph(destination)
+                initialize_git_snapshot(destination, profile, release_tags)
+                attach_persistent_tools(source, destination)
                 print(f"+ copy adapted cppcoroexample ({profile})", flush=True)
             else:
+                release_tags = release_tags_at_head(source)
                 copy_framework(source, destination)
+                initialize_git_snapshot(destination, profile, release_tags)
+                attach_framework_caches(source, destination)
             continue
         if source.name in FRAMEWORK_REPOSITORIES:
             release_tags = release_tags_at_head(source)
