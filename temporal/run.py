@@ -1588,6 +1588,24 @@ def schedule_workflow_request(schedule_description: str) -> dict[str, object]:
     return next(iter(unique.values()))
 
 
+def traced_schedule_workflow_request(
+    language: Language, schedule_description: str
+) -> dict[str, object]:
+    """Use the durable Schedule action with tracing enabled for this explicit probe.
+
+    The Schedule was created before the service switches to production tracing.
+    Its persisted action may still carry noopTracing=true; the workflow started
+    by this probe must not claim tracing is disabled while supplying traceparent.
+    """
+    request = schedule_workflow_request(schedule_description)
+    if language.name != "typescript":
+        return request
+    telemetry = request.get("telemetry")
+    if not isinstance(telemetry, dict) or not isinstance(telemetry.get("noopTracing"), bool):
+        raise RuntimeError("Temporal Schedule action is missing noopTracing telemetry policy")
+    return {**request, "telemetry": {**telemetry, "noopTracing": False}}
+
+
 def fetch_trace(trace_id: str, timeout: float = 30) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     latest: dict[str, Any] | None = None
@@ -2020,7 +2038,8 @@ def verify_tracing(
         env,
         workflow_type=ENDPOINT_WORKFLOW_TYPE,
         task_queue="automation-activity-schedules",
-        request=schedule_workflow_request(
+        request=traced_schedule_workflow_request(
+            language,
             schedule_descriptions[ACTIVITY_SCHEDULE_ID]
         ),
         artifact_prefix="activity-trace",
@@ -2035,7 +2054,8 @@ def verify_tracing(
         env,
         workflow_type=SCHEDULED_WORKFLOW_TYPE,
         task_queue="automation-workflow-schedules",
-        request=schedule_workflow_request(
+        request=traced_schedule_workflow_request(
+            language,
             schedule_descriptions[WORKFLOW_SCHEDULE_ID]
         ),
         artifact_prefix="workflow-trace",
