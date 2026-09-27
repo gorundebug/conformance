@@ -56,7 +56,7 @@ FUNCTION_CONTRACTS = {
         "forbidden": ("*outputs", "*collectors"),
     },
     ROOT / "rustservicelib/src/operators/map.rs": {
-        "required": ("stream: &dyn RuntimeStream", "value: &T", "out: &Collector<R>"),
+        "required": ("stream: &dyn RuntimeStream", "value: &T", "out: &impl Collect<R>"),
         "forbidden": ("outputs: &[", "collectors: &[", "value: Payload<T>", "out: &Stream<R>"),
     },
     ROOT / "rustservicelib/src/operators/filter.rs": {
@@ -64,27 +64,27 @@ FUNCTION_CONTRACTS = {
         "forbidden": ("outputs: &[", "collectors: &[", "value: Payload<T>"),
     },
     ROOT / "rustservicelib/src/operators/flatmap.rs": {
-        "required": ("stream: &dyn RuntimeStream", "value: &T", "out: &Collector<R>"),
+        "required": ("stream: &dyn RuntimeStream", "value: &T", "out: &impl Collect<R>"),
         "forbidden": ("outputs: &[", "collectors: &[", "value: Payload<T>", "out: &Stream<R>"),
     },
     ROOT / "rustservicelib/src/operators/keyby.rs": {
-        "required": ("stream: &dyn RuntimeStream", "value: &T", "out: &Collector<KeyValue<K, V>>"),
+        "required": ("stream: &dyn RuntimeStream", "value: &T", "out: &impl Collect<KeyValue<K, V>>"),
         "forbidden": ("outputs: &[", "collectors: &[", "value: Payload<T>", "out: &Stream<KeyValue<K, V>>"),
     },
     ROOT / "rustservicelib/src/operators/process.rs": {
-        "required": ("stream: &dyn RuntimeStream", "value: &T", "out: &Collector<R>", "error: &Collector<E>"),
+        "required": ("stream: &dyn RuntimeStream", "value: &T", "out: &impl Collect<R>", "error: &impl Collect<E>"),
         "forbidden": ("outputs: &[", "collectors: &[", "value: Payload<T>", "out: &Stream<R>", "error: &Stream<E>"),
     },
     ROOT / "rustservicelib/src/operators/delay.rs": {
-        "required": ("stream: &dyn RuntimeStream", "value: &T", "_out: &Collector<T>"),
+        "required": ("stream: &dyn RuntimeStream", "value: &T", "_out: &impl Collect<T>"),
         "forbidden": ("outputs: &[", "collectors: &[", "value: Payload<T>", "_out: &Stream<T>"),
     },
     ROOT / "rustservicelib/src/operators/join.rs": {
-        "required": ("stream: &dyn RuntimeStream", "left: Vec<L>", "right: Vec<R>", "out: &Collector<O>"),
+        "required": ("stream: &dyn RuntimeStream", "left: Vec<L>", "right: Vec<R>", "out: &impl Collect<O>"),
         "forbidden": ("outputs: &[", "collectors: &[", "Vec<Payload<L>>", "Vec<Payload<R>>", "out: &Stream<O>"),
     },
     ROOT / "rustservicelib/src/operators/multijoin.rs": {
-        "required": ("stream: &dyn RuntimeStream", "out: &Collector<O>"),
+        "required": ("stream: &dyn RuntimeStream", "out: &impl Collect<O>"),
         "forbidden": ("outputs: &[", "collectors: &[", "Vec<Payload<", "out: &Stream<O>"),
     },
     TYPESCRIPT / "src/operators/functions.ts": {
@@ -133,7 +133,7 @@ FUNCTION_CONTRACTS = {
     ROOT / "rustexample/orderservice/src/internal/functions/order/process_order_items.rs": {
         "required": (
             "_stream: &dyn RuntimeStream", "value: &Order",
-            "out: &Collector<OrderItem>",
+            "out: &impl servicelib::runtime::collector::Collect<OrderItem>",
             "pub async fn make_process_order_items(",
             ") -> RuntimeResult<ProcessOrderItems>",
         ),
