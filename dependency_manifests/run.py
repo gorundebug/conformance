@@ -25,6 +25,7 @@ GO_PROJECT_MODULES = {
     "gonativeexample": (".",),
     "cppexample": ("automationservice", "inventory_service_api", "model_go", "order_service_api"),
     "cppboostexample": ("automationservice", "inventory_service_api", "model_go", "order_service_api"),
+    "cppcoroexample": ("automationservice", "inventory_service_api", "model_go", "order_service_api"),
     "rustexample": ("automationservice", "inventory_service_api", "model_go", "order_service_api"),
     "servicegen": (".",),
     "servicelib": (".",),

@@ -859,7 +859,7 @@ class DependencyRootTest(unittest.TestCase):
             actual,
             {
                 "go", "go-native",
-                "cpp", "cpp-native", "cppboost", "cppboost-native",
+                "cpp", "cpp-native", "cppboost", "cppboost-native", "cppcoro",
                 "python", "python-native", "rust", "rust-native",
                 "typescript", "typescript-native",
             },
@@ -1132,7 +1132,7 @@ class DependencyRootTest(unittest.TestCase):
             set(profiling_gate["ALL_LANGUAGES"]),
             {
                 "go", "go-native", "cpp", "cpp-native", "cppboost",
-                "cppboost-native", "python", "python-native", "rust",
+                "cppboost-native", "cppcoro", "python", "python-native", "rust",
                 "rust-native", "typescript", "typescript-native",
             },
         )

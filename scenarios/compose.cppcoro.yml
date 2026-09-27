@@ -1,0 +1,26 @@
+services:
+  inventoryservice:
+    restart: "no"
+    command:
+      - --config
+      - /app/config/config.yaml
+      - --values
+      - /workspace/conformance/inventoryservice.overrides.yaml
+      - --workers
+      - "2"
+    volumes:
+      - ${SERVICELIB_SCENARIO_ARTIFACTS_DIR}/cppcoro:/workspace/conformance:ro
+  orderservice:
+    restart: "no"
+    environment:
+      - ORDER_PROCESSED_ENABLED=false
+    command:
+      - --config
+      - /app/config/config.yaml
+      - --values
+      - /workspace/conformance/orderservice.overrides.yaml
+      - --workers
+      - "2"
+    volumes:
+      - ${SERVICELIB_SCENARIO_ARTIFACTS_DIR}/cppcoro:/workspace/conformance:ro
+    depends_on: [inventoryservice]

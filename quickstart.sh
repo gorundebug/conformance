@@ -47,7 +47,7 @@ else
 fi
 EXAMPLE_PROFILE="${EXAMPLE_PROFILE:-function-call}"
 
-REPOS=(goexample gonativeexample cppexample cppnativeexample cppboostexample cppboostnativeexample pyexample pynativeexample rustexample rustnativeexample tsexample tsnativeexample servicegen servicelib cppservicelib cppboostservicelib pyservicelib rustservicelib tsservicelib)
+REPOS=(goexample gonativeexample cppexample cppnativeexample cppboostexample cppcoroexample cppboostnativeexample pyexample pynativeexample rustexample rustnativeexample tsexample tsnativeexample servicegen servicelib cppservicelib cppboostservicelib cppcoroservicelib pyservicelib rustservicelib tsservicelib)
 
 export GIT_HTTP_LOW_SPEED_LIMIT=${DEPENDENCY_GIT_LOW_SPEED_LIMIT:-1024}
 export GIT_HTTP_LOW_SPEED_TIME=${DEPENDENCY_GIT_LOW_SPEED_TIME:-30}
@@ -233,7 +233,7 @@ fi
 # Rust keeps the equivalent code force-added inside rustexample itself, so it
 # needs no extra step.
 echo "==> Restoring each example's own service/module repos"
-for example in goexample cppexample cppboostexample pyexample tsexample; do
+for example in goexample cppexample cppboostexample cppcoroexample pyexample tsexample; do
   script="$DEPENDENCIES_DIR/$example/clone.generated.sh"
   if [ -f "$script" ]; then
     echo "  $example"

@@ -913,3 +913,26 @@ make dashboards
 ```
 
 The machine-readable result is `.artifacts/dashboards/summary.json`.
+
+## C++20 coroutine runtime
+
+The public runtime is https://github.com/gorundebug/cppcoroservicelib and its
+canonical example is https://github.com/gorundebug/cppcoroexample. Both are
+restored by `quickstart.sh`, alongside the existing Boost repositories.
+They are included in the ordinary runner selection, not an opt-in experiment.
+
+The benchmark name is `cpp-coro`; profiling and live conformance use
+`cppcoro`, following their respective existing Boost naming conventions.
+CPU quotas, graph validation, load, telemetry and assertions are unchanged.
+Local development uses the same `DEPENDENCIES_DIR` and
+`DEPENDENCY_PROXY_DIR` options as Boost.
+
+The example contains the adapted coroutine source. The shared generator does
+not yet have a coroutine backend: do not regenerate it with the synchronous
+Boost backend. A requested graph profile must still match the actual graph;
+incompatible profiles are not silently accepted.
+
+Live scenario, Kafka, metrics and tracing runners accept `--language cppcoro`.
+`make cppcoro-runtime` runs the library's complete stock Docker test suite in
+Debug and Release; it is also included in `make fast`. This does not claim
+that generation or published-package conformance exists for this backend.

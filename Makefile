@@ -76,7 +76,7 @@ all: release
 release: fast integration
 	python3 aggregate.py
 
-fast: dependency-manifests tooling structure signatures config pools operators serde
+fast: dependency-manifests tooling structure signatures config pools operators serde cppcoro-runtime
 
 integration: call-semantics config-runtime dependencies standalone-components published-components transports kafka temporal tracing metrics dashboards logging scenarios sanitizers generation kubernetes
 
@@ -216,3 +216,7 @@ clean:
 		if [ -e "$$path" ]; then chmod -R u+w "$$path"; fi; \
 	done
 	rm -rf .artifacts benchmarks/examples/.artifacts profiling/examples/.artifacts
+
+.PHONY: cppcoro-runtime
+cppcoro-runtime: dependency-manifests
+	python3 run_suite.py cppcoro-runtime python3 cppcoro_runtime.py

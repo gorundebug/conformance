@@ -153,3 +153,9 @@ clean: ## Stop benchmark containers and remove generated results
 help: ## Show benchmark commands and parameters
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
+
+.PHONY: cpp-coro
+cpp-coro:
+	$(PYTHON) run.py --language cpp-coro --cores $(CORES) --loadgen-cores $(LOADGEN_CORES) \
+		--vus $(VUS) --duration $(DURATION) --warmup $(WARMUP) --runs $(RUNS) \
+		--result-prefix cpp-coro --max-map-count $(MAX_MAP_COUNT)

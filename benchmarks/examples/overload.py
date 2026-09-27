@@ -209,7 +209,7 @@ def main() -> int:
     selected = [
         language
         for language in benchmark.LANGUAGES
-        if not args.language or language.name in args.language
+        if (language.default_enabled if not args.language else language.name in args.language)
     ]
     benchmark.ensure_examples(selected, args)
     benchmark.ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -218,7 +218,9 @@ def main() -> int:
         if any(language.name == "cpp" for language in selected):
             benchmark.prepare_cpp_configs(args.cores)
         if any(language.name == "cpp-boost" for language in selected):
-            benchmark.prepare_cppboost_configs(args.cores)
+            benchmark.prepare_cppboost_configs(args.cores, args.cores)
+        if any(language.name == "cpp-coro" for language in selected):
+            benchmark.prepare_cppboost_configs(args.cores, args.cores, example="cppcoroexample", config_directory="cppcoro-config")
         if args.max_map_count:
             benchmark.raise_max_map_count(args.max_map_count)
     if not args.skip_build:

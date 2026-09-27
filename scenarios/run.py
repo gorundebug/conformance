@@ -75,6 +75,7 @@ IMPLEMENTATIONS = (
         "cpp-native", ROOT / "cppnativeexample", HERE / "compose.cpp-native.yml"
     ),
     Implementation("cppboost", ROOT / "cppboostexample", HERE / "compose.cppboost.yml"),
+    Implementation("cppcoro", ROOT / "cppcoroexample", HERE / "compose.cppcoro.yml"),
     Implementation("cppboost-native", ROOT / "cppboostnativeexample", HERE / "compose.cppboost-native.yml"),
     Implementation("python", ROOT / "pyexample", HERE / "compose.python.yml"),
     Implementation(
@@ -94,7 +95,7 @@ IMPLEMENTATIONS = (
     ),
 )
 FRAMEWORK_IMPLEMENTATIONS = {
-    "go", "cpp", "cppboost", "python", "rust", "typescript"
+    "go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript"
 }
 
 NATIVE_SOURCE_CONTEXTS: tuple[Path, Path] | None = None
@@ -107,7 +108,7 @@ def command(implementation: Implementation, *args: str) -> list[str]:
         "--project-directory", str(implementation.example),
         "--file", str(implementation.example / "docker-compose.yml"),
     ]
-    if implementation.name in {"cpp", "python", "typescript"}:
+    if implementation.name in {"cpp", "cppcoro", "python", "typescript"}:
         runtime_overlays = sorted(
             implementation.example.glob("docker-compose.*-runtime.generated.yml")
         )
@@ -153,8 +154,10 @@ def environment(implementation: Implementation) -> dict[str, str]:
             )
         )
         env["USERVER_LTO"] = "ON"
-    elif implementation.name == "cppboost":
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+    elif implementation.name in {"cppboost", "cppcoro"}:
+        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / ("cppcoroservicelib" if implementation.name == "cppcoro" else "cppboostservicelib"))
+        if implementation.name == "cppcoro":
+            env["USE_LOCAL_MODULES"] = "1"
     elif implementation.name == "cppboost-native" and NATIVE_SOURCE_CONTEXTS:
         grpc_source, asio_grpc_source = NATIVE_SOURCE_CONTEXTS
         env["GRPC_SOURCE_CONTEXT"] = str(grpc_source)
@@ -275,11 +278,11 @@ def grpc_request(
     )
 
 
-def prepare_cppboost() -> None:
-    output = ARTIFACTS / "cppboost"
+def prepare_cppboost(name: str = "cppboost") -> None:
+    output = ARTIFACTS / name
     output.mkdir(parents=True, exist_ok=True)
     for service in ("inventoryservice", "orderservice"):
-        source = ROOT / "cppboostexample" / service / "config" / "overrides.yaml"
+        source = ROOT / f"{name}example" / service / "config" / "overrides.yaml"
         overrides = source.read_text()
         if service == "orderservice":
             overrides = overrides.replace(
@@ -913,7 +916,7 @@ def build_implementation(implementation: Implementation) -> None:
             cwd=implementation.example,
             env=environment(implementation),
         )
-    elif implementation.name == "cppboost":
+    elif implementation.name in {"cppboost", "cppcoro"}:
         for service in ("analyticsservice", "inventoryservice", "orderservice"):
             print(
                 f"+ make -C {service} docker-build USE_LOCAL_MODULES=1",
@@ -957,6 +960,8 @@ def main() -> int:
         prepare_cpp()
     if "cppboost" in selected_names:
         prepare_cppboost()
+    if "cppcoro" in selected_names:
+        prepare_cppboost("cppcoro")
     if "python" in selected_names:
         prepare_python()
     if "typescript" in selected_names:

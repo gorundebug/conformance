@@ -90,6 +90,7 @@ LANGUAGES = (
         ROOT / "cppboostexample",
         Path(__file__).with_name("compose.cppboost.yml"),
     ),
+    Language("cppcoro", ROOT / "cppcoroexample", Path(__file__).with_name("compose.cppcoro.yml")),
     Language(
         "python",
         ROOT / "pyexample",
@@ -169,7 +170,7 @@ def build(language: Language, env: dict[str, str]) -> None:
             env={**env, "ENABLE_OTLP_TRACING": "ON"},
             retry_network=True,
         )
-    elif language.name == "cppboost":
+    elif language.name in {"cppboost", "cppcoro"}:
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
@@ -853,10 +854,12 @@ def language_env(language: Language) -> dict[str, str]:
     if language.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
         env["ENABLE_OTLP_TRACING"] = "ON"
-    elif language.name == "cppboost":
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+    elif language.name in {"cppboost", "cppcoro"}:
+        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / ("cppcoroservicelib" if language.name == "cppcoro" else "cppboostservicelib"))
+        if language.name == "cppcoro":
+            env["USE_LOCAL_MODULES"] = "1"
         cpp_source_cache.configure_environment(
-            env, ROOT / "cppboostservicelib"
+            env, Path(env["SERVICELIB_SOURCE_CONTEXT"])
         )
     elif language.name == "python":
         env["PYSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "pyservicelib")

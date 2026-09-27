@@ -96,8 +96,8 @@ def language_log(
     _terminal(f"==> [{label}] PASS ({elapsed:.1f}s; log: {path})")
 
 
-def cppboost_dependency_context(dependency: str) -> str:
-    versions = ROOT / "cppboostservicelib" / "cmake" / "DependencyVersions.cmake"
+def cppboost_dependency_context(dependency: str, library: str = "cppboostservicelib") -> str:
+    versions = ROOT / library / "cmake" / "DependencyVersions.cmake"
     try:
         contents = versions.read_text(encoding="utf-8")
     except OSError as error:
@@ -130,6 +130,7 @@ class Language:
     verify_framework_pool: bool = True
     repository: str | None = None
     revision: str | None = None
+    default_enabled: bool = True
 
 
 LANGUAGES = (
@@ -156,6 +157,7 @@ LANGUAGES = (
         ROOT / "cppboostexample",
         BENCHMARK_DIR / "compose.cpp-boost.yml",
     ),
+    Language("cpp-coro", ROOT / "cppcoroexample", BENCHMARK_DIR / "compose.cpp-coro.yml"),
     Language(
         "cpp-boost-native",
         NATIVE_ROOT / "cppboostnativeexample",
@@ -432,7 +434,13 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
         env["COMPOSE_PROJECT_NAME"] = "cppboostexample"
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
 
-    if language.name in {"cpp-boost", "cpp-boost-native"}:
+    if language.name == "cpp-coro":
+        env["COMPOSE_PROJECT_NAME"] = "cppcoroexample"
+        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
+        env["BENCHMARK_CPPBOOST_CONFIG_DIR"] = str(ARTIFACTS / "cppcoro-config")
+        env["USE_LOCAL_MODULES"] = "1"
+    if language.name in {"cpp-boost", "cpp-boost-native", "cpp-coro"}:
+        library = "cppcoroservicelib" if language.name == "cpp-coro" else "cppboostservicelib"
         # docker-compose.cmake.generated.yml must never fall back to `.` for
         # these named contexts: the example checkout contains matching gRPC
         # headers under its build tree, so Docker can otherwise mount the
@@ -441,11 +449,11 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
         # versions as cppboostservicelib and remain cached by BuildKit.
         if "GRPC_SOURCE_CONTEXT" not in env:
             env["GRPC_SOURCE_CONTEXT"] = (
-                cppboost_dependency_context("grpc")
+                cppboost_dependency_context("grpc", library)
             )
         if "ASIO_GRPC_SOURCE_CONTEXT" not in env:
             env["ASIO_GRPC_SOURCE_CONTEXT"] = (
-                cppboost_dependency_context("asio-grpc")
+                cppboost_dependency_context("asio-grpc", library)
             )
     elif language.name == "python":
         env["PYSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "pyservicelib")
@@ -468,7 +476,7 @@ def build(language: Language, env: dict[str, str]) -> None:
             env=env,
             retry_network=True,
         )
-    elif language.name in {"cpp", "cpp-boost"}:
+    elif language.name in {"cpp", "cpp-boost", "cpp-coro"}:
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
@@ -670,15 +678,15 @@ def disable_order_processed_endpoint(values: str) -> str:
     return values
 
 
-def prepare_cppboost_configs(service_cores: int, grpc_connections: int) -> None:
-    output = ARTIFACTS / "cppboost-config"
+def prepare_cppboost_configs(service_cores: int, grpc_connections: int, *, example: str = "cppboostexample", config_directory: str = "cppboost-config") -> None:
+    output = ARTIFACTS / config_directory
     output.mkdir(parents=True, exist_ok=True)
     for service, pool in (
         ("inventoryservice", "inventoryPriorityWorkers"),
         ("orderservice", "defaultPool"),
     ):
         values = (
-            ROOT / "cppboostexample" / service / "config" / "overrides.yaml"
+            ROOT / example / service / "config" / "overrides.yaml"
         ).read_text()
         values = values.replace(
             "connectionsCount: 1", f"connectionsCount: {grpc_connections}"
@@ -987,13 +995,13 @@ def verify_boost_worker_configuration(
     env: dict[str, str],
     services: dict[str, Any] | None = None,
 ) -> None:
-    if language.name not in {"cpp-boost", "cpp-boost-native"}:
+    if language.name not in {"cpp-boost", "cpp-boost-native", "cpp-coro"}:
         return
     if services is None:
         services = resolved_compose_services(language, env)
     for service in ("inventoryservice", "orderservice"):
         config = services[service]
-        if language.name == "cpp-boost":
+        if language.name in {"cpp-boost", "cpp-coro"}:
             command_line = config.get("command", [])
             pairs = list(zip(command_line, command_line[1:]))
             if ("--workers", str(expected)) not in pairs:
@@ -1018,6 +1026,7 @@ def verify_cpp_compose_isolation(
     expected_prefixes = {
         "cpp": "cppexample",
         "cpp-boost": "cppboostexample",
+        "cpp-coro": "cppcoroexample",
     }
     expected_prefix = expected_prefixes.get(language.name)
     if expected_prefix is None:
@@ -1424,7 +1433,7 @@ def main() -> int:
     selected = [
         language
         for language in LANGUAGES
-        if not args.language or language.name in args.language
+        if (language.default_enabled if not args.language else language.name in args.language)
     ]
     if args.fetch_native:
         ensure_examples(
@@ -1446,6 +1455,8 @@ def main() -> int:
             prepare_cppboost_configs(
                 args.cores, args.grpc_connections or args.cores
             )
+        if any(language.name == "cpp-coro" for language in selected):
+            prepare_cppboost_configs(args.cores, args.grpc_connections or args.cores, example="cppcoroexample", config_directory="cppcoro-config")
         if args.max_map_count:
             raise_max_map_count(args.max_map_count)
     if any(language.name == "python" for language in selected):

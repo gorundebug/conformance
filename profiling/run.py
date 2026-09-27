@@ -20,9 +20,9 @@ PROFILING_ROOT = CONFORMANCE_DIR / "profiling"
 PROFILING_RUNNER = PROFILING_ROOT / "examples" / "run.py"
 PROFILE_ARTIFACTS = PROFILING_ROOT / "examples" / ".artifacts"
 ARTIFACTS = CONFORMANCE_DIR / ".artifacts" / "profiling"
-LANGUAGES = ("cppboost", "cppboost-native")
+LANGUAGES = ("cppboost", "cppboost-native", "cppcoro")
 ALL_LANGUAGES = (
-    "go", "go-native", "cpp", "cpp-native", "cppboost", "cppboost-native",
+    "go", "go-native", "cpp", "cpp-native", "cppboost", "cppboost-native", "cppcoro",
     "python", "python-native", "rust", "rust-native",
     "typescript", "typescript-native",
 )
@@ -477,7 +477,7 @@ def validate_artifacts(args: argparse.Namespace) -> dict[str, Any]:
                     "offcpu_load": str(offcpu_load),
                 }
             )
-            if language == "cppboost":
+            if language in {"cppboost", "cppcoro"}:
                 metrics = PROFILE_ARTIFACTS / f"{prefix}.runtime-metrics.json"
                 service_result["runtime_metrics"] = validate_runtime_metrics(metrics)
                 service_result["artifacts"]["runtime_metrics"] = str(metrics)

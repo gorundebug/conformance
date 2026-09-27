@@ -108,6 +108,8 @@ def invalidate() -> None:
     prefixes = (
         "cppexample_cpp-cmake-build",
         "cppboostexample_cpp-cmake-build",
+        "cppcoroexample_cpp-cmake-build",
+        "cppcoroservicelib-",
         "cppboostservicelib-",
         "servicelib-",
     )

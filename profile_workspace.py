@@ -296,6 +296,14 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
         destination = workspace / source.name
         if destination.exists() or destination.is_symlink():
             continue
+        if source.name in {"cppcoroexample", "cppcoroservicelib"}:
+            # The coroutine example is published as an adapted source project.
+            # Preserve the adapted local graph; the runner verifies its profile.
+            if source.name == "cppcoroexample":
+                copy_example(source, destination)
+            else:
+                copy_framework(source, destination)
+            continue
         if source.name in FRAMEWORK_REPOSITORIES:
             release_tags = release_tags_at_head(source)
             copy_framework(source, destination)
