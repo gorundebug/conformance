@@ -174,6 +174,7 @@ def coro_framework_build_script() -> str:
     return (
         "cmake --fresh -S . -B build/docker -G Ninja "
         "-DCMAKE_BUILD_TYPE=Debug "
+        "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
         "-DCMAKE_INSTALL_PREFIX=/workspace/build/docker-install "
         "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
         "-DCPPCOROSERVICELIB_ENABLE_KAFKA=ON "
