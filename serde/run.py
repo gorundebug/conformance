@@ -544,6 +544,7 @@ def main() -> int:
         "docker",
         "run",
         "--rm",
+        *coro_source_mount_args(),
         *repository_mounts(),
         "-v", f"{CORO}:/workspace",
         *cpp_source_cache.build_volume_mount_args(
