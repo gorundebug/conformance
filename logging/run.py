@@ -162,6 +162,7 @@ def main() -> int:
         coro_script = (
             "cmake --fresh -S . -B build/docker -G Ninja "
             "-DCMAKE_BUILD_TYPE=Debug "
+            "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
             "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
             f"{cpp_source_cache.cmake_args(CORO)}&& "
             "cmake --build build/docker --parallel --target "
