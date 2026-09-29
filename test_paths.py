@@ -111,8 +111,8 @@ class DependencyRootTest(unittest.TestCase):
         self.assertNotIn("<model_cpp/include/", coro_probe)
         canonical_probe = (CONFORMANCE_DIR / "serde/canonical_probe.cmake").read_text()
         self.assertIn("/repo/cppexample/model_cpp/include", canonical_probe)
-        serde_runner = (CONFORMANCE_DIR / "serde/run.py").read_text()
-        self.assertIn("/repo/cppcoroexample/model_cppcoro/include", serde_runner)
+        coro_probe_cmake = (CONFORMANCE_DIR / "serde/coro_probe.cmake").read_text()
+        self.assertIn("/repo/cppcoroexample/model_cppcoro/include", coro_probe_cmake)
         self.assertNotIn("<model/include/example/model/", probe)
 
     def test_typescript_installs_enforce_proxy_and_binary_mirror(self) -> None:
