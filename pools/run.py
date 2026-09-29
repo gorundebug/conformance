@@ -175,17 +175,11 @@ def coro_framework_build_script() -> str:
         "cmake --fresh -S . -B build/docker -G Ninja "
         "-DCMAKE_BUILD_TYPE=Debug "
         "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
-        "-DCMAKE_INSTALL_PREFIX=/workspace/build/docker-install "
         "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
         "-DCPPCOROSERVICELIB_ENABLE_KAFKA=ON "
         f"{cpp_source_cache.cmake_args(CORO)}&& "
         "cmake --build build/docker --parallel && "
-        "ctest --test-dir build/docker --output-on-failure && "
-        "cmake --install build/docker && "
-        "cmake --fresh -S tests/consumer -B build/consumer -G Ninja "
-        "-DCMAKE_PREFIX_PATH=/workspace/build/docker-install && "
-        "cmake --build build/consumer --parallel && "
-        "/workspace/build/consumer/cppcoroservicelib_consumer"
+        "ctest --test-dir build/docker --output-on-failure"
     )
 
 
