@@ -96,7 +96,7 @@ def language_log(
     _terminal(f"==> [{label}] PASS ({elapsed:.1f}s; log: {path})")
 
 
-def cppboost_dependency_context(dependency: str, library: str = "cppboostservicelib") -> str:
+def cpp_dependency_context(dependency: str, library: str = "cppcoroservicelib") -> str:
     versions = ROOT / library / "cmake" / "DependencyVersions.cmake"
     try:
         contents = versions.read_text(encoding="utf-8")
@@ -110,8 +110,8 @@ def cppboost_dependency_context(dependency: str, library: str = "cppboostservice
     }
     repository = repositories.get(dependency)
     if repository is None:
-        raise RuntimeError(f"unsupported Boost dependency context: {dependency}")
-    prefix = f"CPPBOOSTSERVICELIB_{dependency.upper().replace('-', '_')}"
+        raise RuntimeError(f"unsupported C++ dependency context: {dependency}")
+    prefix = f"CPPCOROSERVICELIB_{dependency.upper().replace('-', '_')}"
     match = re.search(
         rf'^set\({re.escape(prefix)}_VERSION "([^"]+)"',
         contents,
@@ -151,11 +151,6 @@ LANGUAGES = (
         verify_framework_pool=False,
         repository="https://github.com/gorundebug/cppnativeexample.git",
         revision="v0.2.148",
-    ),
-    Language(
-        "cpp-boost",
-        ROOT / "cppboostexample",
-        BENCHMARK_DIR / "compose.cpp-boost.yml",
     ),
     Language("cpp-coro", ROOT / "cppcoroexample", BENCHMARK_DIR / "compose.cpp-coro.yml"),
     Language(
@@ -374,7 +369,7 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
         {
             "BENCHMARK_ARTIFACTS_DIR": str(ARTIFACTS),
             "BENCHMARK_CPP_CONFIG_DIR": str(ARTIFACTS / "cpp-config"),
-            "BENCHMARK_CPPBOOST_CONFIG_DIR": str(ARTIFACTS / "cppboost-config"),
+            "BENCHMARK_CPPCORO_CONFIG_DIR": str(ARTIFACTS / "cppcoro-config"),
             "BENCHMARK_PYTHON_CONFIG_DIR": str(ARTIFACTS / "python-config"),
             "BENCHMARK_DIR": str(BENCHMARK_DIR),
             "BENCHMARK_DURATION": args.duration,
@@ -430,30 +425,27 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
             if getattr(args, "native_diagnostic_bypass_grpc", False)
             else "false"
         )
-    elif language.name == "cpp-boost":
-        env["COMPOSE_PROJECT_NAME"] = "cppboostexample"
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
 
     if language.name == "cpp-coro":
         env["COMPOSE_PROJECT_NAME"] = "cppcoroexample"
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
-        env["BENCHMARK_CPPBOOST_CONFIG_DIR"] = str(ARTIFACTS / "cppcoro-config")
+        env["BENCHMARK_CPPCORO_CONFIG_DIR"] = str(ARTIFACTS / "cppcoro-config")
         env["USE_LOCAL_MODULES"] = "1"
-    if language.name in {"cpp-boost", "cpp-boost-native", "cpp-coro"}:
-        library = "cppcoroservicelib" if language.name == "cpp-coro" else "cppboostservicelib"
+    if language.name in {"cpp-boost-native", "cpp-coro"}:
+        library = "cppcoroservicelib"
         # docker-compose.cmake.generated.yml must never fall back to `.` for
         # these named contexts: the example checkout contains matching gRPC
         # headers under its build tree, so Docker can otherwise mount the
         # example itself as /servicegen-grpc-source and CMake configures the
         # wrong project.  Explicit remote contexts are pinned to the same
-        # versions as cppboostservicelib and remain cached by BuildKit.
+        # versions as cppcoroservicelib and remain cached by BuildKit.
         if "GRPC_SOURCE_CONTEXT" not in env:
             env["GRPC_SOURCE_CONTEXT"] = (
-                cppboost_dependency_context("grpc", library)
+                cpp_dependency_context("grpc", library)
             )
         if "ASIO_GRPC_SOURCE_CONTEXT" not in env:
             env["ASIO_GRPC_SOURCE_CONTEXT"] = (
-                cppboost_dependency_context("asio-grpc", library)
+                cpp_dependency_context("asio-grpc", library)
             )
     elif language.name == "python":
         env["PYSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "pyservicelib")
@@ -476,7 +468,7 @@ def build(language: Language, env: dict[str, str]) -> None:
             env=env,
             retry_network=True,
         )
-    elif language.name in {"cpp", "cpp-boost", "cpp-coro"}:
+    elif language.name in {"cpp", "cpp-coro"}:
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
@@ -678,7 +670,7 @@ def disable_order_processed_endpoint(values: str) -> str:
     return values
 
 
-def prepare_cppboost_configs(service_cores: int, grpc_connections: int, *, example: str = "cppboostexample", config_directory: str = "cppboost-config") -> None:
+def prepare_coro_configs(service_cores: int, grpc_connections: int, *, example: str = "cppcoroexample", config_directory: str = "cppcoro-config") -> None:
     output = ARTIFACTS / config_directory
     output.mkdir(parents=True, exist_ok=True)
     for service, pool in (
@@ -989,19 +981,19 @@ def load(
     return json.loads(result_path.read_text())
 
 
-def verify_boost_worker_configuration(
+def verify_coro_worker_configuration(
     language: Language,
     expected: int,
     env: dict[str, str],
     services: dict[str, Any] | None = None,
 ) -> None:
-    if language.name not in {"cpp-boost", "cpp-boost-native", "cpp-coro"}:
+    if language.name not in {"cpp-boost-native", "cpp-coro"}:
         return
     if services is None:
         services = resolved_compose_services(language, env)
     for service in ("inventoryservice", "orderservice"):
         config = services[service]
-        if language.name in {"cpp-boost", "cpp-coro"}:
+        if language.name in {"cpp-coro"}:
             command_line = config.get("command", [])
             pairs = list(zip(command_line, command_line[1:]))
             if ("--workers", str(expected)) not in pairs:
@@ -1025,7 +1017,6 @@ def verify_cpp_compose_isolation(
 ) -> None:
     expected_prefixes = {
         "cpp": "cppexample",
-        "cpp-boost": "cppboostexample",
         "cpp-coro": "cppcoroexample",
     }
     expected_prefix = expected_prefixes.get(language.name)
@@ -1093,7 +1084,7 @@ def benchmark_language(
     services = resolved_compose_services(language, env)
     verify_noop_telemetry_configuration(language, env, services)
     verify_cpp_compose_isolation(language, env, services)
-    verify_boost_worker_configuration(language, args.cores, env, services)
+    verify_coro_worker_configuration(language, args.cores, env, services)
     try:
         run(
             compose_command(
@@ -1451,12 +1442,8 @@ def main() -> int:
     if cpp_selected:
         if any(language.name == "cpp" for language in selected):
             prepare_cpp_configs(args.cores)
-        if any(language.name == "cpp-boost" for language in selected):
-            prepare_cppboost_configs(
-                args.cores, args.grpc_connections or args.cores
-            )
         if any(language.name == "cpp-coro" for language in selected):
-            prepare_cppboost_configs(args.cores, args.grpc_connections or args.cores, example="cppcoroexample", config_directory="cppcoro-config")
+            prepare_coro_configs(args.cores, args.grpc_connections or args.cores, example="cppcoroexample", config_directory="cppcoro-config")
         if args.max_map_count:
             raise_max_map_count(args.max_map_count)
     if any(language.name == "python" for language in selected):

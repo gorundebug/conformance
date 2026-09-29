@@ -25,7 +25,7 @@ RUNNER = BENCHMARKS / "examples" / "run.py"
 RUNNER_ARTIFACTS = BENCHMARKS / "examples" / ".artifacts"
 ARTIFACTS = CONFORMANCE / ".artifacts" / "benchmarks"
 LANGUAGES = {
-    "go", "go-native", "cpp", "cpp-native", "cpp-boost",
+    "go", "go-native", "cpp", "cpp-native",
     "cpp-boost-native", "cpp-coro", "python", "python-native", "rust", "rust-native",
     "typescript", "typescript-native",
 }

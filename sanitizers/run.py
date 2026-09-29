@@ -36,7 +36,6 @@ ORDER_PATH = "/v1/processorder"
 IMPLEMENTATIONS = {
     "go": ROOT / "goexample",
     "cpp": ROOT / "cppexample",
-    "cppboost": ROOT / "cppboostexample",
     "cppcoro": ROOT / "cppcoroexample",
     "python": ROOT / "pyexample",
     "rust": ROOT / "rustexample",
@@ -45,8 +44,7 @@ IMPLEMENTATIONS = {
 IMPLEMENTATION_LANGUAGES = {
     "go": "golang",
     "cpp": "cppUserver",
-    "cppboost": "cppBoost",
-    "cppcoro": "cppBoost",
+    "cppcoro": "cppCoro",
     "python": "python",
     "rust": "rust",
     "typescript": "typescript",
@@ -54,7 +52,6 @@ IMPLEMENTATION_LANGUAGES = {
 IMPLEMENTATION_SANITIZERS = {
     "go": ("race",),
     "cpp": ("runtime", "asan", "tsan"),
-    "cppboost": ("runtime", "asan", "tsan"),
     "cppcoro": ("runtime", "asan", "tsan"),
     "python": ("runtime",),
     "rust": ("runtime",),
@@ -250,11 +247,6 @@ def capture_runtime_evidence(
 RUNTIME_FAILURE_MARKERS = {
     "cpp": (
         "Unhandled exception in components::Run",
-        "terminate called after throwing",
-        "Assertion failed",
-        "Segmentation fault",
-    ),
-    "cppboost": (
         "terminate called after throwing",
         "Assertion failed",
         "Segmentation fault",
@@ -507,9 +499,6 @@ def implementation_env(language: str) -> dict[str, str]:
         pass
     elif language == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
-    elif language == "cppboost":
-        source = str(ROOT / "cppboostservicelib")
-        env["SERVICELIB_SOURCE_CONTEXT"] = source
     elif language == "cppcoro":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
     elif language == "python":

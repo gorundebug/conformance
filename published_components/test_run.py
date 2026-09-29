@@ -54,6 +54,15 @@ class PublishedComponentsTest(unittest.TestCase):
                 contexts,
             )
 
+    def test_retired_runtime_has_no_standalone_or_publication_selector(self) -> None:
+        for catalog in (
+            run.SERVICE_REPOSITORIES, run.SERVICE_PACKAGE_SCRIPTS,
+            run.standalone.LANGUAGES, run.standalone.MATERIALIZERS,
+            run.standalone.MODULE_LANGUAGE_SUFFIX,
+        ):
+            self.assertIn("cppcoro", catalog)
+            self.assertNotIn("cppboost", catalog)
+
     def test_shared_rust_module_uses_direct_cargo_without_proxy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             module = Path(directory)

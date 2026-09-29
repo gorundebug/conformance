@@ -11,63 +11,307 @@
   },
   "signature_deviations": {
     "datasink/grpc/bidistreaming.hpp": {
-      "reason": "Boost Asio streaming holds deferred responses until its completion token is released; userver uses its task runtime for the same response lifetime.",
+      "reason": "Coro consumes and stops through awaitable<void>; Callback transport selects Rpc via the existing streaming type adapter and owns StreamingCell synchronization. Bidi retains DeferredResponse while its completion token is active. These transport ownership types are explicit, not graph API substitutions.",
       "canonical_only": [
         "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >",
         "callable|servicelib::BidirectionalStreamingEndpoint::SessionCell|void markReady ( )",
         "callable|servicelib::BidirectionalStreamingEndpoint::SessionCell|void wait ( )",
+        "callable|servicelib::BidirectionalStreamingEndpoint|void consume ( MessageContext , Payload < T > )",
+        "callable|servicelib::BidirectionalStreamingEndpoint|void stop ( Context ) override",
         "type|servicelib::BidirectionalStreamingEndpoint|struct SessionCell final"
       ],
-      "boost_only": [
+      "coro_only": [
         "alias|servicelib::BidirectionalStreamingEndpoint|using Rpc = typename detail :: BidirectionalStreamingRpcType < ClientFunction > :: type",
         "alias|servicelib::BidirectionalStreamingEndpoint|using SessionCell = detail :: StreamingCell < Session >",
         "callable|servicelib::BidirectionalStreamingEndpoint::DeferredResponse|DeferredResponse ( Res , std :: shared_ptr < detail :: StreamingActivity :: Token > )",
+        "callable|servicelib::BidirectionalStreamingEndpoint|boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > )",
+        "callable|servicelib::BidirectionalStreamingEndpoint|boost :: asio :: awaitable < void > stop ( Context ) override",
         "type|servicelib::BidirectionalStreamingEndpoint|struct DeferredResponse final"
       ]
     },
     "datasink/grpc/clientstreaming.hpp": {
-      "reason": "asio-grpc generated clients expose AsyncSession instead of userver's callable stream object; the public Rpc alias selects that transport result while every endpoint method remains identical.",
+      "reason": "Coro consumes and stops through awaitable<void>; Callback transport selects Rpc via the existing streaming type adapter and owns StreamingCell synchronization. Bidi retains DeferredResponse while its completion token is active. These transport ownership types are explicit, not graph API substitutions.",
       "canonical_only": [
         "alias|servicelib::ClientStreamingEndpoint|using Rpc = std :: remove_cvref_t < std :: invoke_result_t < ClientFunction & , CallOptions > >",
         "callable|servicelib::ClientStreamingEndpoint::SessionCell|void markReady ( )",
         "callable|servicelib::ClientStreamingEndpoint::SessionCell|void wait ( )",
+        "callable|servicelib::ClientStreamingEndpoint|void consume ( MessageContext , Payload < T > )",
+        "callable|servicelib::ClientStreamingEndpoint|void stop ( Context ) override",
         "type|servicelib::ClientStreamingEndpoint|struct SessionCell final"
       ],
-      "boost_only": [
+      "coro_only": [
         "alias|servicelib::ClientStreamingEndpoint|using Rpc = typename detail :: ClientStreamingRpcType < ClientFunction > :: type",
-        "alias|servicelib::ClientStreamingEndpoint|using SessionCell = detail :: StreamingCell < Session >"
+        "alias|servicelib::ClientStreamingEndpoint|using SessionCell = detail :: StreamingCell < Session >",
+        "callable|servicelib::ClientStreamingEndpoint|boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > )",
+        "callable|servicelib::ClientStreamingEndpoint|boost :: asio :: awaitable < void > stop ( Context ) override"
       ]
     },
     "datasink/grpc/common.hpp": {
-      "reason": "Boost owns a transport-neutral CallOptions value and retains the existing optional tracingEnabled argument; userver uses its client CallOptions type and requires that argument explicitly.",
+      "reason": "Coro Sender and ResultContext callbacks are awaitable so sends and completion never require blocking a worker; stop is awaitable. The Asio transport retains its own CallOptions and optional tracing flag.",
       "canonical_only": [
+        "alias|servicelib::Sender|using Send = std :: function < void ( Req ) >",
+        "callable|servicelib::DataSink|void stop ( Context )",
+        "callable|servicelib::Endpoint|void stop ( [[ maybe_unused ]] Context ) override",
+        "callable|servicelib::IEndpoint|virtual void stop ( Context ) = 0",
+        "callable|servicelib::ResultContext|explicit ResultContext ( std :: function < void ( ) > )",
+        "callable|servicelib::ResultContext|void done ( )",
+        "callable|servicelib::Sender|void send ( Req )",
         "callable|servicelib|inline CallOptions callOptions ( const MessageContext & , bool )"
       ],
-      "boost_only": [
+      "coro_only": [
+        "alias|servicelib::Sender|using Send = std :: function < boost :: asio :: awaitable < void > ( Req ) >",
+        "callable|servicelib::DataSink|boost :: asio :: awaitable < void > stop ( Context )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > stop ( [[ maybe_unused ]] Context ) override",
+        "callable|servicelib::IEndpoint|virtual boost :: asio :: awaitable < void > stop ( Context ) = 0",
+        "callable|servicelib::ResultContext|boost :: asio :: awaitable < void > done ( )",
+        "callable|servicelib::ResultContext|explicit ResultContext ( std :: function < boost :: asio :: awaitable < void > ( ) > )",
+        "callable|servicelib::Sender|boost :: asio :: awaitable < void > send ( Req )",
         "callable|servicelib|inline CallOptions callOptions ( const MessageContext & , bool = true )",
         "type|servicelib|struct CallOptions final"
       ]
     },
+    "datasink/grpc/nostreaming.hpp": {
+      "reason": "Coro RPC handlers and consumers return awaitable<R> instead of R/void; the exact request, response, context and reader/writer types are unchanged. No method or parameter normalization is applied.",
+      "canonical_only": [
+        "callable|servicelib::NoStreamingEndpoint|void consume ( MessageContext , Payload < T > )"
+      ],
+      "coro_only": [
+        "callable|servicelib::NoStreamingEndpoint|boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > )"
+      ]
+    },
+    "datasink/grpc/serverstreaming.hpp": {
+      "reason": "Coro RPC handlers and consumers return awaitable<R> instead of R/void; the exact request, response, context and reader/writer types are unchanged. No method or parameter normalization is applied.",
+      "canonical_only": [
+        "callable|servicelib::ServerStreamingEndpoint|void consume ( MessageContext , Payload < T > )"
+      ],
+      "coro_only": [
+        "callable|servicelib::ServerStreamingEndpoint|boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > )"
+      ]
+    },
+    "datasink/localsink/custom.hpp": {
+      "reason": "Coro transport lifecycle and graph/result callbacks explicitly return awaitable with the same logical result and arguments. The exact declaration pairs are checked, including aliases.",
+      "canonical_only": [
+        "alias|servicelib::Endpoint|using SinkCallback = std :: function < void ( MessageContext , const T & , std :: exception_ptr ) >",
+        "callable|servicelib::Endpoint|void consume ( MessageContext , Payload < T > )",
+        "callable|servicelib::Endpoint|void stop ( Context ) override",
+        "callable|servicelib::IEndpoint|virtual void stop ( Context ) = 0"
+      ],
+      "coro_only": [
+        "alias|servicelib::Endpoint|using SinkCallback = std :: function < boost :: asio :: awaitable < void > ( MessageContext , const T & , std :: exception_ptr ) >",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > stop ( Context ) override",
+        "callable|servicelib::IEndpoint|virtual boost :: asio :: awaitable < void > stop ( Context ) = 0"
+      ]
+    },
+    "datasource/cron/libcron.hpp": {
+      "reason": "Coro transport lifecycle and graph/result callbacks explicitly return awaitable with the same logical result and arguments. The exact declaration pairs are checked, including aliases.",
+      "canonical_only": [
+        "alias|servicelib::Endpoint|using Output = std :: function < void ( MessageContext , Payload < ScheduleTrigger > ) >",
+        "callable|servicelib::LibcronDataSource|void start ( Context )",
+        "callable|servicelib::LibcronDataSource|void stop ( Context )"
+      ],
+      "coro_only": [
+        "alias|servicelib::Endpoint|using Output = std :: function < boost :: asio :: awaitable < void > ( MessageContext , Payload < ScheduleTrigger > ) >",
+        "callable|servicelib::LibcronDataSource|boost :: asio :: awaitable < void > start ( Context )",
+        "callable|servicelib::LibcronDataSource|boost :: asio :: awaitable < void > stop ( Context )"
+      ]
+    },
+    "datasource/detail/result_context.hpp": {
+      "reason": "Coro transport lifecycle and graph/result callbacks explicitly return awaitable with the same logical result and arguments. The exact declaration pairs are checked, including aliases.",
+      "canonical_only": [
+        "alias|servicelib::PendingResult|using Callback = std :: function < bool ( MessageContext , SourceStreamContext < T , R , E > & , State & , const R & ) >"
+      ],
+      "coro_only": [
+        "alias|servicelib::PendingResult|using Callback = std :: function < boost :: asio :: awaitable < bool > ( MessageContext , SourceStreamContext < T , R , E > & , State & , const R & ) >"
+      ]
+    },
+    "datasource/grpc/bidistreaming.hpp": {
+      "reason": "Coro RPC handlers and consumers return awaitable<R> instead of R/void; the exact request, response, context and reader/writer types are unchanged. No method or parameter normalization is applied.",
+      "canonical_only": [
+        "callable|servicelib::BidirectionalStreamingEndpoint|template < typename ReaderWriter > :: grpc :: Status handle ( :: grpc :: ServerContext & , ReaderWriter & )",
+        "callable|servicelib::BidirectionalStreamingEndpoint|template < typename ReaderWriter > void handle ( MessageContext , ReaderWriter & )"
+      ],
+      "coro_only": [
+        "callable|servicelib::BidirectionalStreamingEndpoint|template < typename ReaderWriter > boost :: asio :: awaitable < :: grpc :: Status > handle ( :: grpc :: ServerContext & , ReaderWriter & )",
+        "callable|servicelib::BidirectionalStreamingEndpoint|template < typename ReaderWriter > boost :: asio :: awaitable < void > handle ( MessageContext , ReaderWriter & )"
+      ]
+    },
+    "datasource/grpc/clientstreaming.hpp": {
+      "reason": "Coro RPC handlers and consumers return awaitable<R> instead of R/void; the exact request, response, context and reader/writer types are unchanged. No method or parameter normalization is applied.",
+      "canonical_only": [
+        "callable|servicelib::ClientStreamingEndpoint|template < typename Reader > Res handle ( :: grpc :: ServerContext & , Reader & )",
+        "callable|servicelib::ClientStreamingEndpoint|template < typename Reader > Res handle ( MessageContext , Reader & )"
+      ],
+      "coro_only": [
+        "callable|servicelib::ClientStreamingEndpoint|template < typename Reader > boost :: asio :: awaitable < Res > handle ( :: grpc :: ServerContext & , Reader & )",
+        "callable|servicelib::ClientStreamingEndpoint|template < typename Reader > boost :: asio :: awaitable < Res > handle ( MessageContext , Reader & )"
+      ]
+    },
+    "datasource/grpc/common.hpp": {
+      "reason": "Coro uses awaitable transport and graph operations. Suspended consume/eof/waitDone/finish frames own shared_ptr<Request> by value; finish owns its completion callback rather than retaining a forwarding reference. Sender.close awaits its mutex and is not noexcept because coroutine setup can throw. userver-only waitForResult remains a transport boundary.",
+      "canonical_only": [
+        "alias|servicelib::RequestState|using Callback = std :: function < bool ( MessageContext , StreamContext & , State & , const R & , Sender < Res > & ) >",
+        "alias|servicelib::Sender|using Send = std :: function < void ( Res ) >",
+        "callable|servicelib::DataSource|void stop ( Context )",
+        "callable|servicelib::Endpoint|std :: shared_ptr < Request > begin ( MessageContext , std :: shared_ptr < Sender < Res > > , std :: shared_ptr < tracing :: Span > )",
+        "callable|servicelib::Endpoint|template < typename CompletionReady > void finish ( const std :: shared_ptr < Request > & , std :: exception_ptr & , CompletionReady && )",
+        "callable|servicelib::Endpoint|void consume ( const std :: shared_ptr < Request > & , const Req & )",
+        "callable|servicelib::Endpoint|void consumeResult ( MessageContext , Payload < R > )",
+        "callable|servicelib::Endpoint|void eof ( const std :: shared_ptr < Request > & , std :: optional < std :: int64_t > = std :: nullopt )",
+        "callable|servicelib::Endpoint|void finish ( const std :: shared_ptr < Request > & , std :: exception_ptr & )",
+        "callable|servicelib::Endpoint|void stop ( Context ) override",
+        "callable|servicelib::Endpoint|void waitDone ( const std :: shared_ptr < Request > & )",
+        "callable|servicelib::IEndpoint|virtual void stop ( Context ) = 0",
+        "callable|servicelib::Sender|void close ( ) noexcept",
+        "callable|servicelib::Sender|void send ( Res )",
+        "callable|servicelib|inline void waitForResult ( const MessageContext & , userver :: engine :: SingleUseEvent & )"
+      ],
+      "coro_only": [
+        "alias|servicelib::RequestState|using Callback = std :: function < boost :: asio :: awaitable < bool > ( MessageContext , StreamContext & , State & , const R & , Sender < Res > & ) >",
+        "alias|servicelib::Sender|using Send = std :: function < boost :: asio :: awaitable < void > ( Res ) >",
+        "callable|servicelib::DataSource|boost :: asio :: awaitable < void > stop ( Context )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < std :: shared_ptr < Request > > begin ( MessageContext , std :: shared_ptr < Sender < Res > > , std :: shared_ptr < tracing :: Span > )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > consume ( std :: shared_ptr < Request > , const Req & )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > consumeResult ( MessageContext , Payload < R > )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > eof ( std :: shared_ptr < Request > , std :: optional < std :: int64_t > = std :: nullopt )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > finish ( std :: shared_ptr < Request > , std :: exception_ptr & )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > stop ( Context ) override",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > waitDone ( std :: shared_ptr < Request > )",
+        "callable|servicelib::Endpoint|template < typename CompletionReady > boost :: asio :: awaitable < void > finish ( std :: shared_ptr < Request > , std :: exception_ptr & , CompletionReady )",
+        "callable|servicelib::IEndpoint|virtual boost :: asio :: awaitable < void > stop ( Context ) = 0",
+        "callable|servicelib::Sender|boost :: asio :: awaitable < void > close ( )",
+        "callable|servicelib::Sender|boost :: asio :: awaitable < void > send ( Res )"
+      ]
+    },
     "datasource/grpc/nostreaming.hpp": {
-      "reason": "The asio-grpc server adapter must await graph completion without blocking an Asio worker; asyncHandle is the transport-boundary counterpart of canonical handle and preserves the same graph, metrics, tracing, cancellation and response semantics.",
-      "canonical_only": [],
-      "boost_only": [
-        "callable|servicelib::NoStreamingEndpoint|boost :: asio :: awaitable < Res > asyncHandle ( MessageContext , const Req & )"
+      "reason": "Coro unary handle returns awaitable<Res>; asyncHandle is the retained asynchronous transport adapter. All request/context arguments remain explicit.",
+      "canonical_only": [
+        "callable|servicelib::NoStreamingEndpoint|Res handle ( :: grpc :: ServerContext & , Req && )",
+        "callable|servicelib::NoStreamingEndpoint|Res handle ( MessageContext , const Req & )"
+      ],
+      "coro_only": [
+        "callable|servicelib::NoStreamingEndpoint|boost :: asio :: awaitable < Res > asyncHandle ( MessageContext , const Req & )",
+        "callable|servicelib::NoStreamingEndpoint|boost :: asio :: awaitable < Res > handle ( :: grpc :: ServerContext & , Req && )",
+        "callable|servicelib::NoStreamingEndpoint|boost :: asio :: awaitable < Res > handle ( MessageContext , const Req & )"
+      ]
+    },
+    "datasource/grpc/serverstreaming.hpp": {
+      "reason": "Coro RPC handlers and consumers return awaitable<R> instead of R/void; the exact request, response, context and reader/writer types are unchanged. No method or parameter normalization is applied.",
+      "canonical_only": [
+        "callable|servicelib::ServerStreamingEndpoint|template < typename Writer > :: grpc :: Status handle ( :: grpc :: ServerContext & , Req && , Writer & )",
+        "callable|servicelib::ServerStreamingEndpoint|template < typename Writer > void handle ( MessageContext , const Req & , Writer & )"
+      ],
+      "coro_only": [
+        "callable|servicelib::ServerStreamingEndpoint|template < typename Writer > boost :: asio :: awaitable < :: grpc :: Status > handle ( :: grpc :: ServerContext & , Req && , Writer & )",
+        "callable|servicelib::ServerStreamingEndpoint|template < typename Writer > boost :: asio :: awaitable < void > handle ( MessageContext , const Req & , Writer & )"
+      ]
+    },
+    "datasource/kafka/detail/endpoint.hpp": {
+      "reason": "Coro transport lifecycle and graph/result callbacks explicitly return awaitable with the same logical result and arguments. The exact declaration pairs are checked, including aliases.",
+      "canonical_only": [
+        "callable|servicelib::EndpointState|void consumeResult ( MessageContext , Payload < R > )",
+        "callable|servicelib::EndpointState|void start ( Context )",
+        "callable|servicelib::EndpointState|void stop ( Context )"
+      ],
+      "coro_only": [
+        "callable|servicelib::EndpointState|boost :: asio :: awaitable < void > consumeResult ( MessageContext , Payload < R > )",
+        "callable|servicelib::EndpointState|boost :: asio :: awaitable < void > start ( Context )",
+        "callable|servicelib::EndpointState|boost :: asio :: awaitable < void > stop ( Context )"
+      ]
+    },
+    "datasource/localsource/custom.hpp": {
+      "reason": "Coro producer/endpoint operations and callbacks return awaitable. The local-source processInline default remains true for the Asio execution model versus false for userver dispatch; constructor parameters are otherwise identical.",
+      "canonical_only": [
+        "alias|servicelib::DataProducer|using Consumer = std :: function < void ( MessageContext , Payload < T > ) >",
+        "callable|servicelib::DataProducer|virtual void start ( Context , Consumer ) = 0",
+        "callable|servicelib::DataProducer|virtual void stop ( Context ) = 0",
+        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = false )",
+        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = false , std :: string = \"local.input\" )",
+        "callable|servicelib::Endpoint|void consumeResult ( MessageContext , Payload < R > )",
+        "callable|servicelib::Endpoint|void start ( Context ) override",
+        "callable|servicelib::Endpoint|void stop ( Context ) override",
+        "callable|servicelib::IEndpoint|virtual void start ( Context ) = 0",
+        "callable|servicelib::IEndpoint|virtual void stop ( Context ) = 0"
+      ],
+      "coro_only": [
+        "alias|servicelib::DataProducer|using Consumer = std :: function < boost :: asio :: awaitable < void > ( MessageContext , Payload < T > ) >",
+        "callable|servicelib::DataProducer|virtual boost :: asio :: awaitable < void > start ( Context , Consumer ) = 0",
+        "callable|servicelib::DataProducer|virtual boost :: asio :: awaitable < void > stop ( Context ) = 0",
+        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = true )",
+        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = true , std :: string = \"local.input\" )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > consumeResult ( MessageContext , Payload < R > )",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > start ( Context ) override",
+        "callable|servicelib::Endpoint|boost :: asio :: awaitable < void > stop ( Context ) override",
+        "callable|servicelib::IEndpoint|virtual boost :: asio :: awaitable < void > start ( Context ) = 0",
+        "callable|servicelib::IEndpoint|virtual boost :: asio :: awaitable < void > stop ( Context ) = 0"
+      ]
+    },
+    "runtime/caller.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::Caller|virtual void consume ( MessageContext , Payload < T > ) = 0",
+        "callable|servicelib::Caller|void consume ( MessageContext , Payload < T > ) const",
+        "callable|servicelib::DirectCaller|void consume ( MessageContext , Payload < T > ) override",
+        "callable|servicelib::ParallelCaller|void consume ( MessageContext , Payload < T > ) override",
+        "callable|servicelib::PriorityTaskPoolCaller|void consume ( MessageContext , Payload < T > ) override",
+        "callable|servicelib::TaskPoolCaller|void consume ( MessageContext , Payload < T > ) override"
+      ],
+      "coro_only": [
+        "callable|servicelib::Caller|[[ nodiscard ]] boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > ) const",
+        "callable|servicelib::Caller|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > ) = 0",
+        "callable|servicelib::DirectCaller|[[ nodiscard ]] boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > ) override",
+        "callable|servicelib::ParallelCaller|[[ nodiscard ]] boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > ) override",
+        "callable|servicelib::PriorityTaskPoolCaller|[[ nodiscard ]] boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > ) override",
+        "callable|servicelib::TaskPoolCaller|[[ nodiscard ]] boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > ) override"
+      ]
+    },
+    "runtime/common.hpp": {
+      "reason": "SubStream consume/collector callbacks are awaitable with the same logical void/bool results. OperationCancelledError is a userver task-runtime boundary, not a Coro public exception.",
+      "canonical_only": [
+        "alias|servicelib::OperationCancelledError|using std :: runtime_error :: runtime_error",
+        "alias|servicelib::SubStreamCollectorFunc|using Function = std :: function < bool ( MessageContext , const R & ) >",
+        "callable|servicelib::ISubStream|virtual void consume ( MessageContext , Payload < T > , std :: shared_ptr < SubStreamCollector < R > > ) = 0",
+        "callable|servicelib::SubStreamCollectorFunc|bool out ( MessageContext , const R & ) override",
+        "callable|servicelib::SubStreamCollector|virtual bool out ( MessageContext , const R & ) = 0",
+        "type|servicelib|class OperationCancelledError : public std :: runtime_error"
+      ],
+      "coro_only": [
+        "alias|servicelib::SubStreamCollectorFunc|using Function = std :: function < boost :: asio :: awaitable < bool > ( MessageContext , const R & ) >",
+        "callable|servicelib::ISubStream|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > consume ( MessageContext , Payload < T > , std :: shared_ptr < SubStreamCollector < R > > ) = 0",
+        "callable|servicelib::SubStreamCollectorFunc|[[ nodiscard ]] boost :: asio :: awaitable < bool > out ( MessageContext , const R & ) override",
+        "callable|servicelib::SubStreamCollector|[[ nodiscard ]] virtual boost :: asio :: awaitable < bool > out ( MessageContext , const R & ) = 0"
       ]
     },
     "runtime/config/loader.hpp": {
-      "reason": "The userver TaskProcessor constructor argument has no Boost counterpart; file polling owns one stoppable native thread.",
+      "reason": "Coro ConfigLoader owns file-polling lifetime and has no userver TaskProcessor constructor argument.",
       "canonical_only": [
         "callable|servicelib::ConfigLoader|ConfigLoader ( Paths , YamlValue , log :: Logger & , metrics :: Metrics & , std :: string , userver :: engine :: TaskProcessor * = nullptr )"
       ],
-      "boost_only": [
+      "coro_only": [
         "callable|servicelib::ConfigLoader|ConfigLoader ( Paths , YamlValue , log :: Logger & , metrics :: Metrics & , std :: string )"
       ]
     },
+    "runtime/consumer.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::Collector|void out ( MessageContext , T && )",
+        "callable|servicelib::Collector|void out ( MessageContext , const T & )",
+        "callable|servicelib::Collector|void out ( [[ maybe_unused ]] MessageContext , [[ maybe_unused ]] T && )",
+        "callable|servicelib::Collector|void out ( [[ maybe_unused ]] MessageContext , [[ maybe_unused ]] const T & )",
+        "callable|servicelib::StreamConsumer|virtual void consume ( MessageContext , Payload < _Tp > ) = 0"
+      ],
+      "coro_only": [
+        "callable|servicelib::Collector|[[ nodiscard ]] boost :: asio :: awaitable < void > out ( MessageContext , T && )",
+        "callable|servicelib::Collector|[[ nodiscard ]] boost :: asio :: awaitable < void > out ( MessageContext , const T & )",
+        "callable|servicelib::Collector|[[ nodiscard ]] boost :: asio :: awaitable < void > out ( [[ maybe_unused ]] MessageContext , [[ maybe_unused ]] T && )",
+        "callable|servicelib::Collector|[[ nodiscard ]] boost :: asio :: awaitable < void > out ( [[ maybe_unused ]] MessageContext , [[ maybe_unused ]] const T & )",
+        "callable|servicelib::StreamConsumer|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > consume ( MessageContext , Payload < _Tp > ) = 0"
+      ]
+    },
     "runtime/context.hpp": {
-      "reason": "Boost tracks completion across Asio coroutines and pooled work with explicit reference-counted tokens; userver relies on task-runtime lifetime tracking.",
+      "reason": "Coro tracks completion across asynchronous and pooled work using explicit reference-counted completion tokens; userver task runtime supplies its own lifetime tracking. Token and MessageContext declarations are enumerated, not ignored.",
       "canonical_only": [],
-      "boost_only": [
+      "coro_only": [
         "callable|servicelib::AsyncCompletionState|[[ nodiscard ]] AsyncCompletionToken retainToken ( )",
         "callable|servicelib::AsyncCompletionState|[[ nodiscard ]] static std :: shared_ptr < AsyncCompletionState > make ( std :: function < void ( ) > , std :: shared_ptr < AsyncCompletionToken > = { } )",
         "callable|servicelib::AsyncCompletionState|[[ nodiscard ]] std :: shared_ptr < AsyncCompletionToken > retain ( )",
@@ -97,78 +341,239 @@
         "type|servicelib|class AsyncCompletionToken final"
       ]
     },
+    "runtime/datasink.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "alias|servicelib::SinkEndpointStream|using ErrorOutput = std :: function < void ( MessageContext , Payload < E > ) >",
+        "alias|servicelib::SinkEndpointStream|using ResultOutput = std :: function < void ( MessageContext , Payload < R > ) >",
+        "alias|servicelib::SinkStreamContext|using ErrorOutput = std :: function < void ( MessageContext , Payload < E > ) >",
+        "alias|servicelib::SinkStreamContext|using ResultOutput = std :: function < void ( MessageContext , Payload < R > ) >",
+        "callable|servicelib::SinkEndpointStream|virtual void collectError ( MessageContext , Payload < E > ) = 0",
+        "callable|servicelib::SinkEndpointStream|virtual void collectResult ( MessageContext , Payload < R > ) = 0",
+        "callable|servicelib::SinkStreamContext|void collect ( MessageContext , Payload < R > ) const",
+        "callable|servicelib::SinkStreamContext|void collect ( MessageContext , R && ) const requires std :: move_constructible < R >",
+        "callable|servicelib::SinkStreamContext|void collect ( MessageContext , const R & ) const requires std :: copy_constructible < R >",
+        "callable|servicelib::SinkStreamContext|void collectError ( MessageContext , E && ) const requires std :: move_constructible < E >",
+        "callable|servicelib::SinkStreamContext|void collectError ( MessageContext , Payload < E > ) const",
+        "callable|servicelib::SinkStreamContext|void collectError ( MessageContext , const E & ) const requires std :: copy_constructible < E >"
+      ],
+      "coro_only": [
+        "alias|servicelib::SinkEndpointStream|using ErrorOutput = std :: function < boost :: asio :: awaitable < void > ( MessageContext , Payload < E > ) >",
+        "alias|servicelib::SinkEndpointStream|using ResultOutput = std :: function < boost :: asio :: awaitable < void > ( MessageContext , Payload < R > ) >",
+        "alias|servicelib::SinkStreamContext|using ErrorOutput = std :: function < boost :: asio :: awaitable < void > ( MessageContext , Payload < E > ) >",
+        "alias|servicelib::SinkStreamContext|using ResultOutput = std :: function < boost :: asio :: awaitable < void > ( MessageContext , Payload < R > ) >",
+        "callable|servicelib::SinkEndpointStream|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > collectError ( MessageContext , Payload < E > ) = 0",
+        "callable|servicelib::SinkEndpointStream|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > collectResult ( MessageContext , Payload < R > ) = 0",
+        "callable|servicelib::SinkStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collect ( MessageContext , Payload < R > ) const",
+        "callable|servicelib::SinkStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collect ( MessageContext , R && ) const requires std :: move_constructible < R >",
+        "callable|servicelib::SinkStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collect ( MessageContext , const R & ) const requires std :: copy_constructible < R >",
+        "callable|servicelib::SinkStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collectError ( MessageContext , E && ) const requires std :: move_constructible < E >",
+        "callable|servicelib::SinkStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collectError ( MessageContext , Payload < E > ) const",
+        "callable|servicelib::SinkStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collectError ( MessageContext , const E & ) const requires std :: copy_constructible < E >"
+      ]
+    },
+    "runtime/datasource.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "alias|servicelib::SourceStreamContext|using ErrorOutput = std :: function < void ( MessageContext , Payload < E > ) >",
+        "alias|servicelib::SourceStreamContext|using Output = std :: function < void ( MessageContext , Payload < T > ) >",
+        "callable|servicelib::SourceStreamContext|void collect ( MessageContext , Payload < T > ) const",
+        "callable|servicelib::SourceStreamContext|void collect ( MessageContext , T && ) const requires std :: move_constructible < T >",
+        "callable|servicelib::SourceStreamContext|void collect ( MessageContext , const T & ) const requires std :: copy_constructible < T >",
+        "callable|servicelib::SourceStreamContext|void collectError ( MessageContext , E && ) const requires std :: move_constructible < E >",
+        "callable|servicelib::SourceStreamContext|void collectError ( MessageContext , Payload < E > ) const",
+        "callable|servicelib::SourceStreamContext|void collectError ( MessageContext , const E & ) const requires std :: copy_constructible < E >"
+      ],
+      "coro_only": [
+        "alias|servicelib::SourceStreamContext|using ErrorOutput = std :: function < boost :: asio :: awaitable < void > ( MessageContext , Payload < E > ) >",
+        "alias|servicelib::SourceStreamContext|using Output = std :: function < boost :: asio :: awaitable < void > ( MessageContext , Payload < T > ) >",
+        "callable|servicelib::SourceStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collect ( MessageContext , Payload < T > ) const",
+        "callable|servicelib::SourceStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collect ( MessageContext , T && ) const requires std :: move_constructible < T >",
+        "callable|servicelib::SourceStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collect ( MessageContext , const T & ) const requires std :: copy_constructible < T >",
+        "callable|servicelib::SourceStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collectError ( MessageContext , E && ) const requires std :: move_constructible < E >",
+        "callable|servicelib::SourceStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collectError ( MessageContext , Payload < E > ) const",
+        "callable|servicelib::SourceStreamContext|[[ nodiscard ]] boost :: asio :: awaitable < void > collectError ( MessageContext , const E & ) const requires std :: copy_constructible < E >"
+      ]
+    },
     "runtime/detail/kafka_admin.hpp": {
-      "reason": "The userver Kafka producer adapter cannot query broker metadata directly, so its transport boundary owns the partition-count helper; the Boost librdkafka producer exposes the equivalent operation on its producer adapter.",
+      "reason": "userver needs a standalone partition metadata helper; the Coro librdkafka producer exposes the equivalent operation on its producer adapter.",
       "canonical_only": [
         "callable|servicelib|inline std :: uint32_t KafkaTopicPartitionCount ( const config :: KafkaDataConnectorConfig & , const std :: string & )"
       ],
-      "boost_only": []
+      "coro_only": []
+    },
+    "runtime/environment.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::StreamExecutionEnvironment|template < typename Value , typename Producer , typename Consumer > void consume ( MessageContext , Producer & , Consumer & , Payload < Value > )",
+        "callable|servicelib::StreamExecutionEnvironment|void parallel ( std :: function < void ( ) > ) override"
+      ],
+      "coro_only": [
+        "callable|servicelib::StreamExecutionEnvironment|template < typename Value , typename Producer , typename Consumer > [[ nodiscard ]] boost :: asio :: awaitable < void > consume ( MessageContext , Producer & , Consumer & , Payload < Value > )",
+        "callable|servicelib::StreamExecutionEnvironment|void parallel ( std :: function < boost :: asio :: awaitable < void > ( ) > ) override"
+      ]
+    },
+    "runtime/environment/environment.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::IRuntimeEnvironment|virtual void delay ( Context , pool :: IDelayPool :: Duration , std :: function < void ( ) > )",
+        "callable|servicelib::IRuntimeEnvironment|virtual void parallel ( std :: function < void ( ) > )"
+      ],
+      "coro_only": [
+        "callable|servicelib::IRuntimeEnvironment|virtual void delay ( Context , pool :: IDelayPool :: Duration , std :: function < boost :: asio :: awaitable < void > ( ) > )",
+        "callable|servicelib::IRuntimeEnvironment|virtual void parallel ( std :: function < boost :: asio :: awaitable < void > ( ) > )"
+      ]
+    },
+    "runtime/pool/delaypool.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::DelayPoolImpl|void delay ( Context , Duration , std :: function < void ( ) > ) override",
+        "callable|servicelib::DelayPoolImpl|void stop ( Context ) override"
+      ],
+      "coro_only": [
+        "callable|servicelib::DelayPoolImpl|[[ nodiscard ]] boost :: asio :: awaitable < void > stop ( Context ) override",
+        "callable|servicelib::DelayPoolImpl|void delay ( Context , Duration , std :: function < boost :: asio :: awaitable < void > ( ) > ) override"
+      ]
+    },
+    "runtime/pool/pool.hpp": {
+      "reason": "Coro pool submissions stay synchronous while callbacks and stop are awaitable. PoolCancelledError derives from std::runtime_error rather than the userver task-cancellation boundary.",
+      "canonical_only": [
+        "callable|servicelib::IDelayPool|virtual void delay ( Context , Duration , std :: function < void ( ) > ) = 0",
+        "callable|servicelib::IDelayPool|virtual void stop ( Context ) = 0",
+        "callable|servicelib::IPriorityTaskPool|virtual void addTask ( Context , int , std :: function < void ( ) > ) = 0",
+        "callable|servicelib::IPriorityTaskPool|virtual void stop ( Context ) = 0",
+        "callable|servicelib::ITaskPool|virtual void addTask ( Context , std :: function < void ( ) > ) = 0",
+        "callable|servicelib::ITaskPool|virtual void stop ( Context ) = 0",
+        "type|servicelib|class PoolCancelledError final : public OperationCancelledError"
+      ],
+      "coro_only": [
+        "callable|servicelib::IDelayPool|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > stop ( Context ) = 0",
+        "callable|servicelib::IDelayPool|virtual void delay ( Context , Duration , std :: function < boost :: asio :: awaitable < void > ( ) > ) = 0",
+        "callable|servicelib::IPriorityTaskPool|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > stop ( Context ) = 0",
+        "callable|servicelib::IPriorityTaskPool|virtual void addTask ( Context , int , std :: function < boost :: asio :: awaitable < void > ( ) > ) = 0",
+        "callable|servicelib::ITaskPool|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > stop ( Context ) = 0",
+        "callable|servicelib::ITaskPool|virtual void addTask ( Context , std :: function < boost :: asio :: awaitable < void > ( ) > ) = 0",
+        "type|servicelib|class PoolCancelledError final : public std :: runtime_error"
+      ]
+    },
+    "runtime/pool/prioritytaskpool.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::PriorityTaskPoolImpl|void addTask ( Context , int , std :: function < void ( ) > ) override",
+        "callable|servicelib::PriorityTaskPoolImpl|void stop ( Context ) override"
+      ],
+      "coro_only": [
+        "callable|servicelib::PriorityTaskPoolImpl|[[ nodiscard ]] boost :: asio :: awaitable < void > stop ( Context ) override",
+        "callable|servicelib::PriorityTaskPoolImpl|void addTask ( Context , int , std :: function < boost :: asio :: awaitable < void > ( ) > ) override"
+      ]
+    },
+    "runtime/pool/taskpool.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::TaskPoolImpl|void addTask ( Context , std :: function < void ( ) > ) override",
+        "callable|servicelib::TaskPoolImpl|void stop ( Context ) override"
+      ],
+      "coro_only": [
+        "callable|servicelib::TaskPoolImpl|[[ nodiscard ]] boost :: asio :: awaitable < void > stop ( Context ) override",
+        "callable|servicelib::TaskPoolImpl|void addTask ( Context , std :: function < boost :: asio :: awaitable < void > ( ) > ) override"
+      ]
+    },
+    "runtime/serviceapp.hpp": {
+      "reason": "Coro lifecycle waits are awaitable and own shared service lifetime across unfinished shutdown work. get/setShutdownLifetime, pending-shutdown observation and waitForShutdown are explicit Asio lifetime boundaries; userver owns lifetime in its component runtime.",
+      "canonical_only": [
+        "callable|servicelib::ServiceApp|void delay ( Context , pool :: IDelayPool :: Duration , std :: function < void ( ) > ) override",
+        "callable|servicelib::ServiceApp|void start ( Context = { } )",
+        "callable|servicelib::ServiceApp|void stop ( Context = { } )",
+        "callable|servicelib::ServiceLifecycle|void start ( Context )",
+        "callable|servicelib::ServiceLifecycle|void stop ( Context , log :: Logger & = log :: NoopLogger :: instance ( ) )",
+        "callable|servicelib::ServiceLifecycle|void stopAfterGraphDrain ( Context , log :: Logger & = log :: NoopLogger :: instance ( ) )",
+        "callable|servicelib::ServiceLifecycle|void stopBeforeGraphDrain ( Context , log :: Logger & = log :: NoopLogger :: instance ( ) )",
+        "type|servicelib|template < typename TService , typename TDataTypeFactory > class ServiceApp : public ServiceExecutionEnvironment < TService , TDataTypeFactory > , public status :: Provider"
+      ],
+      "coro_only": [
+        "callable|servicelib::ServiceApp|[[ nodiscard ]] boost :: asio :: awaitable < void > start ( Context = { } )",
+        "callable|servicelib::ServiceApp|[[ nodiscard ]] boost :: asio :: awaitable < void > stop ( Context = { } )",
+        "callable|servicelib::ServiceApp|[[ nodiscard ]] boost :: asio :: awaitable < void > waitForShutdown ( )",
+        "callable|servicelib::ServiceApp|[[ nodiscard ]] std :: shared_ptr < void > getShutdownLifetime ( )",
+        "callable|servicelib::ServiceApp|void delay ( Context , pool :: IDelayPool :: Duration , std :: function < boost :: asio :: awaitable < void > ( ) > ) override",
+        "callable|servicelib::ServiceApp|void setShutdownLifetime ( const std :: shared_ptr < void > & )",
+        "callable|servicelib::ServiceLifecycle|[[ nodiscard ]] boost :: asio :: awaitable < void > finishShutdown ( log :: Logger & = log :: NoopLogger :: instance ( ) )",
+        "callable|servicelib::ServiceLifecycle|[[ nodiscard ]] boost :: asio :: awaitable < void > start ( Context )",
+        "callable|servicelib::ServiceLifecycle|[[ nodiscard ]] boost :: asio :: awaitable < void > stop ( Context , log :: Logger & = log :: NoopLogger :: instance ( ) )",
+        "callable|servicelib::ServiceLifecycle|[[ nodiscard ]] boost :: asio :: awaitable < void > stopAfterGraphDrain ( Context , log :: Logger & = log :: NoopLogger :: instance ( ) )",
+        "callable|servicelib::ServiceLifecycle|[[ nodiscard ]] boost :: asio :: awaitable < void > stopBeforeGraphDrain ( Context , log :: Logger & = log :: NoopLogger :: instance ( ) )",
+        "callable|servicelib::ServiceLifecycle|bool hasPendingShutdown ( ) const",
+        "type|servicelib|template < typename TService , typename TDataTypeFactory > class ServiceApp : public ServiceExecutionEnvironment < TService , TDataTypeFactory > , public std :: enable_shared_from_this < TService > , public status :: Provider"
+      ]
+    },
+    "runtime/store/hashmap.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::HashMapJoinStorage|void joinValue ( Context , K , std :: size_t , std :: any , JoinValueFunction ) override",
+        "callable|servicelib::HashMapJoinStorage|void stop ( [[ maybe_unused ]] Context ) override"
+      ],
+      "coro_only": [
+        "callable|servicelib::HashMapJoinStorage|[[ nodiscard ]] boost :: asio :: awaitable < void > joinValue ( Context , K , std :: size_t , std :: any , JoinValueFunction ) override",
+        "callable|servicelib::HashMapJoinStorage|[[ nodiscard ]] boost :: asio :: awaitable < void > stop ( [[ maybe_unused ]] Context ) override"
+      ]
+    },
+    "runtime/store/joinstore.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "alias|servicelib|using JoinValueFunction = std :: function < bool ( JoinValues & ) >",
+        "callable|servicelib::IJoinStorage|virtual void joinValue ( Context , K , std :: size_t , std :: any , JoinValueFunction ) = 0"
+      ],
+      "coro_only": [
+        "alias|servicelib|using JoinValueFunction = std :: function < boost :: asio :: awaitable < bool > ( JoinValues & ) >",
+        "callable|servicelib::IJoinStorage|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > joinValue ( Context , K , std :: size_t , std :: any , JoinValueFunction ) = 0"
+      ]
+    },
+    "runtime/store/rotatingmap.hpp": {
+      "reason": "Coro storage stop is awaitable. Heterogeneous lookup overloads remain an explicit std::unordered_map boundary and are enumerated exactly.",
+      "canonical_only": [
+        "callable|servicelib::RotatingMap|void stop ( [[ maybe_unused ]] Context ) override"
+      ],
+      "coro_only": [
+        "callable|servicelib::RotatingMap|[[ nodiscard ]] boost :: asio :: awaitable < void > stop ( [[ maybe_unused ]] Context ) override",
+        "callable|servicelib::RotatingMap|[[ nodiscard ]] std :: optional < V > get ( const Lookup & ) const",
+        "callable|servicelib::RotatingMap|template < typename Lookup > requires std :: copy_constructible < V > && requires ( const Hash & hash , const std :: unordered_map < K , V , Hash , Equal > & entries , const Lookup & key )"
+      ]
+    },
+    "runtime/store/storage.hpp": {
+      "reason": "Coro graph calls, lifecycle waits and submitted callbacks have explicit awaitable return types, with nodiscard on awaited graph APIs. Logical result types, payload/reference qualifiers, template constraints, defaults and argument order remain covered by exact declaration pairs; synchronous submission methods remain synchronous.",
+      "canonical_only": [
+        "callable|servicelib::IStorage|virtual void stop ( Context ) = 0"
+      ],
+      "coro_only": [
+        "callable|servicelib::IStorage|[[ nodiscard ]] virtual boost :: asio :: awaitable < void > stop ( Context ) = 0"
+      ]
+    },
+    "runtime/stream.hpp": {
+      "reason": "Coro Stream.consume is awaitable. Operator constraints use detail::function_result_t, which unwraps the business awaitable result before the same compile-time type checks; it also preserves synchronous business results. Inspected runtime/function.hpp definitions, no type-erasure or argument constraint removal.",
+      "canonical_only": [
+        "callable|servicelib::Stream|template < typename K , typename V , typename KeyByFunction , typename _FCtx > auto keyBy ( const servicelib :: config :: KeyByStreamConfig & , StreamFunction < KeyByFunction , _FCtx > ) -> std :: enable_if_t < std :: is_same_v < std :: invoke_result_t < KeyByFunction , MessageContext , StreamBase & , _Tp & , Collector < KeyValueType < K , V > , void > && > , void > , KeyBy < K , V > & >",
+        "callable|servicelib::Stream|template < typename R , typename MapFunction , typename _FCtx > auto map ( const servicelib :: config :: MapStreamConfig & , const StreamType < R > & , StreamFunction < MapFunction , _FCtx > ) -> std :: enable_if_t < std :: is_same_v < std :: invoke_result_t < MapFunction , MessageContext , StreamBase & , _Tp & , Collector < R , void > && > , void > , Map < R > & >",
+        "callable|servicelib::Stream|template < typename T , typename FlatMapFunction , typename _FCtx > auto flatMap ( const servicelib :: config :: FlatMapStreamConfig & , const StreamType < T > & , StreamFunction < FlatMapFunction , _FCtx > ) -> std :: enable_if_t < std :: is_same_v < std :: invoke_result_t < FlatMapFunction , MessageContext , StreamBase & , _Tp & , Collector < T , void > && > , void > , FlatMap < T , StreamConsumer < T > > & >",
+        "callable|servicelib::Stream|template < typename _FilterFunction , typename _FCtx > auto filter ( const servicelib :: config :: FilterStreamConfig & , StreamFunction < _FilterFunction , _FCtx > ) -> std :: enable_if_t < std :: is_same_v < std :: invoke_result_t < _FilterFunction , MessageContext , StreamBase & , _Tp & > , bool > , Filter < > & >",
+        "callable|servicelib::Stream|void consume ( MessageContext , Payload < _Tp > ) override"
+      ],
+      "coro_only": [
+        "callable|servicelib::Stream|[[ nodiscard ]] boost :: asio :: awaitable < void > consume ( MessageContext , Payload < _Tp > ) override",
+        "callable|servicelib::Stream|template < typename K , typename V , typename KeyByFunction , typename _FCtx > auto keyBy ( const servicelib :: config :: KeyByStreamConfig & , StreamFunction < KeyByFunction , _FCtx > ) -> std :: enable_if_t < std :: is_same_v < detail :: function_result_t < KeyByFunction , MessageContext , StreamBase & , _Tp & , Collector < KeyValueType < K , V > , void > && > , void > , KeyBy < K , V > & >",
+        "callable|servicelib::Stream|template < typename R , typename MapFunction , typename _FCtx > auto map ( const servicelib :: config :: MapStreamConfig & , const StreamType < R > & , StreamFunction < MapFunction , _FCtx > ) -> std :: enable_if_t < std :: is_same_v < detail :: function_result_t < MapFunction , MessageContext , StreamBase & , _Tp & , Collector < R , void > && > , void > , Map < R > & >",
+        "callable|servicelib::Stream|template < typename T , typename FlatMapFunction , typename _FCtx > auto flatMap ( const servicelib :: config :: FlatMapStreamConfig & , const StreamType < T > & , StreamFunction < FlatMapFunction , _FCtx > ) -> std :: enable_if_t < std :: is_same_v < detail :: function_result_t < FlatMapFunction , MessageContext , StreamBase & , _Tp & , Collector < T , void > && > , void > , FlatMap < T , StreamConsumer < T > > & >",
+        "callable|servicelib::Stream|template < typename _FilterFunction , typename _FCtx > auto filter ( const servicelib :: config :: FilterStreamConfig & , StreamFunction < _FilterFunction , _FCtx > ) -> std :: enable_if_t < std :: is_same_v < detail :: function_result_t < _FilterFunction , MessageContext , StreamBase & , _Tp & > , bool > , Filter < > & >"
+      ]
     },
     "runtime/telemetry/telemetry.hpp": {
-      "reason": "Factories whose only possible result is a userver telemetry backend are intentionally absent from the Boost runtime.",
+      "reason": "Factories exclusively constructing userver telemetry are absent from Coro, which provides its own telemetry adapters.",
       "canonical_only": [
         "callable|servicelib|inline log :: Logger & createUserverLogger ( )",
         "callable|servicelib|inline std :: unique_ptr < metrics :: Metrics > createUserverMetrics ( :: userver :: utils :: statistics :: Storage & )",
         "callable|servicelib|inline tracing :: Tracing & createUserverTracing ( )"
       ],
-      "boost_only": []
-    },
-    "datasource/grpc/common.hpp": {
-      "reason": "Userver awaits graph completion with its SingleUseEvent; Boost uses an Asio-compatible completion path.",
-      "canonical_only": [
-        "callable|servicelib|inline void waitForResult ( const MessageContext & , userver :: engine :: SingleUseEvent & )"
-      ],
-      "boost_only": []
-    },
-    "datasource/localsource/custom.hpp": {
-      "reason": "The Boost local source runs its handler inline in its Asio execution model; userver can dispatch to a task processor, so the processInline default differs.",
-      "canonical_only": [
-        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = false )",
-        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = false , std :: string = \"local.input\" )"
-      ],
-      "boost_only": [
-        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = true )",
-        "callable|servicelib::Endpoint|Endpoint ( IServiceEnvironment & , int , int , DataProducer < Input > & , Handler , Output , bool , std :: string , std :: string , ErrorOutput = { } , bool = true , std :: string = \"local.input\" )"
-      ]
-    },
-    "runtime/common.hpp": {
-      "reason": "Userver identifies task cancellation with OperationCancelledError for its detached callback boundary; Boost uses its own cancellation handling.",
-      "canonical_only": [
-        "alias|servicelib::OperationCancelledError|using std :: runtime_error :: runtime_error",
-        "type|servicelib|class OperationCancelledError : public std :: runtime_error"
-      ],
-      "boost_only": []
-    },
-    "runtime/pool/pool.hpp": {
-      "reason": "Userver derives pool cancellation from its task cancellation exception; Boost uses std::runtime_error at its Asio boundary.",
-      "canonical_only": [
-        "type|servicelib|class PoolCancelledError final : public OperationCancelledError"
-      ],
-      "boost_only": [
-        "type|servicelib|class PoolCancelledError final : public std :: runtime_error"
-      ]
-    },
-    "runtime/serviceapp.hpp": {
-      "reason": "Boost retains a shutdown lifetime and waits for Asio completion; userver's component runtime owns the service lifecycle.",
-      "canonical_only": [
-        "type|servicelib|template < typename TService , typename TDataTypeFactory > class ServiceApp : public ServiceExecutionEnvironment < TService , TDataTypeFactory > , public status :: Provider"
-      ],
-      "boost_only": [
-        "callable|servicelib::ServiceApp|[[ nodiscard ]] std :: shared_ptr < void > getShutdownLifetime ( )",
-        "callable|servicelib::ServiceApp|void setShutdownLifetime ( const std :: shared_ptr < void > & )",
-        "callable|servicelib::ServiceApp|void waitForShutdown ( )",
-        "callable|servicelib::ServiceLifecycle|bool hasPendingShutdown ( ) const",
-        "callable|servicelib::ServiceLifecycle|void finishShutdown ( log :: Logger & = log :: NoopLogger :: instance ( ) )",
-        "type|servicelib|template < typename TService , typename TDataTypeFactory > class ServiceApp : public ServiceExecutionEnvironment < TService , TDataTypeFactory > , public std :: enable_shared_from_this < TService > , public status :: Provider"
-      ]
-    },
-    "runtime/store/rotatingmap.hpp": {
-      "reason": "Boost supports heterogeneous lookup with its std::unordered_map shards; userver uses its task-runtime storage implementation.",
-      "canonical_only": [],
-      "boost_only": [
-        "callable|servicelib::RotatingMap|[[ nodiscard ]] std :: optional < V > get ( const Lookup & ) const",
-        "callable|servicelib::RotatingMap|template < typename Lookup > requires std :: copy_constructible < V > && requires ( const Hash & hash , const std :: unordered_map < K , V , Hash , Equal > & entries , const Lookup & key )"
-      ]
+      "coro_only": []
     }
-  }
+  },
+  "comparison_scope": "Exact lexical userver/Coro declaration differences. Coroutine returns are recorded, never globally erased. Runtime behavioral parity is verified separately by transport/operator/lifecycle suites."
 }

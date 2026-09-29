@@ -74,7 +74,6 @@ IMPLEMENTATIONS = (
     Implementation(
         "cpp-native", ROOT / "cppnativeexample", HERE / "compose.cpp-native.yml"
     ),
-    Implementation("cppboost", ROOT / "cppboostexample", HERE / "compose.cppboost.yml"),
     Implementation("cppcoro", ROOT / "cppcoroexample", HERE / "compose.cppcoro.yml"),
     Implementation("cppboost-native", ROOT / "cppboostnativeexample", HERE / "compose.cppboost-native.yml"),
     Implementation("python", ROOT / "pyexample", HERE / "compose.python.yml"),
@@ -95,7 +94,7 @@ IMPLEMENTATIONS = (
     ),
 )
 FRAMEWORK_IMPLEMENTATIONS = {
-    "go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript"
+    "go", "cpp", "cppcoro", "python", "rust", "typescript"
 }
 
 NATIVE_SOURCE_CONTEXTS: tuple[Path, Path] | None = None
@@ -154,10 +153,9 @@ def environment(implementation: Implementation) -> dict[str, str]:
             )
         )
         env["USERVER_LTO"] = "ON"
-    elif implementation.name in {"cppboost", "cppcoro"}:
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / ("cppcoroservicelib" if implementation.name == "cppcoro" else "cppboostservicelib"))
-        if implementation.name == "cppcoro":
-            env["USE_LOCAL_MODULES"] = "1"
+    elif implementation.name in {"cppcoro"}:
+        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
+        env["USE_LOCAL_MODULES"] = "1"
     elif implementation.name == "cppboost-native" and NATIVE_SOURCE_CONTEXTS:
         grpc_source, asio_grpc_source = NATIVE_SOURCE_CONTEXTS
         env["GRPC_SOURCE_CONTEXT"] = str(grpc_source)
@@ -278,7 +276,7 @@ def grpc_request(
     )
 
 
-def prepare_cppboost(name: str = "cppboost") -> None:
+def prepare_coro(name: str = "cppcoro") -> None:
     output = ARTIFACTS / name
     output.mkdir(parents=True, exist_ok=True)
     for service in ("inventoryservice", "orderservice"):
@@ -916,7 +914,7 @@ def build_implementation(implementation: Implementation) -> None:
             cwd=implementation.example,
             env=environment(implementation),
         )
-    elif implementation.name in {"cppboost", "cppcoro"}:
+    elif implementation.name in {"cppcoro"}:
         for service in ("analyticsservice", "inventoryservice", "orderservice"):
             print(
                 f"+ make -C {service} docker-build USE_LOCAL_MODULES=1",
@@ -958,10 +956,8 @@ def main() -> int:
     prepare_grpc_probe()
     if "cpp" in selected_names:
         prepare_cpp()
-    if "cppboost" in selected_names:
-        prepare_cppboost()
     if "cppcoro" in selected_names:
-        prepare_cppboost("cppcoro")
+        prepare_coro("cppcoro")
     if "python" in selected_names:
         prepare_python()
     if "typescript" in selected_names:
@@ -969,7 +965,7 @@ def main() -> int:
     if not args.skip_build and any(
         value.name == "cppboost-native" for value in selected
     ):
-        sources = cpp_source_cache.ensure(ROOT / "cppboostservicelib")
+        sources = cpp_source_cache.ensure(ROOT / "cppcoroservicelib")
         NATIVE_SOURCE_CONTEXTS = (
             sources / "grpc-src",
             sources / "asio-grpc-src",

@@ -193,7 +193,7 @@ class StandaloneComponentTest(unittest.TestCase):
         self.assertEqual(set(run.SERVICES) | set(run.MODULES), set(run.COMPONENTS))
         self.assertEqual(
             set(run.LANGUAGES),
-            {"go", "cpp", "cppboost", "python", "rust", "typescript"},
+            {"go", "cpp", "cppcoro", "python", "rust", "typescript"},
         )
 
     def test_typescript_module_generates_openapi_before_build(self) -> None:
@@ -448,7 +448,7 @@ class StandaloneComponentTest(unittest.TestCase):
 
     def test_component_directory_suffixes_only_language_specific_modules(self) -> None:
         self.assertEqual(run.component_directory("go", "model"), "model_go")
-        self.assertEqual(run.component_directory("cppboost", "model"), "model_cpp")
+        self.assertEqual(run.component_directory("cppcoro", "model"), "model_cppcoro")
         self.assertEqual(run.component_directory("typescript", "model"), "model_ts")
         self.assertEqual(
             run.component_directory("rust", "inventory_service_api"),
@@ -458,6 +458,18 @@ class StandaloneComponentTest(unittest.TestCase):
             run.component_directory("python", "order_service_api"),
             "order_service_api",
         )
+
+    def test_coro_configures_runtime_adapter_without_moving_shared_schemas(self) -> None:
+        for component in run.LANGUAGE_NEUTRAL_MODULES:
+            with self.subTest(component=component):
+                self.assertEqual(run.component_directory("cppcoro", component), component)
+                self.assertEqual(
+                    run.cpp_component_source_directory("cppcoro", component),
+                    f"{component}/cppcoro",
+                )
+                self.assertEqual(run.cpp_component_source_directory("cpp", component), component)
+        self.assertEqual(run.cpp_component_source_directory("cppcoro", "model"), "model_cppcoro")
+        self.assertEqual(run.cpp_component_source_directory("cppcoro", "orderservice"), "orderservice")
 
     def test_docker_run_proxy_arguments_apply_one_container_contract(self) -> None:
         with mock.patch.dict(

@@ -413,30 +413,30 @@ def difference_paths(left: Any, right: Any, path: str = "") -> list[str]:
 
 def check_service(root: Path, service: str) -> dict[str, object]:
     go_root = root / "goexample" / service
-    boost_root = root / "cppboostexample" / service
+    coro_root = root / "cppcoroexample" / service
     typescript_root = root / "tsexample" / service
     errors: list[str] = []
     identical: dict[str, dict[str, bool]] = {}
     for relative in ("config/config.yaml", "config/overrides.yaml"):
         go_data = (go_root / relative).read_bytes()
-        boost_data = (boost_root / relative).read_bytes()
+        coro_data = (coro_root / relative).read_bytes()
         typescript_data = (typescript_root / relative).read_bytes()
         identical[relative] = {
-            "cppboost": go_data == boost_data,
+            "cppcoro": go_data == coro_data,
             "typescript": go_data == typescript_data,
         }
-        if go_data != boost_data:
-            errors.append(f"{service}:{relative}:Go/Boost bytes differ")
+        if go_data != coro_data:
+            errors.append(f"{service}:{relative}:Go/Coro bytes differ")
         if go_data != typescript_data:
             errors.append(f"{service}:{relative}:Go/TypeScript bytes differ")
 
-    config_text = (boost_root / "config/config.yaml").read_text()
+    config_text = (coro_root / "config/config.yaml").read_text()
     unresolved = unresolved_override_paths(
-        config_text, (boost_root / "config/overrides.yaml").read_text()
+        config_text, (coro_root / "config/overrides.yaml").read_text()
     )
     for path in unresolved:
         errors.append(f"{service}:config/overrides.yaml:missing value for {path}")
-    cpp = (boost_root / "config/config.generated.hpp").read_text()
+    cpp = (coro_root / "config/config.generated.hpp").read_text()
     go = (go_root / "internal/config/config.generated.go").read_text()
     typescript = (
         typescript_root / "src/internal/config/config.generated.ts"
@@ -525,7 +525,7 @@ def check_automation_service(root: Path) -> dict[str, object]:
     implementations = (
         "goexample",
         "cppexample",
-        "cppboostexample",
+        "cppcoroexample",
         "pyexample",
         "rustexample",
         "tsexample",
@@ -568,7 +568,7 @@ def check_automation_service(root: Path) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Differentially verify generated Go, Boost and TypeScript "
+            "Differentially verify generated Go, Coro and TypeScript "
             "typed configuration."
         )
     )
@@ -579,13 +579,13 @@ def main() -> int:
     required = tuple(
         root / implementation / service
         for implementation in (
-            "goexample", "cppexample", "cppboostexample",
+            "goexample", "cppexample", "cppcoroexample",
             "pyexample", "rustexample", "tsexample",
         )
         for service in ("automationservice",)
     ) + tuple(
         root / implementation / service
-        for implementation in ("goexample", "cppboostexample", "tsexample")
+        for implementation in ("goexample", "cppcoroexample", "tsexample")
         for service in ("analyticsservice", "inventoryservice", "orderservice")
     )
     missing = [str(path) for path in required if not path.is_dir()]

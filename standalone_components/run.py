@@ -164,8 +164,7 @@ LANGUAGE_NEUTRAL_MODULES = frozenset({"inventory_service_api", "order_service_ap
 MODULE_LANGUAGE_SUFFIX = {
     "go": "go",
     "cpp": "cpp",
-    "cppboost": "cpp",
-    "cppcoro": "cpp",
+    "cppcoro": "cppcoro",
     "python": "python",
     "rust": "rust",
     "typescript": "ts",
@@ -193,6 +192,14 @@ def component_directory(language: str, component: str) -> str:
     return f"{component}_{MODULE_LANGUAGE_SUFFIX[language]}"
 
 
+def cpp_component_source_directory(language: str, component: str) -> str:
+    """Keep shared schema files, but configure the runtime-specific adapter."""
+    directory = component_directory(language, component)
+    if language == "cppcoro" and component in LANGUAGE_NEUTRAL_MODULES:
+        return f"{directory}/cppcoro"
+    return directory
+
+
 @dataclass(frozen=True)
 class Language:
     name: str
@@ -203,7 +210,6 @@ class Language:
 LANGUAGES: dict[str, Language] = {
     "go": Language("go", "goexample", "servicelib"),
     "cpp": Language("cpp", "cppexample", "cppservicelib"),
-    "cppboost": Language("cppboost", "cppboostexample", "cppboostservicelib"),
     "cppcoro": Language("cppcoro", "cppcoroexample", "cppcoroservicelib"),
     "python": Language("python", "pyexample", "pyservicelib"),
     "rust": Language("rust", "rustexample", "rustservicelib"),
@@ -525,7 +531,6 @@ def materialize_typescript(
 MATERIALIZERS = {
     "go": materialize_go,
     "cpp": materialize_cpp,
-    "cppboost": materialize_cpp,
     "cppcoro": materialize_cpp,
     "python": materialize_python,
     "rust": materialize_rust,
@@ -886,10 +891,6 @@ def build_service_with_make(
     local_framework_contexts = {
         "go": ("GOSERVICELIB_SOURCE_CONTEXT", root / "servicelib"),
         "cpp": ("SERVICELIB_SOURCE_CONTEXT", root / "cppservicelib"),
-        "cppboost": (
-            "SERVICELIB_SOURCE_CONTEXT",
-            root / "cppboostservicelib",
-        ),
         "cppcoro": (
             "SERVICELIB_SOURCE_CONTEXT",
             root / "cppcoroservicelib",
@@ -938,7 +939,7 @@ def ensure_cpp_image(root: Path, language_name: str) -> CppContext:
     })
     env = docker_process_environment(framework_environment)
     source_cache: Path | None = None
-    if language_name in {"cppboost", "cppcoro"}:
+    if language_name == "cppcoro":
         source_cache = cpp_source_cache.configure_environment(
             env, root / language.framework, language.example,
         )
@@ -1055,7 +1056,7 @@ def build_cpp(
     cpp_context: CppContext,
 ) -> None:
     example, compose, env, source_cache = cpp_context
-    component_dir = component_directory(language_name, component)
+    component_dir = cpp_component_source_directory(language_name, component)
     build_dir = f"/workspace/build/standalone-components/{component}"
     definitions = [
         "-DMODULES_ROOT=/standalone",
@@ -1069,7 +1070,7 @@ def build_cpp(
     else:
         definitions.extend([
             "-DSERVICELIB_SOURCE_DIR=/opt/servicelib",
-            "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=CONAN",
+            "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=CONAN",
         ])
     service_targets = {
         "analyticsservice": (
@@ -1291,7 +1292,7 @@ def main() -> int:
                 continue
             if (
                 not args.prepare_only
-                and language_name in {"cpp", "cppboost", "cppcoro"}
+                and language_name in {"cpp", "cppcoro"}
                 and language_name in {
                     implementation_language(root, language_name, component)
                     for component in language_components
@@ -1335,7 +1336,7 @@ def main() -> int:
                                 implementation,
                                 component,
                             )
-                        elif implementation in {"cpp", "cppboost", "cppcoro"}:
+                        elif implementation in {"cpp", "cppcoro"}:
                             build_cpp(
                                 root,
                                 target,

@@ -1,6 +1,6 @@
-#if defined(SERVICELIB_CUSTOM_SERDE_BOOST)
-#include <model_cpp/include/example/model/serdes/order_item_result_serde.hpp>
-#include <model_cpp/include/example/model/serdes/order_item_serde.hpp>
+#if defined(SERVICELIB_CUSTOM_SERDE_CORO)
+#include <model_cppcoro/include/example/model/serdes/order_item_result_serde.hpp>
+#include <model_cppcoro/include/example/model/serdes/order_item_serde.hpp>
 #include <orderservice/internal/serdes/order_serde.hpp>
 #include <orderservice/internal/serdes/order_state_serde.hpp>
 #elif defined(SERVICELIB_CUSTOM_SERDE_CANONICAL)

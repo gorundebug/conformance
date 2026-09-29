@@ -191,7 +191,7 @@ def main() -> int:
     typescript, typescript_public = typescript_structs()
     runtimes = {
         "cppservicelib": cpp_structs("cppservicelib"),
-        "cppboostservicelib": cpp_structs("cppboostservicelib"),
+        "cppcoroservicelib": cpp_structs("cppcoroservicelib"),
         "tsservicelib": typescript,
     }
     errors: list[str] = []

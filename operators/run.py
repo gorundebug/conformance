@@ -24,7 +24,7 @@ ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expandus
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "operators" / "summary.json"
 GO = ROOT / "servicelib"
 CANONICAL = ROOT / "cppservicelib"
-BOOST = ROOT / "cppboostservicelib"
+CORO = ROOT / "cppcoroservicelib"
 TYPESCRIPT = ROOT / "tsservicelib"
 
 
@@ -115,7 +115,7 @@ FUNCTION_CONTRACTS = {
         ),
         "forbidden": ("typename... Outputs", "std::get<0>(collectors)"),
     },
-    ROOT / "cppboostexample/orderservice/internal/functions/order/process_order_items.hpp": {
+    ROOT / "cppcoroexample/orderservice/internal/functions/order/process_order_items.hpp": {
         "required": (
             "template <typename Output>", "servicelib::StreamBase& stream",
             "Output&& out",
@@ -156,7 +156,7 @@ FUNCTION_CONTRACTS = {
         ),
         "forbidden": ("typename... Outputs", "std::get<0>"),
     },
-    ROOT / "servicegen/internal/codegenerator/templates/cppboost/functions/function_hpp.tmpl": {
+    ROOT / "servicegen/internal/codegenerator/templates/cppcoro/functions/function_hpp.tmpl": {
         "required": (
             "servicelib::StreamBase& stream", "template <typename Output>",
             "inline boost::asio::awaitable<std::unique_ptr<{{.Name}}>> Make{{.Name}}",
@@ -216,7 +216,7 @@ SOURCE_CASES = {
         "BuildsLiveTopologyDataAndGraphYaml",
         "EmbedsTheSameBrowserAssetsAsOtherRuntimes",
     ),
-    BOOST / "tests/operators_compile_test.cpp": (
+    CORO / "tests/operators_compile_test.cpp": (
         "PublicApiHeadersCompileTogether",
         "SplitBranchesInheritRuntimeEnvironment",
         "RegisteredInputFeedsConfiguredTerminalSink",
@@ -233,21 +233,21 @@ SOURCE_CASES = {
         "MergeForwardsEveryParentIntoOneOrderedOutput",
         "CallerSemanticsDispatchPreserveContextPriorityAndStatistics",
     ),
-    BOOST / "tests/operators_topology_test.cpp": (
+    CORO / "tests/operators_topology_test.cpp": (
         "SplitBroadcastsAndCaseRoutesExactlyOneBranch",
         "makeCycleLinkStream",
         "setSource",
         "ResultLinkDoesNotRetainReleasedInputGraph",
     ),
-    BOOST / "tests/serviceapp_test.cpp": (
+    CORO / "tests/serviceapp_test.cpp": (
         "connectorTimeoutMatchesTelemetry",
     ),
-    BOOST / "tests/status_test.cpp": (
+    CORO / "tests/status_test.cpp": (
         "BuildsLiveTopologyDataAndGraphYaml",
         "EmbedsTheSameBrowserAssetsAsOtherRuntimes",
         "BeastRoutesMatchCanonicalStatusAndMetricsHandlers",
     ),
-    BOOST / "tests/join_topology_test.cpp": (
+    CORO / "tests/join_topology_test.cpp": (
         "InnerJoinUsesRegisteredStorageLifecycle",
         "multiResults",
         "leftResults",
@@ -343,7 +343,7 @@ def verify_function_contracts() -> dict[str, object]:
 
     cpp_function_files = tuple(
         path
-        for example in (ROOT / "cppexample", ROOT / "cppboostexample")
+        for example in (ROOT / "cppexample", ROOT / "cppcoroexample")
         for path in example.glob("*service/internal/functions/*.hpp")
     )
     for path in cpp_function_files:
@@ -539,67 +539,67 @@ def main() -> int:
     )
 
     if not args.skip_build:
-        boost_build_volume = cpp_source_cache.build_volume_name(
-            BOOST, "cppboostservicelib-operators"
+        coro_build_volume = cpp_source_cache.build_volume_name(
+            CORO, "cppcoroservicelib-operators"
         )
-        boost_env = dependency_environment.from_framework(BOOST)
-        boost_env["CPPBOOSTSERVICELIB_TEST_SOURCE_CACHE_DIR"] = str(
-            cpp_source_cache.ensure(BOOST)
+        coro_env = dependency_environment.from_framework(CORO)
+        coro_env["CPPCOROSERVICELIB_TEST_SOURCE_CACHE_DIR"] = str(
+            cpp_source_cache.ensure(CORO)
         )
-        boost_env["CPPBOOSTSERVICELIB_TEST_BUILD_VOLUME"] = boost_build_volume
+        coro_env["CPPCOROSERVICELIB_TEST_BUILD_VOLUME"] = coro_build_volume
         runs.append(
             execute(
-                "boost-framework-build-and-tests",
+                "coro-framework-build-and-tests",
                 ["./scripts/test.sh"],
-                BOOST,
-                boost_env,
+                CORO,
+                coro_env,
             )
         )
     runs.append(
         execute(
-            "boost-cpp-operators",
+            "coro-cpp-operators",
             [
                 "docker",
                 "run",
                 "--rm",
                 "-v",
-                f"{BOOST}:/workspace",
+                f"{CORO}:/workspace",
                 *cpp_source_cache.build_volume_mount_args(
-                    BOOST, "cppboostservicelib-operators"
+                    CORO, "cppcoroservicelib-operators"
                 ),
                 "-w",
                 "/workspace",
-                "cppboostservicelib-build:local",
+                "cppcoroservicelib-build:local",
                 "ctest",
                 "--test-dir",
                 "build/docker",
                 "--output-on-failure",
                 "-R",
-                "cppboostservicelib_(operators|operators_topology|join_topology)_test",
+                "cppcoroservicelib_(operators|operators_topology|join_topology)_test",
             ],
-            BOOST,
+            CORO,
         )
     )
     runs.append(
         execute(
-            "boost-cpp-link-connector-status",
+            "coro-cpp-link-connector-status",
             [
-                "docker", "run", "--rm", "-v", f"{BOOST}:/workspace",
+                "docker", "run", "--rm", "-v", f"{CORO}:/workspace",
                 *cpp_source_cache.build_volume_mount_args(
-                    BOOST, "cppboostservicelib-operators"
+                    CORO, "cppcoroservicelib-operators"
                 ),
-                "-w", "/workspace", "cppboostservicelib-build:local",
+                "-w", "/workspace", "cppcoroservicelib-build:local",
                 "ctest", "--test-dir", "build/docker", "--output-on-failure",
                 "-R",
-                "cppboostservicelib_(serviceapp|status)_test",
+                "cppcoroservicelib_(serviceapp|status)_test",
             ],
-            BOOST,
+            CORO,
         )
     )
 
     summary = {
         "status": "pass",
-        "languages": ["go", "canonical-cpp", "cppboost", "typescript"],
+        "languages": ["go", "canonical-cpp", "cppcoro", "typescript"],
         "source_matrix": source_matrix,
         "function_contracts": function_contracts,
         "runs": runs,

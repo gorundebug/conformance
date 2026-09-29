@@ -98,7 +98,7 @@ scenario checkouts remain independent on `main`.
 ```bash
 make profiling-all PROFILING_ARGS="--language rust --duration 20s"
 make profiling-all PROFILING_ARGS="--language cpp-native --duration 20s"
-make profiling-all PROFILING_ARGS="--language cppboost --duration 20s"
+make profiling-all PROFILING_ARGS="--language cppcoro --duration 20s"
 make profiling-all PROFILING_ARGS="--language cppboost-native --duration 20s"
 make profiling-all PROFILING_ARGS="--language typescript --language typescript-native --duration 20s"
 ```
@@ -116,7 +116,7 @@ explicitly:
 
 ```bash
 bash ./quickstart.sh --dependencies-dir /path/to/repos -- profiling-all \
-  PROFILING_ARGS="--language cppboost"
+  PROFILING_ARGS="--language cppcoro"
 ```
 
 A direct runner invocation may use `DEPENDENCIES_DIR` or
@@ -128,7 +128,7 @@ A direct runner invocation may use `DEPENDENCIES_DIR` or
 make profiling-all
 # or directly:
 python3 profiling/examples/run.py --language rust --duration 20s
-python3 profiling/examples/run.py --language cppboost --language cppboost-native \
+python3 profiling/examples/run.py --language cppcoro --language cppboost-native \
   --profile-kind allocation --profile-kind scheduler \
   --profile-kind offcpu --duration 20s
 ```
@@ -178,7 +178,7 @@ If the host kernel denies `perf` attachment, prepare a dedicated profiling
 host explicitly:
 
 ```bash
-python3 profiling/examples/run.py --prepare-host-profiling --language cppboost
+python3 profiling/examples/run.py --prepare-host-profiling --language cppcoro
 ```
 
 Flamegraphs are written to
@@ -243,9 +243,9 @@ k6 has drained its scenario-specific grace window, so the raw CPU profile covers
 the same accepted request window rather than silently ending before slow
 timeout responses complete.
 
-For `cppboost`, profiling additionally scrapes the service while load is
+For `cppcoro`, profiling additionally scrapes the service while load is
 active and writes
-`.artifacts/cppboost.<service>.runtime-metrics.json`. Each timestamped sample
+`.artifacts/cppcoro.<service>.runtime-metrics.json`. Each timestamped sample
 contains `runtime_active_work`, `runtime_worker_utilization` and
 `runtime_event_loop_lag_seconds`. Use this time series together with the
 flamegraph and load-generator JSON to distinguish CPU saturation from an idle

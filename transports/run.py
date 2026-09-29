@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical C++ and Boost.Asio gRPC transport conformance gate."""
+"""Canonical C++ and Coro gRPC transport conformance gate."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "transports" / "summary.json"
 CANONICAL = ROOT / "cppservicelib"
-BOOST = ROOT / "cppboostservicelib"
 CORO = ROOT / "cppcoroservicelib"
 SERVICEGEN = ROOT / "servicegen"
 TYPESCRIPT = ROOT / "tsservicelib"
@@ -142,7 +141,7 @@ SOURCE_CASES = {
         "MissingRequestIsReportedToEndRequest",
         '"datasink_endpoint.request_duration_seconds"',
     ),
-    BOOST / "tests/http_endpoints_test.cpp": (
+    CORO / "tests/http_endpoints_test.cpp": (
         "PreservesCanonicalHandlerAndCorrelationContract",
         "GracefulStopDrainsAcceptedRequestAndClosesKeepAlive",
         "ShutdownDeadlineForcesCancellationOfAcceptedRequest",
@@ -156,7 +155,7 @@ SOURCE_CASES = {
         "PreservesCanonicalRequestLifecycleAndStreamId",
         '"datasink_endpoint.request_duration_seconds"',
     ),
-    BOOST / "tests/custom_endpoints_test.cpp": (
+    CORO / "tests/custom_endpoints_test.cpp": (
         "RunsProducerAndHandlerLifecycle",
         "BlockingHandlerDoesNotBlockReactorWorkers",
         "CorrelatesPipelineResultUsingStreamContext",
@@ -171,19 +170,19 @@ SOURCE_CASES = {
         "NoStreamingEndpoint",
         "BidirectionalStreamingEndpoint",
     ),
-    BOOST / "tests/grpc_endpoints_test.cpp": (
+    CORO / "tests/grpc_endpoints_test.cpp": (
         "SupportsAllFourMethodTypesAndCorrelation",
         "SupportsAllFourMethodTypesAndStreamIdSessions",
         "RequiresExplicitSampledTraceParent",
         "NoStreamingEndpoint",
         "BidirectionalStreamingEndpoint",
     ),
-    BOOST / "tests/grpc_unary_test.cpp": (
+    CORO / "tests/grpc_unary_test.cpp": (
         "accepted unary cancellation did not reach MessageContext",
         "unary cancellation/deadline status differs",
         "a suspended gRPC coroutine inflated worker utilization",
     ),
-    BOOST / "tests/grpc_streaming_test.cpp": (
+    CORO / "tests/grpc_streaming_test.cpp": (
         '"server-streaming"',
         '"client-streaming"',
         '"bidirectional-streaming"',
@@ -200,7 +199,7 @@ SOURCE_CASES = {
         "CopiesRecordAndExposesUserverCommit",
         "consumer.committed.load()",
     ),
-    BOOST / "tests/kafka_endpoints_test.cpp": (
+    CORO / "tests/kafka_endpoints_test.cpp": (
         "SendsThroughAdapterAndCollectsDeliveryResult",
         '"events:key:payload"',
         "return {partition, 17, {}}",
@@ -211,18 +210,18 @@ SOURCE_CASES = {
         "MapsDeliveryFailureToErrorOutputAndEndRequest",
         "BrokerLossReturnsErrorAndConsumerRemainsStoppable",
     ),
-    BOOST / "include/servicelib/datasource/kafka/librdkafka.hpp": (
+    CORO / "include/servicelib/datasource/kafka/librdkafka.hpp": (
         "IsTransientError",
         "RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN",
         "RD_KAFKA_RESP_ERR_NOT_COORDINATOR",
     ),
-    SERVICEGEN / "internal/codegenerator/cpp/boost_generation_test.go": (
-        "TestGeneratedCppBoostKafkaRuntimeRecoversInDocker",
-        "TestBoostMainConfiguresGrpcRuntimeOnlyForGrpcServices",
+    SERVICEGEN / "internal/codegenerator/cpp/coro_contract_generation_test.go": (
+        "TestGeneratedCppCoroKafkaRuntimeRecoversInDocker",
+        "TestCoroMainConfiguresGrpcRuntimeOnlyForGrpcServices",
     ),
     SERVICEGEN / "internal/codegenerator/cpp/type_test.go": (
-        "runGeneratedCppBoostKafkaRuntimeDocker",
-        "cppBoostKafkaRuntimeFixture",
+        "runGeneratedCppCoroKafkaRuntimeDocker",
+        "cppCoroKafkaRuntimeFixture",
         "kafka-runtime-errors.txt",
         "kafka-runtime-observed.txt",
         "redpandadata/redpanda:v24.2.5",
@@ -479,40 +478,33 @@ def canonical_http_command(skip_build: bool) -> list[str]:
     return command
 
 
-def boost_source_cache_build_dir() -> str:
-    return cpp_source_cache.build_dir(BOOST)
+def coro_source_cache_build_dir() -> str:
+    return cpp_source_cache.build_dir(CORO)
 
 
-def boost_source_cache_cmake_args() -> str:
-    return cpp_source_cache.cmake_args(BOOST)
+def coro_source_cache_cmake_args() -> str:
+    return cpp_source_cache.cmake_args(CORO)
 
 
-def boost_source_cache_command() -> list[str]:
-    return cpp_source_cache.prepare_command(BOOST)
+def coro_source_cache_command() -> list[str]:
+    return cpp_source_cache.prepare_command(CORO)
 
 
-def boost_sanitizer_cmake_flags() -> str:
-    # Boost.Context fcontext does not register fiber stack switches with ASan.
-    # Its supported ucontext backend does so when BOOST_USE_ASAN is defined.
-    # Keep Release on fcontext; only sanitizer builds need this backend.
-    return (
-        " -DCPPBOOSTSERVICELIB_ASAN=ON -DCPPBOOSTSERVICELIB_UBSAN=ON"
-        " -DBOOST_CONTEXT_IMPLEMENTATION=ucontext"
-        " -DCMAKE_CXX_FLAGS=-DBOOST_USE_ASAN"
-    )
+def coro_sanitizer_cmake_flags() -> str:
+    return " -DCPPCOROSERVICELIB_ASAN=ON -DCPPCOROSERVICELIB_UBSAN=ON"
 
 
-def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[str, str]:
-    environment = dependency_environment.from_framework(BOOST)
+def coro_generator_environment(*, prepare_source_cache: bool = True) -> dict[str, str]:
+    environment = dependency_environment.from_framework(CORO)
     environment["SERVICEGEN_RUN_DOCKER_TESTS"] = "1"
     if prepare_source_cache:
-        cpp_source_cache.configure_environment(environment, BOOST)
+        cpp_source_cache.configure_environment(environment, CORO)
     else:
-        environment["CPPBOOST_SOURCE_CACHE_DIR"] = str(
-            cpp_source_cache.source_dir(BOOST)
+        environment["CPPCORO_SOURCE_CACHE_DIR"] = str(
+            cpp_source_cache.source_dir(CORO)
         )
-        environment["CPPBOOST_BUILD_VOLUME"] = (
-            cpp_source_cache.build_volume_name(BOOST)
+        environment["CPPCORO_BUILD_VOLUME"] = (
+            cpp_source_cache.build_volume_name(CORO)
         )
     environment["GOCACHE"] = "/tmp/servicegen-go-build"
     # Conan packages are dependency caches, not suite results. Use the shared
@@ -531,9 +523,9 @@ def boost_generator_environment(*, prepare_source_cache: bool = True) -> dict[st
     return environment
 
 
-def boost_command(build_dir: str, sanitizer: bool,
+def coro_command(build_dir: str, sanitizer: bool,
                   skip_build: bool) -> list[str]:
-    tests = "^cppboostservicelib_grpc_(runtime|endpoints|unary|streaming)_test$"
+    tests = "^cppcoroservicelib_grpc_(runtime|endpoints|unary|streaming)_test$"
     run = (
         f"ctest --test-dir {build_dir} --output-on-failure -R "
         f"'{tests}'"
@@ -544,41 +536,41 @@ def boost_command(build_dir: str, sanitizer: bool,
             "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 " + run
         )
     if not skip_build:
-        sanitizer_flags = boost_sanitizer_cmake_flags() if sanitizer else ""
+        sanitizer_flags = coro_sanitizer_cmake_flags() if sanitizer else ""
         run = (
             "cmake -U'FETCHCONTENT_SOURCE_DIR_OPENTELEMETRY-CPP' "
             f"-S . -B {build_dir} -G Ninja "
             f"-DCMAKE_BUILD_TYPE={'Debug' if sanitizer else 'Release'} "
-            "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=FETCH "
-            "-DCPPBOOSTSERVICELIB_ENABLE_GRPC=ON "
-            "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
-            f"{boost_source_cache_cmake_args()}"
+            "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
+            "-DCPPCOROSERVICELIB_ENABLE_GRPC=ON "
+            "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
+            f"{coro_source_cache_cmake_args()}"
             f"{sanitizer_flags} && "
             f"cmake --build {build_dir} --parallel --target "
-            "cppboostservicelib_grpc_runtime_test "
-            "cppboostservicelib_grpc_endpoints_test "
-            "cppboostservicelib_grpc_unary_test "
-            "cppboostservicelib_grpc_streaming_test && " + run
+            "cppcoroservicelib_grpc_runtime_test "
+            "cppcoroservicelib_grpc_endpoints_test "
+            "cppcoroservicelib_grpc_unary_test "
+            "cppcoroservicelib_grpc_streaming_test && " + run
         )
     return [
         "docker", "run", "--rm",
-        *dependency_environment.docker_arguments(BOOST),
+        *dependency_environment.docker_arguments(CORO),
         "-v",
-        cpp_source_cache.source_mount(BOOST),
-        "-v", f"{BOOST}:/workspace",
+        cpp_source_cache.source_mount(CORO),
+        "-v", f"{CORO}:/workspace",
         *cpp_source_cache.build_volume_mount_args(
-            BOOST, "cppboostservicelib-transports"
+            CORO, "cppcoroservicelib-transports"
         ), "-w",
-        "/workspace", "cppboostservicelib-build:local", "/bin/bash", "-lc",
+        "/workspace", "cppcoroservicelib-build:local", "/bin/bash", "-lc",
         run,
     ]
 
 
-def boost_kafka_command(build_dir: str, sanitizer: bool,
+def coro_kafka_command(build_dir: str, sanitizer: bool,
                         skip_build: bool) -> list[str]:
     run = (
         f"ctest --test-dir {build_dir} --output-on-failure -R "
-        "'^cppboostservicelib_kafka_endpoints_test$'"
+        "'^cppcoroservicelib_kafka_endpoints_test$'"
     )
     if sanitizer:
         run = (
@@ -586,57 +578,28 @@ def boost_kafka_command(build_dir: str, sanitizer: bool,
             "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 " + run
         )
     if not skip_build:
-        sanitizer_flags = boost_sanitizer_cmake_flags() if sanitizer else ""
+        sanitizer_flags = coro_sanitizer_cmake_flags() if sanitizer else ""
         run = (
             f"cmake -S . -B {build_dir} -G Ninja "
             f"-DCMAKE_BUILD_TYPE={'Debug' if sanitizer else 'Release'} "
-            "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=FETCH "
-            "-DCPPBOOSTSERVICELIB_ENABLE_KAFKA=ON "
-            "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
-            f"{boost_source_cache_cmake_args()}"
+            "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
+            "-DCPPCOROSERVICELIB_ENABLE_KAFKA=ON "
+            "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
+            f"{coro_source_cache_cmake_args()}"
             f"{sanitizer_flags} && "
             f"cmake --build {build_dir} --parallel --target "
-            "cppboostservicelib_kafka_endpoints_test && " + run
+            "cppcoroservicelib_kafka_endpoints_test && " + run
         )
     return [
         "docker", "run", "--rm",
-        *dependency_environment.docker_arguments(BOOST),
+        *dependency_environment.docker_arguments(CORO),
         "-v",
-        cpp_source_cache.source_mount(BOOST),
-        "-v", f"{BOOST}:/workspace",
+        cpp_source_cache.source_mount(CORO),
+        "-v", f"{CORO}:/workspace",
         *cpp_source_cache.build_volume_mount_args(
-            BOOST, "cppboostservicelib-transports"
+            CORO, "cppcoroservicelib-transports"
         ), "-w",
-        "/workspace", "cppboostservicelib-build:local", "/bin/bash", "-lc",
-        run,
-    ]
-
-
-def boost_http_custom_command(skip_build: bool) -> list[str]:
-    build_dir = "build/grpc-conformance-release"
-    tests = (
-        "^(cppboostservicelib_http_endpoints_test|"
-        "cppboostservicelib_custom_endpoints_test)$"
-    )
-    run = (
-        f"ctest --test-dir {build_dir} --output-on-failure -R '{tests}'"
-    )
-    if not skip_build:
-        run = (
-            f"cmake --build {build_dir} --parallel --target "
-            "cppboostservicelib_http_endpoints_test "
-            "cppboostservicelib_custom_endpoints_test && " + run
-        )
-    return [
-        "docker", "run", "--rm",
-        *dependency_environment.docker_arguments(BOOST),
-        "-v",
-        cpp_source_cache.source_mount(BOOST),
-        "-v", f"{BOOST}:/workspace",
-        *cpp_source_cache.build_volume_mount_args(
-            BOOST, "cppboostservicelib-transports"
-        ), "-w",
-        "/workspace", "cppboostservicelib-build:local", "/bin/bash", "-lc",
+        "/workspace", "cppcoroservicelib-build:local", "/bin/bash", "-lc",
         run,
     ]
 
@@ -644,24 +607,24 @@ def boost_http_custom_command(skip_build: bool) -> list[str]:
 def coro_http_custom_command(skip_build: bool) -> list[str]:
     build_dir = "build/http-conformance-release"
     tests = (
-        "^(cppboostservicelib_http_endpoints_test|"
-        "cppboostservicelib_custom_endpoints_test)$"
+        "^(cppcoroservicelib_http_endpoints_test|"
+        "cppcoroservicelib_custom_endpoints_test)$"
     )
     run = f"ctest --test-dir {build_dir} --output-on-failure -R '{tests}'"
     if not skip_build:
         run = (
             f"cmake -S . -B {build_dir} -G Ninja "
             "-DCMAKE_BUILD_TYPE=Release "
-            "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=FETCH "
-            "-DCPPBOOSTSERVICELIB_ENABLE_GRPC=OFF "
-            "-DCPPBOOSTSERVICELIB_ENABLE_KAFKA=OFF "
-            "-DCPPBOOSTSERVICELIB_ENABLE_OTEL=OFF "
-            "-DCPPBOOSTSERVICELIB_ENABLE_CRON=OFF "
-            "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
+            "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
+            "-DCPPCOROSERVICELIB_ENABLE_GRPC=OFF "
+            "-DCPPCOROSERVICELIB_ENABLE_KAFKA=OFF "
+            "-DCPPCOROSERVICELIB_ENABLE_OTEL=OFF "
+            "-DCPPCOROSERVICELIB_ENABLE_CRON=OFF "
+            "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
             f"{cpp_source_cache.cmake_args(CORO)} && "
             f"cmake --build {build_dir} --parallel --target "
-            "cppboostservicelib_http_endpoints_test "
-            "cppboostservicelib_custom_endpoints_test && " + run
+            "cppcoroservicelib_http_endpoints_test "
+            "cppcoroservicelib_custom_endpoints_test && " + run
         )
     return [
         "docker", "run", "--rm",
@@ -810,68 +773,53 @@ def main() -> int:
     ))
     if not args.skip_build:
         runs.append(execute(
-            "boost-build-image",
+            "coro-build-image",
             ["docker", "build", "-f", "Dockerfile.cmake", "-t",
-             "cppboostservicelib-build", "."],
-            BOOST,
-            dependency_environment.from_framework(BOOST),
+             "cppcoroservicelib-build:local", "."],
+            CORO,
+            dependency_environment.from_framework(CORO),
         ))
         runs.append(execute(
-            "boost-source-cache",
-            boost_source_cache_command(),
-            BOOST,
+            "coro-source-cache",
+            coro_source_cache_command(),
+            CORO,
         ))
     runs.append(execute(
-        "boost-grpc-release",
-        boost_command("build/grpc-conformance-release", False, args.skip_build),
-        BOOST,
+        "coro-grpc-release",
+        coro_command("build/grpc-conformance-release", False, args.skip_build),
+        CORO,
     ))
     runs.append(execute(
-        "boost-http-and-custom-lifecycle",
-        boost_http_custom_command(args.skip_build), BOOST,
+        "coro-grpc-asan-ubsan",
+        coro_command("build/grpc-conformance-asan", True, args.skip_build),
+        CORO,
     ))
     runs.append(execute(
-        "boost-grpc-asan-ubsan",
-        boost_command("build/grpc-conformance-asan", True, args.skip_build),
-        BOOST,
-    ))
-    runs.append(execute(
-        "boost-kafka-application-and-broker-wire",
-        boost_kafka_command(
+        "coro-kafka-application-and-broker-wire",
+        coro_kafka_command(
             "build/kafka-conformance-release",
             False,
             args.skip_build,
         ),
-        BOOST,
+        CORO,
     ))
     runs.append(execute(
-        "boost-kafka-asan-ubsan",
-        boost_kafka_command(
+        "coro-kafka-asan-ubsan",
+        coro_kafka_command(
             "build/kafka-asan" if args.skip_build
             else "build/kafka-conformance-asan",
             True,
             args.skip_build,
         ),
-        BOOST,
+        CORO,
     ))
 
-    if not args.skip_build:
-        runs.append(execute(
-            "coro-build-image",
-            ["docker", "build", "-f", "Dockerfile.cmake", "-t",
-             "cppcoroservicelib-build:local", "."],
-            CORO, dependency_environment.from_framework(CORO),
-        ))
-        runs.append(execute(
-            "coro-source-cache",
-            cpp_source_cache.prepare_command(CORO), CORO,
-        ))
     runs.append(execute(
         "coro-http-and-custom-lifecycle",
         coro_http_custom_command(args.skip_build), CORO,
     ))
 
-    generator_env = boost_generator_environment()
+    generator_env = coro_generator_environment()
     generated_run_name = "generated-four-method-workspace"
     if args.skip_build:
         runs.append(previous_successful_run(generated_run_name))
@@ -879,7 +827,7 @@ def main() -> int:
         runs.append(execute(
             generated_run_name,
             ["go", "test", "-timeout", "20m", "./internal/codegenerator/cpp",
-             "-run", "^TestGeneratedCppBoostGrpcStreamingSourcesBuildsInDocker$",
+             "-run", "^TestGeneratedCppCoroGrpcStreamingSourcesBuildsInDocker$",
              "-count=1", "-v"],
             SERVICEGEN, generator_env,
         ))
@@ -892,7 +840,7 @@ def main() -> int:
             generated_kafka_run_name,
             ["go", "test", "-timeout", "20m",
              "./internal/codegenerator/cpp", "-run",
-             "^TestGeneratedCppBoostKafkaRuntimeRecoversInDocker$",
+             "^TestGeneratedCppCoroKafkaRuntimeRecoversInDocker$",
              "-count=1", "-v"],
             SERVICEGEN, generator_env,
         ))
@@ -900,7 +848,7 @@ def main() -> int:
     summary = {
         "status": "pass",
         "languages": [
-            "go", "canonical-cpp", "cppboost", "cppcoro", "python", "rust",
+            "go", "canonical-cpp", "cppcoro", "python", "rust",
             "typescript",
         ],
         "source_matrix": source_matrix,
@@ -934,7 +882,6 @@ def main() -> int:
         "http_client_live_metric_evidence": {
             "go": "go-http-client-metrics-real-transport",
             "cpp": "canonical-cpp-http-lifecycle",
-            "cppboost": "boost-http-and-custom-lifecycle",
             "cppcoro": "coro-http-and-custom-lifecycle",
             "python": "python-http-client-metrics-real-transport",
             "rust": "rust-http-client-metrics-real-transport",
@@ -971,7 +918,7 @@ def main() -> int:
         },
         "kafka_application_wire": KAFKA_APPLICATION_WIRE,
         "kafka_comparison": (
-            "field-for-field plus Boost librdkafka broker round-trip"
+            "field-for-field plus Coro librdkafka broker round-trip"
         ),
         "kafka_broker_loss": {
             "producer_error": True,

@@ -25,7 +25,6 @@ ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expandus
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "logging" / "summary.json"
 GO = ROOT / "servicelib"
 CANONICAL = ROOT / "cppservicelib"
-BOOST = ROOT / "cppboostservicelib"
 CORO = ROOT / "cppcoroservicelib"
 PYTHON = ROOT / "pyservicelib"
 PYTHON_EXAMPLE = ROOT / "pyexample"
@@ -39,10 +38,6 @@ SOURCE_CASES = {
         "FieldTypeBool", "FieldTypeError",
     ),
     CANONICAL / "tests/telemetry_test.cpp": (
-        "LogCapturesStructuredEntriesAndSupportsReset",
-        "Field::Float64", "Field::Bool", "Field::Err",
-    ),
-    BOOST / "tests/telemetry_test.cpp": (
         "LogCapturesStructuredEntriesAndSupportsReset",
         "Field::Float64", "Field::Bool", "Field::Err",
     ),
@@ -153,42 +148,27 @@ def main() -> int:
     source_matrix = verify_sources()
 
     canonical_script = "/workspace/build/servicelib_telemetry_test"
-    boost_script = (
+    coro_script = (
         "ctest --test-dir build/docker --output-on-failure "
-        "-R '^cppboostservicelib_telemetry_test$'"
+        "-R '^cppcoroservicelib_telemetry_test$'"
     )
-    coro_script = boost_script
     if not args.skip_build:
-        boost_source_mount = [
-            "-v",
-            cpp_source_cache.source_mount(BOOST),
-        ]
-        cpp_source_cache.ensure(BOOST)
         cpp_source_cache.ensure(CORO)
         canonical_script = (
             cpp_userver.configure_script() +
             " && cmake --build --preset docker --parallel "
             "--target servicelib_telemetry_test && " + canonical_script
         )
-        boost_script = (
-            "cmake --fresh -S . -B build/docker -G Ninja "
-            "-DCMAKE_BUILD_TYPE=Debug "
-            "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
-            f"{cpp_source_cache.cmake_args(BOOST)}&& "
-            "cmake --build build/docker --parallel --target "
-            "cppboostservicelib_telemetry_test && " + boost_script
-        )
         coro_script = (
             "cmake --fresh -S . -B build/docker -G Ninja "
             "-DCMAKE_BUILD_TYPE=Debug "
-            "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
+            "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
             f"{cpp_source_cache.cmake_args(CORO)}&& "
             "cmake --build build/docker --parallel --target "
-            "cppboostservicelib_telemetry_test && " + coro_script
+            "cppcoroservicelib_telemetry_test && " + coro_script
         )
         coro_source_mount = ["-v", cpp_source_cache.source_mount(CORO)]
     else:
-        boost_source_mount = []
         coro_source_mount = []
 
     python_build_run: dict[str, object] | None = None
@@ -245,24 +225,13 @@ def main() -> int:
             dependency_environment.from_framework(CANONICAL),
         ),
         execute(
-            "boost-cpp-structured-logging",
-            ["docker", "run", "--rm", *boost_source_mount,
-             "-v", f"{BOOST}:/workspace",
-             *cpp_source_cache.build_volume_mount_args(
-                 BOOST, "cppboostservicelib-logging"
-             ),
-             "-w", "/workspace", "cppboostservicelib-build:local", "/bin/bash",
-             "-lc", boost_script],
-            BOOST,
-        ),
-        execute(
             "coro-cpp-structured-logging",
             ["docker", "run", "--rm", *coro_source_mount,
              "-v", f"{CORO}:/workspace",
              *cpp_source_cache.build_volume_mount_args(
                  CORO, "cppcoroservicelib-logging"
              ),
-             "-w", "/workspace", "cppboostservicelib-build:local", "/bin/bash",
+             "-w", "/workspace", "cppcoroservicelib-build:local", "/bin/bash",
              "-lc", coro_script],
             CORO,
         ),
@@ -291,7 +260,7 @@ def main() -> int:
     ]
     summary = {
         "status": "pass",
-        "languages": ["go", "cpp", "cppboost", "cppcoro", "python", "rust", "typescript"],
+        "languages": ["go", "cpp", "cppcoro", "python", "rust", "typescript"],
         "contract": {
             "levels": ["debug", "info", "warn", "error"],
             "typed_fields": ["string", "int64", "float64", "bool", "error"],
@@ -312,7 +281,7 @@ def main() -> int:
     ARTIFACT.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     print(
         "Structured logging conformance passed: "
-        "go, cpp, cppboost, cppcoro, python, rust, typescript"
+        "go, cpp, cppcoro, python, rust, typescript"
     )
     return 0
 

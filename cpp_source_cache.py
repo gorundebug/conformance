@@ -1,4 +1,4 @@
-"""Shared, versioned Boost C++ dependency source cache for conformance builds."""
+"""Shared, versioned C++ dependency source cache for conformance builds."""
 
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ def invalidate() -> None:
         "cppboostexample_cpp-cmake-build",
         "cppcoroexample_cpp-cmake-build",
         "cppcoroservicelib-",
-        "cppboostservicelib-",
+        "cppcoroservicelib-",
         "servicelib-",
     )
     volumes = [
@@ -131,7 +131,7 @@ def source_mount(framework: Path) -> str:
     return f"{source_dir(framework)}:{CONTAINER_SOURCE_DIR}:ro"
 
 
-def build_volume_name(framework: Path, project: str = "cppboostexample") -> str:
+def build_volume_name(framework: Path, project: str = "cppcoroexample") -> str:
     return (
         f"{project}_cpp-cmake-build-{BUILD_CACHE_LAYOUT_VERSION}-"
         f"{cache_name(framework)}"
@@ -140,7 +140,7 @@ def build_volume_name(framework: Path, project: str = "cppboostexample") -> str:
 
 def build_volume_mount_args(
     framework: Path,
-    project: str = "cppboostexample",
+    project: str = "cppcoroexample",
     *,
     readonly: bool = False,
 ) -> list[str]:
@@ -166,11 +166,11 @@ def volume_mount_args(name: str, *, readonly: bool = False) -> list[str]:
 
 def configure_environment(
     environment: dict[str, str], framework: Path,
-    project: str = "cppboostexample",
+    project: str = "cppcoroexample",
 ) -> Path:
     sources = ensure(framework)
-    environment["CPPBOOST_SOURCE_CACHE_DIR"] = str(sources)
-    environment["CPPBOOST_BUILD_VOLUME"] = build_volume_name(
+    environment["CPPCORO_SOURCE_CACHE_DIR"] = str(sources)
+    environment["CPPCORO_BUILD_VOLUME"] = build_volume_name(
         framework, project
     )
     # Runtime-image builds consume gRPC and asio-grpc through BuildKit named
@@ -234,12 +234,12 @@ def prepare_command(framework: Path) -> list[str]:
         f"cmake -S . -B {container_cache} -G Ninja "
         "-DCMAKE_BUILD_TYPE=Release "
         "-DFETCHCONTENT_UPDATES_DISCONNECTED=ON "
-        "-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=FETCH "
-        "-DCPPBOOSTSERVICELIB_ENABLE_GRPC=ON "
-        "-DCPPBOOSTSERVICELIB_ENABLE_KAFKA=ON "
-        "-DCPPBOOSTSERVICELIB_ENABLE_OTEL=ON "
-        "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
-        "-DCPPBOOSTSERVICELIB_GITHUB_ARCHIVE_BASE="
+        "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
+        "-DCPPCOROSERVICELIB_ENABLE_GRPC=ON "
+        "-DCPPCOROSERVICELIB_ENABLE_KAFKA=ON "
+        "-DCPPCOROSERVICELIB_ENABLE_OTEL=ON "
+        "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
+        "-DCPPCOROSERVICELIB_GITHUB_ARCHIVE_BASE="
         '"${DEPENDENCY_GITHUB_RAW_URL:-https://github.com}"'
     )
     # Every source, including opentelemetry-proto, is populated during
@@ -275,7 +275,7 @@ def prepare_command(framework: Path) -> list[str]:
             command.extend(["--add-host", add_host])
         command.extend(["--env", f"DEPENDENCY_GITHUB_RAW_URL={github_raw_url}"])
     command.extend([
-        "cppboostservicelib-build:local", "/bin/bash", "-lc", run,
+        "cppcoroservicelib-build:local", "/bin/bash", "-lc", run,
     ])
     return command
 
@@ -302,7 +302,7 @@ def ensure(framework: Path) -> Path:
             [
                 "docker", "build", *build_proxy_args,
                 "-f", "Dockerfile.cmake", "-t",
-                "cppboostservicelib-build:local", ".",
+                "cppcoroservicelib-build:local", ".",
             ],
             cwd=framework,
             env=os.environ.copy(),

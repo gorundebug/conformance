@@ -26,7 +26,7 @@ SERVICEGEN = ROOT / "servicegen"
 VARIANTS = {
     "go": "goexample",
     "cpp": "cppexample",
-    "cpp-boost": "cppboostexample",
+    "cpp-coro": "cppcoroexample",
     "python": "pyexample",
     "rust": "rustexample",
     "typescript": "tsexample",
@@ -35,7 +35,7 @@ VARIANTS = {
 FRAMEWORKS = (
     "servicelib",
     "cppservicelib",
-    "cppboostservicelib",
+    "cppcoroservicelib",
     "pyservicelib",
     "rustservicelib",
     "tsservicelib",
@@ -145,7 +145,7 @@ def prepare_workspace(
         repository = VARIANTS[language]
         source = ROOT / repository
         destination = workspace / repository
-        archive = archive_dir / f"{language.replace('cpp-boost', 'cppboost')}.zip"
+        archive = archive_dir / f"{language.replace('cpp-coro', 'cppcoro')}.zip"
         if not source.is_dir():
             raise RuntimeError(f"missing canonical example: {source}")
         if not archive.is_file() or archive.stat().st_size == 0:

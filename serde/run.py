@@ -23,7 +23,7 @@ CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "serde" / "summary.json"
 CANONICAL = ROOT / "cppservicelib"
-BOOST = ROOT / "cppboostservicelib"
+CORO = ROOT / "cppcoroservicelib"
 PYTHON = ROOT / "pyservicelib"
 PYTHON_EXAMPLE = ROOT / "pyexample"
 RUST = ROOT / "rustservicelib"
@@ -42,8 +42,8 @@ def repository_mounts() -> list[str]:
     ]
 
 
-def boost_source_mount_args() -> list[str]:
-    return ["-v", cpp_source_cache.source_mount(BOOST)]
+def coro_source_mount_args() -> list[str]:
+    return ["-v", cpp_source_cache.source_mount(CORO)]
 
 CASES = (
     "PrimitiveWireFormatMatchesGo",
@@ -277,9 +277,9 @@ def json_probe(
 
 def verify_sources() -> dict[str, object]:
     canonical_test = CANONICAL / "tests" / "serde_test.cpp"
-    boost_test = BOOST / "tests" / "serde_test.cpp"
+    coro_test = CORO / "tests" / "serde_test.cpp"
     missing: dict[str, list[str]] = {}
-    for path in (canonical_test, boost_test):
+    for path in (canonical_test, coro_test):
         source = path.read_text()
         absent = [case for case in CASES if case not in source]
         if absent:
@@ -294,10 +294,10 @@ def verify_sources() -> dict[str, object]:
     unequal = [
         str(path)
         for path in shared_headers
-        if (CANONICAL / path).read_bytes() != (BOOST / path).read_bytes()
+        if (CANONICAL / path).read_bytes() != (CORO / path).read_bytes()
     ]
     if unequal:
-        raise RuntimeError(f"canonical/Boost serde headers differ: {unequal}")
+        raise RuntimeError(f"canonical/Coro serde headers differ: {unequal}")
     typescript_cases = {
         TYPESCRIPT / "test/serde.test.ts": (
             "primitive serde is byte-compatible with the Go wire format",
@@ -331,7 +331,7 @@ def verify_sources() -> dict[str, object]:
         raise RuntimeError(f"TypeScript serde source matrix failed: {typescript_missing}")
     return {
         "required_case_markers_per_cpp_runtime": len(CASES),
-        "canonical_boost_headers_byte_identical": True,
+        "canonical_coro_headers_byte_identical": True,
         "headers": [str(path) for path in shared_headers],
         "typescript_required_case_markers": sum(
             len(cases) for cases in typescript_cases.values()
@@ -339,26 +339,26 @@ def verify_sources() -> dict[str, object]:
     }
 
 
-def boost_serde_script(skip_build: bool) -> str:
+def coro_serde_script(skip_build: bool) -> str:
     if skip_build:
         return (
             "ctest --test-dir build/debug --output-on-failure "
-            "-R cppboostservicelib_serde_test"
+            "-R cppcoroservicelib_serde_test"
         )
-    source_args = cpp_source_cache.cmake_args(BOOST)
+    source_args = cpp_source_cache.cmake_args(CORO)
     return (
         "cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug "
-        f"-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON {source_args}&& "
+        f"-DCPPCOROSERVICELIB_BUILD_TESTS=ON {source_args}&& "
         "cmake --build build/debug --parallel --target "
-        "cppboostservicelib_serde_test && "
+        "cppcoroservicelib_serde_test && "
         "ctest --test-dir build/debug --output-on-failure "
-        "-R cppboostservicelib_serde_test && "
+        "-R cppcoroservicelib_serde_test && "
         "cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release "
-        f"-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON {source_args}&& "
+        f"-DCPPCOROSERVICELIB_BUILD_TESTS=ON {source_args}&& "
         "cmake --build build/release --parallel --target "
-        "cppboostservicelib_serde_test && "
+        "cppcoroservicelib_serde_test && "
         "ctest --test-dir build/release --output-on-failure "
-        "-R cppboostservicelib_serde_test"
+        "-R cppcoroservicelib_serde_test"
     )
 
 
@@ -367,7 +367,7 @@ def main() -> int:
     parser.add_argument("--skip-build", action="store_true")
     args = parser.parse_args()
 
-    cpp_source_cache.ensure(BOOST)
+    cpp_source_cache.ensure(CORO)
     source_matrix = verify_sources()
     canonical_script = (
         "/workspace/build/servicelib_serde_test"
@@ -389,29 +389,29 @@ def main() -> int:
         ["--rm", "test", "/bin/bash", "-lc", canonical_script]
     )
 
-    boost_script = boost_serde_script(args.skip_build)
-    boost_command = [
+    coro_script = coro_serde_script(args.skip_build)
+    coro_command = [
         "docker",
         "run",
         "--rm",
-        *boost_source_mount_args(),
+        *coro_source_mount_args(),
         "-v",
-        f"{BOOST}:/workspace",
+        f"{CORO}:/workspace",
         *cpp_source_cache.build_volume_mount_args(
-            BOOST, "cppboostservicelib-serde"
+            CORO, "cppcoroservicelib-serde"
         ),
         "-w",
         "/workspace",
-        "cppboostservicelib-build:local",
+        "cppcoroservicelib-build:local",
         "/bin/bash",
         "-lc",
-        boost_script,
+        coro_script,
     ]
 
     canonical_env = dependency_environment.from_framework(CANONICAL)
     runs = [
         execute("canonical-cpp-serde", canonical_command, CANONICAL, canonical_env),
-        execute("boost-cpp-serde", boost_command, BOOST),
+        execute("coro-cpp-serde", coro_command, CORO),
     ]
     if not args.skip_build:
         runs.append(
@@ -495,7 +495,7 @@ def main() -> int:
     ]
     for runtime_name, include_dir in (
         ("canonical-cpp", "/repo/cppservicelib/include"),
-        ("boost-cpp", "/repo/cppboostservicelib/include"),
+        ("coro-cpp", "/repo/cppcoroservicelib/include"),
     ):
         binary = f"/tmp/{runtime_name}-serde-probe"
         fixtures, probe_run = fixture_probe(
@@ -505,7 +505,7 @@ def main() -> int:
                 "run",
                 "--rm",
                 *repository_mounts(),
-                "cppboostservicelib-build:local",
+                "cppcoroservicelib-build:local",
                 "/bin/bash",
                 "-lc",
                 f"c++ -std=c++20 -I{include_dir} /repo/conformance/serde/cpp_probe.cpp -o {binary} && {binary}",
@@ -536,35 +536,35 @@ def main() -> int:
         "cmake --build --preset docker --parallel --target "
         "servicelib_custom_serde_probe && /workspace/build/servicelib_custom_serde_probe",
     ]
-    boost_custom_command = [
+    coro_custom_command = [
         "docker",
         "run",
         "--rm",
         *repository_mounts(),
-        "cppboostservicelib-build:local",
+        "cppcoroservicelib-build:local",
         "/bin/bash",
         "-lc",
-        "c++ -std=c++20 -DSERVICELIB_CUSTOM_SERDE_BOOST=1 "
-        "-I/repo/cppboostservicelib/include -I/repo/cppboostexample "
-        "-I/repo/cppboostexample/model_cpp/include "
+        "c++ -std=c++20 -DSERVICELIB_CUSTOM_SERDE_CORO=1 "
+        "-I/repo/cppcoroservicelib/include -I/repo/cppcoroexample "
+        "-I/repo/cppcoroexample/model_cppcoro/include "
         "/repo/conformance/serde/custom_cpp_probe.cpp -lboost_json "
-        "-o /tmp/custom-serde-boost && /tmp/custom-serde-boost",
+        "-o /tmp/custom-serde-coro && /tmp/custom-serde-coro",
     ]
     canonical_custom, canonical_custom_run = json_probe(
         "canonical-cpp-custom-json-serde", canonical_custom_command, CANONICAL,
         canonical_env,
     )
-    boost_custom, boost_custom_run = json_probe(
-        "boost-cpp-custom-json-serde", boost_custom_command, BOOST
+    coro_custom, coro_custom_run = json_probe(
+        "coro-cpp-custom-json-serde", coro_custom_command, CORO
     )
-    if boost_custom != canonical_custom:
+    if coro_custom != canonical_custom:
         changed = sorted(
             key
-            for key in set(canonical_custom) | set(boost_custom)
-            if canonical_custom.get(key) != boost_custom.get(key)
+            for key in set(canonical_custom) | set(coro_custom)
+            if canonical_custom.get(key) != coro_custom.get(key)
         )
         raise RuntimeError(
-            f"canonical/Boost custom JSON serde differs field-for-field: {changed}"
+            f"canonical/Coro custom JSON serde differs field-for-field: {changed}"
         )
 
     go_protobuf_setup_run: dict[str, object] | None = None
@@ -629,17 +629,17 @@ def main() -> int:
         env=canonical_env,
     )
 
-    boost_protobuf_compose = [
-        "env", f"SERVICELIB_SOURCE_CONTEXT={BOOST}",
+    coro_protobuf_compose = [
+        "env", f"SERVICELIB_SOURCE_CONTEXT={CORO}",
         "docker", "compose",
         "-f", "docker-compose.cmake.generated.yml",
-        "-f", str(CONFORMANCE_DIR / "serde/compose.boost.yml"),
+        "-f", str(CONFORMANCE_DIR / "serde/compose.coro.yml"),
         "run",
     ]
     if not args.skip_build:
-        boost_protobuf_compose.append("--build")
-    boost_protobuf_compose.extend([
-        "--rm", *boost_source_mount_args(), *repository_mounts(), "cpp-build",
+        coro_protobuf_compose.append("--build")
+    coro_protobuf_compose.extend([
+        "--rm", *coro_source_mount_args(), *repository_mounts(), "cpp-build",
         "/bin/bash", "-lc",
         "./scripts/conan-install.generated.sh Release /workspace/build/conan-release && "
         "conan_toolchain=$(cat /workspace/build/conan-release/toolchain.path) && "
@@ -650,14 +650,14 @@ def main() -> int:
         "servicelib_protobuf_wire_probe && "
         "/workspace/build/servicelib_protobuf_wire_probe",
     ])
-    boost_protobuf, boost_protobuf_run = fixture_probe(
-        "boost-cpp-generated-protobuf-wire", boost_protobuf_compose,
-        ROOT / "cppboostexample",
+    coro_protobuf, coro_protobuf_run = fixture_probe(
+        "coro-cpp-generated-protobuf-wire", coro_protobuf_compose,
+        ROOT / "cppcoroexample",
         fixture_prefix="protobuf_",
     )
     for runtime_name, fixtures in (
         ("canonical-cpp", canonical_protobuf),
-        ("boost-cpp", boost_protobuf),
+        ("coro-cpp", coro_protobuf),
     ):
         if fixtures != go_protobuf:
             missing = sorted(set(go_protobuf) - set(fixtures))
@@ -674,16 +674,16 @@ def main() -> int:
     summary = {
         "status": "pass",
         "languages": [
-            "go", "canonical-cpp", "cppboost", "python", "rust", "typescript",
+            "go", "canonical-cpp", "cppcoro", "python", "rust", "typescript",
         ],
         "source_matrix": source_matrix,
         "runs": runs,
         "wire_fixture_runs": probe_runs,
         "wire_fixtures": go_fixtures,
         "wire_fixture_languages": [
-            "go", "canonical-cpp", "boost-cpp", "python", "rust", "typescript",
+            "go", "canonical-cpp", "coro-cpp", "python", "rust", "typescript",
         ],
-        "custom_json_serde_runs": [canonical_custom_run, boost_custom_run],
+        "custom_json_serde_runs": [canonical_custom_run, coro_custom_run],
         "custom_json_values": canonical_custom,
         "custom_json_comparison": "field-for-field",
         "custom_json_generated_factory": "MakeDefaultSerde<T>",
@@ -695,10 +695,10 @@ def main() -> int:
             *([go_protobuf_setup_run] if go_protobuf_setup_run else []),
             go_protobuf_run,
             canonical_protobuf_run,
-            boost_protobuf_run,
+            coro_protobuf_run,
         ],
         "generated_protobuf_languages": [
-            "go", "canonical-cpp", "boost-cpp",
+            "go", "canonical-cpp", "coro-cpp",
         ],
         "generated_protobuf_fixtures": go_protobuf,
         "generated_protobuf_comparison": "deterministic-byte-for-byte",
@@ -708,7 +708,7 @@ def main() -> int:
             "generated JSON factory/type-erasure/values and generated protobuf "
             "wire contract"
         ),
-        "boost_build_profiles": ["debug"] if args.skip_build else ["debug", "release"],
+        "coro_build_profiles": ["debug"] if args.skip_build else ["debug", "release"],
     }
     ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
     ARTIFACT.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")

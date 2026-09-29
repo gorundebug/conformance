@@ -21,12 +21,10 @@ import cpp_source_cache
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 ARTIFACT_DIR = CONFORMANCE_DIR / ".artifacts" / "dependencies"
 SOURCE_ROOTS = (
-    ROOT / "cppboostservicelib",
-    ROOT / "cppboostexample",
     ROOT / "cppboostnativeexample",
     ROOT / "cppcoroservicelib",
     ROOT / "cppcoroexample",
-    ROOT / "servicegen" / "internal" / "codegenerator" / "templates" / "cppboost",
+    ROOT / "servicegen" / "internal" / "codegenerator" / "templates" / "cppcoro",
 )
 BUILD_FILENAMES = {"CMakeLists.txt", "Dockerfile", "Dockerfile.cmake"}
 BUILD_SUFFIXES = {".cmake", ".sh", ".yml", ".yaml", ".tmpl"}
@@ -40,7 +38,7 @@ BINARIES = {
     "orderservice": "/workspace/build/orderservice/example_order_service",
     "inventoryservice": "/workspace/build/inventoryservice/example_inventory_service",
 }
-CPPBOOST_BUILD_IMAGE = "cppboostexample-cpp-build:local"
+CORO_BUILD_IMAGE = "cppcoroexample-cpp-build:local"
 NATIVE_BINARIES = {
     "orderservice-native": (
         f"cppboostnativeexample-orderservice:{os.environ.get('DOCKER_IMAGE_TAG', 'local')}",
@@ -52,7 +50,7 @@ NATIVE_BINARIES = {
     ),
 }
 
-CPPBOOST_SNAPSHOT = {
+CORO_SNAPSHOT = {
     "boost": "BOOST",
     "grpc": "GRPC",
     "protobuf": "PROTOBUF",
@@ -72,7 +70,7 @@ SHARED_NATIVE_CONAN_PACKAGES = (
         },
     ),
     (
-        "cppboostservicelib",
+        "cppcoroservicelib",
         "cppboostnativeexample",
         {"grpc": "@gorundebug/boost#"},
     ),
@@ -173,28 +171,28 @@ def dependency_snapshot_errors() -> list[str]:
         ROOT / "servicegen" / "internal" / "codegenerator" / "dependencies.yaml"
     )
     errors: list[str] = []
-    boost_snapshot = runpy.run_path(
-        str(ROOT / "cppboostservicelib" / "conan" / "dependencies_generated.py")
+    coro_snapshot = runpy.run_path(
+        str(ROOT / "cppcoroservicelib" / "conan" / "dependencies_generated.py")
     )
-    expected_boost_dependencies = conan_dependencies_for_scope(manifest, "cppboost")
-    actual_boost_dependencies = set(boost_snapshot["VERSIONS"]) - {"conan"}
-    if actual_boost_dependencies != expected_boost_dependencies:
+    expected_coro_dependencies = conan_dependencies_for_scope(manifest, "cppcoro")
+    actual_coro_dependencies = set(coro_snapshot["VERSIONS"]) - {"conan"}
+    if actual_coro_dependencies != expected_coro_dependencies:
         errors.append(
-            "cppboostservicelib generated Conan dependency set differs: "
-            f"actual={sorted(actual_boost_dependencies)!r}, "
-            f"expected={sorted(expected_boost_dependencies)!r}"
+            "cppcoroservicelib generated Conan dependency set differs: "
+            f"actual={sorted(actual_coro_dependencies)!r}, "
+            f"expected={sorted(expected_coro_dependencies)!r}"
         )
-    for dependency in CPPBOOST_SNAPSHOT:
+    for dependency in CORO_SNAPSHOT:
         expected = manifest.get(dependency, {})
         for field, generated_map in (
             ("conanVersion", "VERSIONS"),
             ("repository", "REPOSITORIES"),
             ("revision", "REVISIONS"),
         ):
-            actual = boost_snapshot[generated_map].get(dependency)
+            actual = coro_snapshot[generated_map].get(dependency)
             if actual != expected.get(field):
                 errors.append(
-                    f"cppboostservicelib {generated_map}[{dependency!r}]={actual!r} "
+                    f"cppcoroservicelib {generated_map}[{dependency!r}]={actual!r} "
                     "differs from dependencies.yaml "
                     f"{dependency}.{field}={expected.get(field)!r}"
                 )
@@ -319,17 +317,17 @@ def shared_native_conan_contract_errors() -> list[str]:
 
 
 def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
-    example = ROOT / "cppboostexample"
+    example = ROOT / "cppcoroexample"
     native_example = ROOT / "cppboostnativeexample"
     framework_env = os.environ.copy()
     framework_env.setdefault(
-        "CPPBOOST_BUILD_VOLUME",
-        cpp_source_cache.build_volume_name(ROOT / "cppboostservicelib"),
+        "CPPCORO_BUILD_VOLUME",
+        cpp_source_cache.build_volume_name(ROOT / "cppcoroservicelib"),
     )
     if not skip_build:
-        framework_env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
+        framework_env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
         source_cache = cpp_source_cache.configure_environment(
-            framework_env, ROOT / "cppboostservicelib"
+            framework_env, ROOT / "cppcoroservicelib"
         )
         # Keep the subsequent Compose inspection on the exact build volume
         # selected by scripts/build.generated.sh. Environment exported inside
@@ -352,12 +350,12 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
         )
 
     results: dict[str, dict[str, object]] = {}
-    build_volume = framework_env["CPPBOOST_BUILD_VOLUME"]
+    build_volume = framework_env["CPPCORO_BUILD_VOLUME"]
     compose_source = (example / "docker-compose.cmake.generated.yml").read_text()
-    if f"image: {CPPBOOST_BUILD_IMAGE}" not in compose_source:
+    if f"image: {CORO_BUILD_IMAGE}" not in compose_source:
         raise RuntimeError(
             "generated C++ build image identity differs from the dependency "
-            f"inspector: expected {CPPBOOST_BUILD_IMAGE}"
+            f"inspector: expected {CORO_BUILD_IMAGE}"
         )
     for service, binary in BINARIES.items():
         output = command(
@@ -370,7 +368,7 @@ def linked_dependencies(skip_build: bool) -> dict[str, dict[str, object]]:
                 *cpp_source_cache.volume_mount_args(
                     build_volume, readonly=True
                 ),
-                CPPBOOST_BUILD_IMAGE,
+                CORO_BUILD_IMAGE,
                 binary,
             ],
             cwd=example,

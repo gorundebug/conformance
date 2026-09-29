@@ -147,7 +147,7 @@ python3 run.py --language go --language go-native --cores 4 --vus 64
 ```
 
 The equivalent pairs are `cpp`/`cpp-native`,
-`cpp-boost`/`cpp-boost-native`, `python`/`python-native` and
+`cpp-coro`/`cpp-boost-native`, `python`/`python-native` and
 `rust`/`rust-native`. C++ native uses userver directly, preserving the runtime
 under the generated ServiceLib implementation; Python native uses aiohttp and
 grpc.aio; Rust native uses Axum and Tonic. Boost native uses Beast and
@@ -217,7 +217,7 @@ make capacity \
 ```
 
 All implementations run sequentially when `CAPACITY_LANGUAGES` is omitted.
-Valid names are `go`, `go-native`, `cpp`, `cpp-native`, `cpp-boost`,
+Valid names are `go`, `go-native`, `cpp`, `cpp-native`, `cpp-coro`,
 `cpp-boost-native`, `python`, `python-native`, `rust`, `rust-native`,
 `typescript`, and `typescript-native`.
 

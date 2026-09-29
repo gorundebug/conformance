@@ -20,9 +20,9 @@ PROFILING_ROOT = CONFORMANCE_DIR / "profiling"
 PROFILING_RUNNER = PROFILING_ROOT / "examples" / "run.py"
 PROFILE_ARTIFACTS = PROFILING_ROOT / "examples" / ".artifacts"
 ARTIFACTS = CONFORMANCE_DIR / ".artifacts" / "profiling"
-LANGUAGES = ("cppboost", "cppboost-native", "cppcoro")
+LANGUAGES = ("cppboost-native", "cppcoro")
 ALL_LANGUAGES = (
-    "go", "go-native", "cpp", "cpp-native", "cppboost", "cppboost-native", "cppcoro",
+    "go", "go-native", "cpp", "cpp-native", "cppboost-native", "cppcoro",
     "python", "python-native", "rust", "rust-native",
     "typescript", "typescript-native",
 )
@@ -35,7 +35,7 @@ RUNTIME_METRICS = {
 
 
 def prepare_cpp_source_contexts() -> tuple[Path, Path]:
-    framework = ROOT / "cppboostservicelib"
+    framework = ROOT / "cppcoroservicelib"
     cpp_source_cache.ensure(framework)
     source_cache = cpp_source_cache.source_dir(framework)
     grpc_source = source_cache / "grpc-src"
@@ -477,7 +477,7 @@ def validate_artifacts(args: argparse.Namespace) -> dict[str, Any]:
                     "offcpu_load": str(offcpu_load),
                 }
             )
-            if language in {"cppboost", "cppcoro"}:
+            if language in {"cppcoro"}:
                 metrics = PROFILE_ARTIFACTS / f"{prefix}.runtime-metrics.json"
                 service_result["runtime_metrics"] = validate_runtime_metrics(metrics)
                 service_result["artifacts"]["runtime_metrics"] = str(metrics)
@@ -521,10 +521,10 @@ def validate_cpu_matrix(args: argparse.Namespace) -> dict[str, Any]:
 def compare_framework_native(results: dict[str, Any]) -> dict[str, Any]:
     comparison: dict[str, Any] = {}
     for service in SERVICES:
-        framework = results["cppboost"][service]["load"]
+        framework = results["cppcoro"][service]["load"]
         native = results["cppboost-native"][service]["load"]
         framework_rps = finite_number(
-            framework["requests_per_second"], f"cppboost.{service}.rps",
+            framework["requests_per_second"], f"cppcoro.{service}.rps",
             minimum=sys.float_info.min,
         )
         native_rps = finite_number(
@@ -535,7 +535,7 @@ def compare_framework_native(results: dict[str, Any]) -> dict[str, Any]:
         for percentile in ("p50", "p95", "p99"):
             framework_latency = finite_number(
                 framework["latency_ms"][percentile],
-                f"cppboost.{service}.{percentile}",
+                f"cppcoro.{service}.{percentile}",
                 minimum=sys.float_info.min,
             )
             native_latency = finite_number(
@@ -554,7 +554,7 @@ def compare_framework_native(results: dict[str, Any]) -> dict[str, Any]:
             "latency_ratios": latency_ratios,
             "allocation_ratios": {
                 field: (
-                    results["cppboost"][service]["allocation"][field]
+                    results["cppcoro"][service]["allocation"][field]
                     / results["cppboost-native"][service]["allocation"][field]
                 )
                 for field in (

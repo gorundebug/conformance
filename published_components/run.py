@@ -79,7 +79,6 @@ class RepositorySpec:
 SERVICE_REPOSITORIES: dict[str, str] = {
     "go": "{service}",
     "cpp": "cppexample-{service}",
-    "cppboost": "cppboostexample-{service}",
     "cppcoro": "cppcoroexample-{service}",
     "python": "pyexample-{service}",
     "rust": "rustexample-{service}",
@@ -88,7 +87,6 @@ SERVICE_REPOSITORIES: dict[str, str] = {
 
 SERVICE_PACKAGE_SCRIPTS: dict[str, str] = {
     "cpp": "scripts/package-cpp-service.generated.sh",
-    "cppboost": "scripts/package-cpp-service.generated.sh",
     "cppcoro": "scripts/package-cpp-service.generated.sh",
     "python": "scripts/package-python-service.generated.sh",
     "rust": "scripts/package-rust-service.generated.sh",
@@ -101,7 +99,7 @@ def service_package_script(language_name: str, service: str) -> str | None:
     # Temporal SDK. Its repository is already autonomous and does not use the
     # native language packager.
     if service == "automationservice" and language_name in {
-        "cpp", "cppboost", "cppcoro", "rust",
+        "cpp", "cppcoro", "rust",
     }:
         return None
     return SERVICE_PACKAGE_SCRIPTS.get(language_name)
@@ -609,11 +607,10 @@ def published_context_arguments(
                 project_repository, "order_service_api"
             ),
         })
-    elif language_name in {"cppboost", "cppcoro"}:
+    elif language_name == "cppcoro":
         contexts.update({
             "SERVICELIB_SOURCE_CONTEXT": source(
-                "cppcoroservicelib" if language_name == "cppcoro"
-                else "cppboostservicelib"
+                "cppcoroservicelib"
             ),
             "MODULE_MODEL_CPP_SOURCE_CONTEXT": source(
                 project_repository, "model_cpp"
@@ -863,7 +860,7 @@ def build_modules(
     cpp_contexts: dict[str, standalone.CppContext] = {}
     passed: list[str] = []
     for language_name in languages:
-        if language_name in {"cpp", "cppboost", "cppcoro"}:
+        if language_name in {"cpp", "cppcoro"}:
             cpp_contexts[language_name] = standalone.ensure_cpp_image(
                 root, language_name
             )

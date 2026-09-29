@@ -46,7 +46,6 @@ class Language:
 LANGUAGES = (
     Language("go", ROOT / "goexample"),
     Language("cpp", ROOT / "cppexample"),
-    Language("cppboost", ROOT / "cppboostexample"),
     Language("cppcoro", ROOT / "cppcoroexample"),
     Language("python", ROOT / "pyexample"),
     Language("rust", ROOT / "rustexample"),
@@ -77,10 +76,9 @@ def language_env(language: Language) -> dict[str, str]:
         # Temporal is not supported by the C++ runtime yet, so the generated
         # mixed-language example contains a Go automation service.
         env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
-    elif language.name in {"cppboost", "cppcoro"}:
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / ("cppcoroservicelib" if language.name == "cppcoro" else "cppboostservicelib"))
-        if language.name == "cppcoro":
-            env["USE_LOCAL_MODULES"] = "1"
+    elif language.name in {"cppcoro"}:
+        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
+        env["USE_LOCAL_MODULES"] = "1"
         env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
         cpp_source_cache.configure_environment(
             env, Path(env["SERVICELIB_SOURCE_CONTEXT"])
@@ -123,7 +121,7 @@ def build(language: Language, env: dict[str, str]) -> None:
             env=env,
             retry_network=True,
         )
-    elif language.name in {"cpp", "cppboost", "cppcoro"}:
+    elif language.name in {"cpp", "cppcoro"}:
         # The Kafka suite runs with the generated runtime overlay.  Building
         # only the development CMake volume here leaves the independent
         # runtime images stale and can silently execute binaries from an

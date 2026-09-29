@@ -59,7 +59,7 @@ durable-quick: ## Reuse images for a short Temporal/DurableCall smoke benchmark
 http-transport: ## Compare only HTTP accept/read/route/write; no serde, graph or gRPC
 	$(PYTHON) run.py --cores $(CORES) --loadgen-cores $(LOADGEN_CORES) --vus $(VUS) \
 		--duration $(DURATION) --warmup $(WARMUP) --runs $(RUNS) \
-		--language cpp-boost --language cpp-boost-native --max-map-count 0 \
+		--language cpp-coro --language cpp-boost-native --max-map-count 0 \
 		--scenario http_transport_only --method GET --expected-status 404 \
 		--target http://orderservice:9091/__servicelib_transport_probe \
 		--result-prefix http-transport
@@ -67,7 +67,7 @@ http-transport: ## Compare only HTTP accept/read/route/write; no serde, graph or
 http-transport-quick: ## Reuse images for a short transport-only comparison
 	$(PYTHON) run.py --skip-build --cores $(CORES) --loadgen-cores $(LOADGEN_CORES) --vus $(VUS) \
 		--duration 5s --warmup 2s --runs 1 \
-		--language cpp-boost --language cpp-boost-native --max-map-count 0 \
+		--language cpp-coro --language cpp-boost-native --max-map-count 0 \
 		--scenario http_transport_only --method GET --expected-status 404 \
 		--target http://orderservice:9091/__servicelib_transport_probe \
 		--result-prefix http-transport
@@ -75,7 +75,7 @@ http-transport-quick: ## Reuse images for a short transport-only comparison
 http-json-reject: ## Add generated/native HTTP handler and JSON rejection; no graph or gRPC
 	$(PYTHON) run.py --cores $(CORES) --loadgen-cores $(LOADGEN_CORES) --vus $(VUS) \
 		--duration $(DURATION) --warmup $(WARMUP) --runs $(RUNS) \
-		--language cpp-boost --language cpp-boost-native --max-map-count 0 \
+		--language cpp-coro --language cpp-boost-native --max-map-count 0 \
 		--scenario http_json_reject --method POST --payload-mode invalid-json \
 		--expected-status 400 --target http://orderservice:9091/v1/processorder \
 		--result-prefix http-json-reject
@@ -83,7 +83,7 @@ http-json-reject: ## Add generated/native HTTP handler and JSON rejection; no gr
 http-json-reject-quick: ## Reuse images for a short JSON-rejection comparison
 	$(PYTHON) run.py --skip-build --cores $(CORES) --loadgen-cores $(LOADGEN_CORES) --vus $(VUS) \
 		--duration 5s --warmup 2s --runs 1 \
-		--language cpp-boost --language cpp-boost-native --max-map-count 0 \
+		--language cpp-coro --language cpp-boost-native --max-map-count 0 \
 		--scenario http_json_reject --method POST --payload-mode invalid-json \
 		--expected-status 400 --target http://orderservice:9091/v1/processorder \
 		--result-prefix http-json-reject

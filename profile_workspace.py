@@ -21,7 +21,7 @@ ARTIFACTS = CONFORMANCE / ".artifacts"
 VARIANTS = {
     "go": "goexample",
     "cpp": "cppexample",
-    "cppboost": "cppboostexample",
+    "cppcoro": "cppcoroexample",
     "python": "pyexample",
     "rust": "rustexample",
     "typescript": "tsexample",
@@ -29,7 +29,7 @@ VARIANTS = {
 FRAMEWORK_REPOSITORIES = {
     "servicelib",
     "cppservicelib",
-    "cppboostservicelib",
+    "cppcoroservicelib",
     "pyservicelib",
     "rustservicelib",
     "tsservicelib",
@@ -256,11 +256,6 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
     (profile_artifacts / "generation.log").write_text(
         generate_archives(source_root, archive_dir, profile)
     )
-    base_archives = archive_dir / "function-call"
-    base_archives.mkdir()
-    (profile_artifacts / "generation-function-call.log").write_text(
-        generate_archives(source_root, base_archives, "function-call")
-    )
 
     generated: dict[str, object] = {}
     generated_repositories = set(VARIANTS.values())
@@ -282,7 +277,7 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
         generated[language] = verify_current_graph(destination)
         initialize_git_snapshot(destination, profile, release_tags)
         # Every canonical language can still own Go-generated protobuf/OpenAPI
-        # modules.  Consequently cppexample, cppboostexample, rustexample and
+        # modules.  Consequently cppexample, cppcoroexample, rustexample and
         # the other mixed-language workspaces use the same host-side tools as
         # goexample.  Keep each one's ignored cache across disposable profile
         # runs instead of downloading protoc/buf again for every retry.
@@ -294,36 +289,13 @@ def prepare(source_root: Path, workspace: Path, profile: str) -> dict[str, objec
     for source in source_root.iterdir():
         if (
             source.name in generated_repositories
+            or source.name in {"cppboostexample", "cppboostservicelib"}
             or source.name == "conformance"
             or source.name.startswith(".")
         ):
             continue
         destination = workspace / source.name
         if destination.exists() or destination.is_symlink():
-            continue
-        if source.name in {"cppcoroexample", "cppcoroservicelib"}:
-            # The coroutine example is published as an adapted source project.
-            # Preserve the coroutine implementation while applying the
-            # profile-owned graph/config delta from generated declarations.
-            if source.name == "cppcoroexample":
-                release_tags = release_tags_at_head(source)
-                copy_example(source, destination)
-                run(
-                    ["python3", str(source_root / "servicegen/scripts/cppcoro_profile.py"),
-                     "--base", str(base_archives / "cppboost.zip"),
-                     "--selected", str(archive_dir / "cppboost.zip"),
-                     "--project", str(destination)],
-                    cwd=source_root / "servicegen",
-                )
-                generated["cppcoro"] = verify_current_graph(destination)
-                initialize_git_snapshot(destination, profile, release_tags)
-                attach_persistent_tools(source, destination)
-                print(f"+ copy adapted cppcoroexample ({profile})", flush=True)
-            else:
-                release_tags = release_tags_at_head(source)
-                copy_framework(source, destination)
-                initialize_git_snapshot(destination, profile, release_tags)
-                attach_framework_caches(source, destination)
             continue
         if source.name in FRAMEWORK_REPOSITORIES:
             release_tags = release_tags_at_head(source)

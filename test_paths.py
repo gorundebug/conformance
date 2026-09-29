@@ -24,9 +24,7 @@ class DependencyRootTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source_root = root / "source"
-            script = source_root / "servicegen/scripts/cppcoro_profile.py"
-            script.parent.mkdir(parents=True)
-            script.write_text("pass\n")
+            source_root.mkdir()
             for name in ("cppcoroexample", "cppcoroservicelib"):
                 source = source_root / name
                 source.mkdir()
@@ -34,13 +32,25 @@ class DependencyRootTest(unittest.TestCase):
 
             workspace = root / "workspace"
             globals_ = profile["prepare"].__globals__
+            original_run = globals_["run"]
+
+            def generate_archives(source_root, archive_dir, selected_profile):
+                (archive_dir / "cppcoro.zip").write_bytes(b"fixture archive")
+                return "generated"
+
+            def run_with_mock_merge(command, **kwargs):
+                if command[:2] == ["bash", "scripts/merge.generated.sh"]:
+                    self.assertEqual(Path(command[-1]).name, "cppcoro.zip")
+                    return subprocess.CompletedProcess(command, 0, stdout="merged")
+                return original_run(command, **kwargs)
             with mock.patch.dict(
                 globals_,
                 {
-                    "VARIANTS": {},
-                    "FRAMEWORK_REPOSITORIES": set(),
+                    "VARIANTS": {"cppcoro": "cppcoroexample"},
+                    "FRAMEWORK_REPOSITORIES": {"cppcoroservicelib"},
                     "ARTIFACTS": root / "artifacts",
-                    "generate_archives": lambda *_: "generated",
+                    "generate_archives": generate_archives,
+                    "run": run_with_mock_merge,
                     "release_tags_at_head": lambda *_: ["v0.2.148"],
                     "verify_current_graph": lambda *_: {},
                 },
@@ -62,12 +72,12 @@ class DependencyRootTest(unittest.TestCase):
                     capture_output=True,
                 )
 
-    def test_coroutine_runtime_requires_each_boost_equivalent_stage(self) -> None:
+    def test_coroutine_runtime_requires_all_stages(self) -> None:
         gate = runpy.run_path(str(CONFORMANCE_DIR / "cppcoro_runtime.py"))
         stages = gate["STAGE_TESTS"]
         self.assertEqual(
             set(stages),
-            {"config", "pools", "operators", "serde", "transports", "telemetry", "lifecycle"},
+            {"io", "config", "pools", "operators", "serde", "transports", "telemetry", "lifecycle"},
         )
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "ctest.log"
@@ -96,10 +106,13 @@ class DependencyRootTest(unittest.TestCase):
     def test_custom_cpp_serde_probe_uses_language_suffixed_model_module(self) -> None:
         probe = (CONFORMANCE_DIR / "serde/custom_cpp_probe.cpp").read_text()
         self.assertIn("<model_cpp/include/example/model/", probe)
+        self.assertIn("<model_cppcoro/include/example/model/", probe)
+        coro_probe = probe.split("#elif defined(SERVICELIB_CUSTOM_SERDE_CANONICAL)", 1)[0]
+        self.assertNotIn("<model_cpp/include/", coro_probe)
         canonical_probe = (CONFORMANCE_DIR / "serde/canonical_probe.cmake").read_text()
         self.assertIn("/repo/cppexample/model_cpp/include", canonical_probe)
         serde_runner = (CONFORMANCE_DIR / "serde/run.py").read_text()
-        self.assertIn("/repo/cppboostexample/model_cpp/include", serde_runner)
+        self.assertIn("/repo/cppcoroexample/model_cppcoro/include", serde_runner)
         self.assertNotIn("<model/include/example/model/", probe)
 
     def test_typescript_installs_enforce_proxy_and_binary_mirror(self) -> None:
@@ -607,18 +620,18 @@ class DependencyRootTest(unittest.TestCase):
         linked_dependencies.__globals__["command"] = command
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            example = root / "cppboostexample"
+            example = root / "cppcoroexample"
             example.mkdir()
             (root / "cppboostnativeexample").mkdir()
             (example / "docker-compose.cmake.generated.yml").write_text(
                 "services:\n"
                 "  cpp-build:\n"
-                "    image: cppboostexample-cpp-build:local\n"
+                "    image: cppcoroexample-cpp-build:local\n"
             )
             with (
                 mock.patch.dict(
                     os.environ,
-                    {"CPPBOOST_BUILD_VOLUME": "expected-build-volume"},
+                    {"CPPCORO_BUILD_VOLUME": "expected-build-volume"},
                     clear=False,
                 ),
                 mock.patch.dict(
@@ -643,13 +656,13 @@ class DependencyRootTest(unittest.TestCase):
                 "target=/workspace/build,volume-nocopy,readonly",
                 args,
             )
-            self.assertIn("cppboostexample-cpp-build:local", args)
+            self.assertIn("cppcoroexample-cpp-build:local", args)
 
     def test_dependency_snapshot_uses_generated_conan_metadata(self) -> None:
         source = (CONFORMANCE_DIR / "dependencies/run.py").read_text()
         self.assertGreaterEqual(source.count('"conan" / "dependencies_generated.py"'), 2)
         self.assertIn('conan_dependencies_for_scope(manifest, "userver")', source)
-        self.assertIn('conan_dependencies_for_scope(manifest, "cppboost")', source)
+        self.assertIn('conan_dependencies_for_scope(manifest, "cppcoro")', source)
         self.assertNotIn("USERVER_CONAN_SNAPSHOT", source)
         self.assertNotIn('"cmake" / "DependencyVersions.cmake"', source)
 
@@ -678,14 +691,14 @@ class DependencyRootTest(unittest.TestCase):
                 "    openssl:\n"
                 "        conanVersion: 3.6.3\n"
                 "        conanScopes:\n"
-                "            - cppboost\n"
+                "            - cppcoro\n"
                 "            - userver\n",
                 encoding="utf-8",
             )
             dependencies = globals_["manifest_dependencies"](manifest)
 
         self.assertEqual(
-            dependencies["openssl"]["conanScopes"], ["cppboost", "userver"]
+            dependencies["openssl"]["conanScopes"], ["cppcoro", "userver"]
         )
 
     def test_standalone_cpp_builds_install_conan_graph_before_cmake(self) -> None:
@@ -699,7 +712,7 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn(module_path, source)
         self.assertIn(prefix_path, source)
         self.assertLess(source.index(install), source.index(toolchain))
-        self.assertIn("-DCPPBOOSTSERVICELIB_DEPENDENCY_MODE=CONAN", source)
+        self.assertIn("-DCPPCOROSERVICELIB_DEPENDENCY_MODE=CONAN", source)
 
     def test_standalone_rust_runs_only_declared_generation_targets(self) -> None:
         source = (CONFORMANCE_DIR / "standalone_components/run.py").read_text()
@@ -902,14 +915,14 @@ class DependencyRootTest(unittest.TestCase):
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "aggregate.py"))
         self.assertEqual(
             globals_["LANGUAGE_SUITES"]["serde"],
-            {"go", "canonical-cpp", "cppboost", "python", "rust", "typescript"},
+            {"go", "canonical-cpp", "cppcoro", "python", "rust", "typescript"},
         )
 
     def test_aggregate_requires_the_full_transport_language_matrix(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "aggregate.py"))
         self.assertEqual(
             globals_["LANGUAGE_SUITES"]["transports"],
-            {"go", "canonical-cpp", "cppboost", "python", "rust", "typescript"},
+            {"go", "canonical-cpp", "cppcoro", "python", "rust", "typescript"},
         )
 
     def test_aggregate_rejects_a_partial_scenario_matrix(self) -> None:
@@ -933,7 +946,7 @@ class DependencyRootTest(unittest.TestCase):
             actual,
             {
                 "go", "go-native",
-                "cpp", "cpp-native", "cppboost", "cppboost-native", "cppcoro",
+                "cpp", "cpp-native", "cppboost-native", "cppcoro",
                 "python", "python-native", "rust", "rust-native",
                 "typescript", "typescript-native",
             },
@@ -946,7 +959,7 @@ class DependencyRootTest(unittest.TestCase):
 
         self.assertEqual(
             set(pooled["VARIANTS"]),
-            {"go", "cpp", "cppboost", "python", "rust", "typescript"},
+            {"go", "cpp", "cppcoro", "python", "rust", "typescript"},
         )
         self.assertEqual(
             set(pooled["VARIANTS"]),
@@ -1000,7 +1013,7 @@ class DependencyRootTest(unittest.TestCase):
         sanitizers = runpy.run_path(str(CONFORMANCE_DIR / "sanitizers/run.py"))
         implementation_env = sanitizers["implementation_env"]
         expected = str(sanitizers["ROOT"] / "servicelib")
-        for language in ("go", "cpp", "cppboost", "python", "rust", "typescript"):
+        for language in ("go", "cpp", "cppcoro", "python", "rust", "typescript"):
             with self.subTest(language=language):
                 self.assertEqual(
                     implementation_env(language)["GOSERVICELIB_SOURCE_CONTEXT"],
@@ -1205,7 +1218,7 @@ class DependencyRootTest(unittest.TestCase):
         self.assertEqual(
             set(profiling_gate["ALL_LANGUAGES"]),
             {
-                "go", "go-native", "cpp", "cpp-native", "cppboost",
+                "go", "go-native", "cpp", "cpp-native",
                 "cppboost-native", "cppcoro", "python", "python-native", "rust",
                 "rust-native", "typescript", "typescript-native",
             },
@@ -1265,15 +1278,15 @@ class DependencyRootTest(unittest.TestCase):
                 "docker-compose.integration.generated.yml",
             ):
                 build_name = (
-                    "${CPPBOOST_BUILD_VOLUME:-"
-                    "cppboostexample_cpp-cmake-build-v0.2.14}"
+                    "${CPPCORO_BUILD_VOLUME:-"
+                    "cppcoroexample_cpp-cmake-build-v0.2.14}"
                 )
                 (root / name).write_text(
                     "volumes:\n"
                     "  cpp-cmake-build:\n"
                     f"    name: {build_name}\n"
                     "  cpp-ccache:\n"
-                    "    name: cppboostexample_cpp-ccache\n"
+                    "    name: cppcoroexample_cpp-ccache\n"
                     "  retained:\n"
                     "    name: unrelated-volume\n"
                 )
@@ -1284,7 +1297,7 @@ class DependencyRootTest(unittest.TestCase):
                 "docker-compose.integration.generated.yml",
             ):
                 text = (root / name).read_text()
-                self.assertNotIn("cppboostexample_cpp-", text)
+                self.assertNotIn("cppcoroexample_cpp-", text)
                 self.assertIn("name: unrelated-volume", text)
 
     def test_generation_preserves_existing_user_files_and_ignores_local_state(
@@ -1326,13 +1339,13 @@ class DependencyRootTest(unittest.TestCase):
 
     def test_transport_profiles_share_versioned_dependency_sources(self) -> None:
         globals_ = runpy.run_path(str(CONFORMANCE_DIR / "transports/run.py"))
-        source_cache = globals_["boost_source_cache_build_dir"]()
-        source_arguments = globals_["boost_source_cache_cmake_args"]()
-        generator_environment = globals_["boost_generator_environment"](
+        source_cache = globals_["coro_source_cache_build_dir"]()
+        source_arguments = globals_["coro_source_cache_cmake_args"]()
+        generator_environment = globals_["coro_generator_environment"](
             prepare_source_cache=False
         )
-        grpc = globals_["boost_command"]("build/grpc-test", False, False)[-1]
-        kafka = globals_["boost_kafka_command"](
+        grpc = globals_["coro_command"]("build/grpc-test", False, False)[-1]
+        kafka = globals_["coro_kafka_command"](
             "build/kafka-test", True, False
         )[-1]
 
@@ -1343,11 +1356,13 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn("/servicegen-cpp-source-cache/grpc-src", grpc)
         self.assertIn("/servicegen-cpp-source-cache/librdkafka-src", kafka)
         for command in (
-            globals_["boost_command"]("build/grpc-test", True, False)[-1],
+            globals_["coro_command"]("build/grpc-test", True, False)[-1],
             kafka,
         ):
-            self.assertIn("-DBOOST_CONTEXT_IMPLEMENTATION=ucontext", command)
-            self.assertIn("-DCMAKE_CXX_FLAGS=-DBOOST_USE_ASAN", command)
+            self.assertIn("-DCPPCOROSERVICELIB_ASAN=ON", command)
+            self.assertIn("-DCPPCOROSERVICELIB_UBSAN=ON", command)
+            self.assertNotIn("BOOST_CONTEXT_IMPLEMENTATION", command)
+            self.assertNotIn("BOOST_USE_ASAN", command)
         self.assertNotIn("BOOST_CONTEXT_IMPLEMENTATION=ucontext", grpc)
         self.assertIn(
             "/servicegen-cpp-source-cache/opentelemetry-cpp-src",
@@ -1363,8 +1378,8 @@ class DependencyRootTest(unittest.TestCase):
         self.assertNotIn("FETCHCONTENT_BASE_DIR", grpc)
         self.assertNotIn("FETCHCONTENT_BASE_DIR", kafka)
         self.assertEqual(
-            generator_environment["CPPBOOST_SOURCE_CACHE_DIR"],
-            str(globals_["cpp_source_cache"].source_dir(globals_["BOOST"])),
+            generator_environment["CPPCORO_SOURCE_CACHE_DIR"],
+            str(globals_["cpp_source_cache"].source_dir(globals_["CORO"])),
         )
         self.assertEqual(
             Path(generator_environment["GOWORK"]),
@@ -1379,8 +1394,8 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn(str(globals_["SERVICEGEN"].resolve()), generator_workspace)
         self.assertIn(str(globals_["GO"].resolve()), generator_workspace)
         self.assertIn(
-            globals_["cpp_source_cache"].source_mount(globals_["BOOST"]),
-            globals_["boost_command"]("build/grpc-test", False, False),
+            globals_["cpp_source_cache"].source_mount(globals_["CORO"]),
+            globals_["coro_command"]("build/grpc-test", False, False),
         )
 
     def test_transport_runner_recreates_canonical_conan_toolchain(self) -> None:
@@ -1443,7 +1458,7 @@ class DependencyRootTest(unittest.TestCase):
         ) as dependency_run:
             build_implementation(
                 implementation(
-                    "cppboost", CONFORMANCE_DIR, Path("compose.cppboost.yml")
+                    "cppcoro", CONFORMANCE_DIR, Path("compose.cppcoro.yml")
                 )
             )
             self.assertEqual(
@@ -1469,8 +1484,8 @@ class DependencyRootTest(unittest.TestCase):
             str(CONFORMANCE_DIR / "generation/run.py")
         )
         self.assertEqual(
-            generation["boost_source_cache_build_dir"](),
-            transports["boost_source_cache_build_dir"](),
+            generation["coro_source_cache_build_dir"](),
+            transports["coro_source_cache_build_dir"](),
         )
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
@@ -1497,7 +1512,7 @@ class DependencyRootTest(unittest.TestCase):
             source_cache = project / "shared-sources"
             source_cache.mkdir()
 
-            generation["attach_boost_source_cache"](project, source_cache)
+            generation["attach_coro_source_cache"](project, source_cache)
 
             override = (
                 project / "docker-compose.source-cache.generated.yml"
@@ -1507,7 +1522,7 @@ class DependencyRootTest(unittest.TestCase):
                 override,
             )
             self.assertIn(
-                '"CPPBOOST_SOURCE_CACHE": "1"',
+                '"CPPCORO_SOURCE_CACHE": "1"',
                 override,
             )
             for name in ("build.generated.sh", "test.generated.sh"):
@@ -1524,21 +1539,21 @@ class DependencyRootTest(unittest.TestCase):
                 integration.read_text(),
             )
 
-    def test_early_boost_suites_use_the_shared_source_cache(self) -> None:
+    def test_early_coro_suites_use_the_shared_source_cache(self) -> None:
         pools = runpy.run_path(str(CONFORMANCE_DIR / "pools/run.py"))
         serde = runpy.run_path(str(CONFORMANCE_DIR / "serde/run.py"))
         expected = "/servicegen-cpp-source-cache/googletest-src"
 
-        self.assertIn(expected, pools["boost_framework_build_script"]())
-        self.assertIn(expected, serde["boost_serde_script"](False))
-        self.assertNotIn("cmake --preset", serde["boost_serde_script"](False))
-        self.assertNotIn("FETCHCONTENT_SOURCE_DIR", serde["boost_serde_script"](True))
+        self.assertIn(expected, pools["coro_framework_build_script"]())
+        self.assertIn(expected, serde["coro_serde_script"](False))
+        self.assertNotIn("cmake --preset", serde["coro_serde_script"](False))
+        self.assertNotIn("FETCHCONTENT_SOURCE_DIR", serde["coro_serde_script"](True))
         self.assertIn(
-            serde["cpp_source_cache"].source_mount(serde["BOOST"]),
-            serde["boost_source_mount_args"](),
+            serde["cpp_source_cache"].source_mount(serde["CORO"]),
+            serde["coro_source_mount_args"](),
         )
         self.assertIn(
-            "cpp_source_cache.ensure(BOOST)",
+            "cpp_source_cache.ensure(CORO)",
             (CONFORMANCE_DIR / "serde/run.py").read_text(),
         )
 
@@ -1546,7 +1561,7 @@ class DependencyRootTest(unittest.TestCase):
         serde = runpy.run_path(str(CONFORMANCE_DIR / "serde/run.py"))
         source = (CONFORMANCE_DIR / "serde/run.py").read_text()
         for language in (
-            "go", "canonical-cpp", "boost-cpp", "python", "rust", "typescript",
+            "go", "canonical-cpp", "coro-cpp", "python", "rust", "typescript",
         ):
             with self.subTest(language=language):
                 self.assertIn(f'"{language}"', source)
@@ -1563,7 +1578,7 @@ class DependencyRootTest(unittest.TestCase):
         self.assertIn("compare_wire_fixtures(go_fixtures", source)
         self.assertIn(
             "name: cppexample_cpp-conan2",
-            (CONFORMANCE_DIR / "serde/compose.boost.yml").read_text(),
+            (CONFORMANCE_DIR / "serde/compose.coro.yml").read_text(),
         )
         self.assertGreaterEqual(
             source.count("./scripts/conan-install.generated.sh Release"), 2
@@ -1577,14 +1592,14 @@ class DependencyRootTest(unittest.TestCase):
                 str(CONFORMANCE_DIR.parent),
             )
         )
-        framework = dependency_root / "cppboostservicelib"
+        framework = dependency_root / "cppcoroservicelib"
         command = globals_["prepare_command"](framework)
         script = command[-1]
 
         self.assertIn("max_attempts=6", script)
         self.assertIn("attempt $attempt failed; retrying", script)
         self.assertIn(
-            "-DCPPBOOSTSERVICELIB_GITHUB_ARCHIVE_BASE=",
+            "-DCPPCOROSERVICELIB_GITHUB_ARCHIVE_BASE=",
             script,
         )
         self.assertIn(globals_["build_dir"](framework), script)
@@ -1623,7 +1638,7 @@ class DependencyRootTest(unittest.TestCase):
                 str(CONFORMANCE_DIR.parent),
             )
         )
-        framework = dependency_root / "cppboostservicelib"
+        framework = dependency_root / "cppcoroservicelib"
         old_raw = os.environ.get("DEPENDENCY_GITHUB_RAW_URL")
         old_host = os.environ.get("DEPENDENCY_PROXY_DOCKER_HOST")
         try:

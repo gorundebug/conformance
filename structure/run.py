@@ -57,6 +57,24 @@ def tracked_files(root: Path) -> set[str]:
     }
 
 
+def mapped_example_paths(paths: set[str], mappings: dict[str, str]) -> set[str]:
+    result: dict[str, str] = {}
+    for path in sorted(paths):
+        mapped = path
+        for source, destination in mappings.items():
+            if path.startswith(source):
+                mapped = destination + path[len(source):]
+                break
+        if mapped in result:
+            raise ValueError(f"example path collision: {result[mapped]} and {path} -> {mapped}")
+        result[mapped] = path
+    return set(result)
+
+
+def interface_tokens(required: dict[str, list[str]], implementation: str) -> list[str]:
+    return [*required["shared"], *required[implementation]]
+
+
 def exact_difference(
     *,
     left: set[str],
@@ -111,24 +129,28 @@ def failures(value: Any, prefix: str = "") -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Compare Boost C++ public paths and example layout with canonical C++."
+        description="Compare Coro C++ public paths and example layout with canonical C++."
     )
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--policy", type=Path, default=HERE / "deviations.json")
     parser.add_argument("--output", type=Path, default=DEFAULT_ARTIFACT)
+    parser.add_argument(
+        "--artifact-state", choices=("tracked", "workspace"), default="tracked",
+        help="Default tracked verifies Git publication readiness; workspace checks local files without claiming they are tracked.",
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()
     canonical_headers = root / "cppservicelib" / "include" / "servicelib"
-    boost_headers = root / "cppboostservicelib" / "include" / "servicelib"
+    coro_headers = root / "cppcoroservicelib" / "include" / "servicelib"
     canonical_example = root / "cppexample"
-    boost_example = root / "cppboostexample"
+    coro_example = root / "cppcoroexample"
     language_examples = {
         name: root / name
         for name in (
             "goexample",
             "cppexample",
-            "cppboostexample",
+            "cppcoroexample",
             "pyexample",
             "rustexample",
             "tsexample",
@@ -136,7 +158,7 @@ def main() -> int:
     }
     required_roots = (
         canonical_headers,
-        boost_headers,
+        coro_headers,
         *language_examples.values(),
     )
     missing_roots = [str(path) for path in required_roots if not path.is_dir()]
@@ -149,57 +171,67 @@ def main() -> int:
     example_policy = policy["example_layout"]
 
     canonical_public = files_below(canonical_headers)
-    boost_public = files_below(boost_headers)
+    coro_public = files_below(coro_headers)
     public_layout = exact_difference(
         left=canonical_public,
-        right=boost_public,
+        right=coro_public,
         allowed_left_only=set(public_policy["omitted_userver_boundaries"]),
-        allowed_right_only=set(public_policy["boost_boundary_replacements"]),
+        allowed_right_only=set(public_policy["coro_boundary_replacements"]),
     )
-    actual_changed = changed_common(canonical_headers, boost_headers)
+    actual_changed = changed_common(canonical_headers, coro_headers)
     allowed_changed = set(public_policy["changed_shared_paths"])
     public_content = {
         "unrecorded_changed_shared_paths": sorted(actual_changed - allowed_changed),
         "stale_changed_shared_allowance": sorted(allowed_changed - actual_changed),
     }
+    retired_tokens = [
+        f"{relative}:{token}"
+        for relative, tokens in public_policy["forbidden_coro_tokens"].items()
+        for token in tokens
+        if token in (coro_headers / relative).read_text()
+    ]
 
-    canonical_layout = example_files(canonical_example)
-    boost_layout = example_files(boost_example)
+    path_mappings = example_policy["path_mappings"]
+    canonical_layout = mapped_example_paths(example_files(canonical_example), path_mappings["canonical"])
+    coro_layout = mapped_example_paths(example_files(coro_example), path_mappings["coro"])
     example_layout = exact_difference(
         left=canonical_layout,
-        right=boost_layout,
+        right=coro_layout,
         allowed_left_only=set(example_policy["omitted_userver_boundaries"]),
-        allowed_right_only=set(example_policy["boost_boundary_replacements"]),
+        allowed_right_only=set(example_policy["coro_boundary_replacements"]),
     )
     canonical_interfaces = interface_files(canonical_example)
-    boost_interfaces = interface_files(boost_example)
-    shared_interfaces = canonical_interfaces & boost_interfaces
+    coro_interfaces = interface_files(coro_example)
+    shared_interfaces = canonical_interfaces & coro_interfaces
     changed_interfaces = {
         relative
         for relative in shared_interfaces
         if (canonical_example / relative).read_bytes()
-        != (boost_example / relative).read_bytes()
+        != (coro_example / relative).read_bytes()
     }
     allowed_interface_changes = set(
         example_policy["changed_interface_boundaries"]
     )
     required_tokens = example_policy["required_boundary_interface_tokens"]
     missing_tokens: list[str] = []
-    for relative, tokens in required_tokens.items():
+    for relative, tokens_by_runtime in required_tokens.items():
         for implementation, base in (
             ("canonical", canonical_example),
-            ("boost", boost_example),
+            ("coro", coro_example),
         ):
             contents = (base / relative).read_text()
-            for token in tokens:
+            for token in interface_tokens(tokens_by_runtime, implementation):
                 if token not in contents:
                     missing_tokens.append(f"{implementation}:{relative}:{token}")
     interface_contract = {
         "missing_canonical_interfaces": sorted(
-            canonical_interfaces - boost_interfaces
+            canonical_interfaces - coro_interfaces
         ),
-        "unexpected_boost_interfaces": sorted(
-            boost_interfaces - canonical_interfaces
+        "coro_interface_boundaries": exact_difference(
+            left=canonical_interfaces,
+            right=coro_interfaces,
+            allowed_left_only=set(),
+            allowed_right_only=set(example_policy["coro_interface_boundaries"]),
         ),
         "unrecorded_changed_interfaces": sorted(
             changed_interfaces - allowed_interface_changes
@@ -209,12 +241,17 @@ def main() -> int:
         ),
         "missing_boundary_interface_tokens": sorted(missing_tokens),
     }
-    required_tracked_paths = policy["required_tracked_example_paths"]
+    required_tracked_paths = policy["required_example_paths"]
+    artifact_files = tracked_files if args.artifact_state == "tracked" else example_files
+    available_artifacts = {
+        example: artifact_files(language_examples[example])
+        for example in required_tracked_paths
+    }
     missing_tracked_paths = [
         f"{example}:{relative}"
         for example, paths in required_tracked_paths.items()
         for relative in paths
-        if relative not in tracked_files(language_examples[example])
+        if relative not in available_artifacts[example]
     ]
 
     typescript_framework = root / "tsservicelib"
@@ -269,9 +306,10 @@ def main() -> int:
     checks = {
         "public_header_layout": public_layout,
         "public_shared_content": public_content,
+        "retired_runtime_tokens": {"unexpected": retired_tokens},
         "generated_example_layout": example_layout,
         "graph_function_interfaces": interface_contract,
-        "required_tracked_example_artifacts": {
+        "required_example_artifacts": {
             "missing": sorted(missing_tracked_paths),
         },
         "typescript_package_taxonomy": {
@@ -282,14 +320,15 @@ def main() -> int:
     errors = failures(checks)
     summary = {
         "status": "pass" if not errors else "fail",
+        "artifact_state": args.artifact_state,
         "canonical_public_paths": len(canonical_public),
-        "boost_public_paths": len(boost_public),
+        "coro_public_paths": len(coro_public),
         "byte_identical_shared_paths": len(
-            (canonical_public & boost_public) - actual_changed
+            (canonical_public & coro_public) - actual_changed
         ),
         "recorded_changed_shared_paths": len(actual_changed),
         "canonical_example_files": len(canonical_layout),
-        "boost_example_files": len(boost_layout),
+        "coro_example_files": len(coro_layout),
         "byte_identical_graph_function_interfaces": len(
             shared_interfaces - changed_interfaces
         ),

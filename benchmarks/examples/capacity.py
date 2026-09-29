@@ -498,10 +498,8 @@ def main() -> int:
     if cpp_selected:
         if any(language.name == "cpp" for language in selected):
             benchmark.prepare_cpp_configs(args.cores)
-        if any(language.name == "cpp-boost" for language in selected):
-            benchmark.prepare_cppboost_configs(args.cores, args.cores)
         if any(language.name == "cpp-coro" for language in selected):
-            benchmark.prepare_cppboost_configs(args.cores, args.cores, example="cppcoroexample", config_directory="cppcoro-config")
+            benchmark.prepare_coro_configs(args.cores, args.cores, example="cppcoroexample", config_directory="cppcoro-config")
         if args.max_map_count:
             benchmark.raise_max_map_count(args.max_map_count)
     if not args.skip_build:

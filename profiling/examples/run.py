@@ -104,7 +104,7 @@ def language_log(
     _terminal(f"==> [{label}] PASS ({elapsed:.1f}s; log: {path})")
 
 
-def cppboost_dependency_context(dependency: str, library: str = "cppboostservicelib") -> str:
+def cpp_dependency_context(dependency: str, library: str = "cppcoroservicelib") -> str:
     versions = ROOT / library / "cmake" / "DependencyVersions.cmake"
     try:
         contents = versions.read_text(encoding="utf-8")
@@ -118,8 +118,8 @@ def cppboost_dependency_context(dependency: str, library: str = "cppboostservice
     }
     repository = repositories.get(dependency)
     if repository is None:
-        raise RuntimeError(f"unsupported Boost dependency context: {dependency}")
-    prefix = f"CPPBOOSTSERVICELIB_{dependency.upper().replace('-', '_')}"
+        raise RuntimeError(f"unsupported C++ dependency context: {dependency}")
+    prefix = f"CPPCOROSERVICELIB_{dependency.upper().replace('-', '_')}"
     match = re.search(
         rf'^set\({re.escape(prefix)}_VERSION "([^"]+)"',
         contents,
@@ -262,7 +262,6 @@ LANGUAGES = (
         repository="https://github.com/gorundebug/cppnativeexample.git",
         revision="v0.2.148",
     ),
-    Language("cppboost", ROOT / "cppboostexample", PROFILING_DIR / "compose.cppboost.yml", "perf", "example_order_service", "example_inventory_service"),
     Language("cppcoro", ROOT / "cppcoroexample", PROFILING_DIR / "compose.cppcoro.yml", "perf", "example_order_service", "example_inventory_service"),
     Language(
         "cppboost-native", NATIVE_ROOT / "cppboostnativeexample",
@@ -482,7 +481,7 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
             "PROFILING_ALLOCATOR_LIBRARY": str(
                 ARTIFACTS / "liballocation_profile.so"
             ),
-            "PROFILING_CPPBOOST_CONFIG_DIR": str(ARTIFACTS / "cppboost-config"),
+            "PROFILING_CPPCORO_CONFIG_DIR": str(ARTIFACTS / "cppcoro-config"),
             "PROFILING_CPP_CONFIG_DIR": str(ARTIFACTS / "cpp-config"),
             "PROFILING_DIR": str(PROFILING_DIR),
             "PROFILING_DURATION": args.duration,
@@ -532,32 +531,26 @@ def environment(args: argparse.Namespace, language: Language) -> dict[str, str]:
             )
         )
         env["USERVER_LTO"] = "ON"
-    elif language.name == "cppboost":
-        env["COMPOSE_PROJECT_NAME"] = "cppboostexample"
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppboostservicelib")
-        if getattr(args, "coroutine_diagnostics", False):
-            env["CPPBOOSTSERVICELIB_PROFILING"] = "ON"
-            env["CPPBOOSTSERVICELIB_COROUTINE_DIAGNOSTICS"] = "ON"
     if language.name == "cppcoro":
         env["COMPOSE_PROJECT_NAME"] = "cppcoroexample"
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
-        env["PROFILING_CPPBOOST_CONFIG_DIR"] = str(ARTIFACTS / "cppcoro-config")
+        env["PROFILING_CPPCORO_CONFIG_DIR"] = str(ARTIFACTS / "cppcoro-config")
         env["USE_LOCAL_MODULES"] = "1"
         if getattr(args, "coroutine_diagnostics", False):
-            env["CPPBOOSTSERVICELIB_PROFILING"] = "ON"
-            env["CPPBOOSTSERVICELIB_COROUTINE_DIAGNOSTICS"] = "ON"
-    if language.name in {"cppboost", "cppboost-native", "cppcoro"}:
-        library = "cppcoroservicelib" if language.name == "cppcoro" else "cppboostservicelib"
+            env["CPPCOROSERVICELIB_PROFILING"] = "ON"
+            env["CPPCOROSERVICELIB_COROUTINE_DIAGNOSTICS"] = "ON"
+    if language.name in {"cppboost-native", "cppcoro"}:
+        library = "cppcoroservicelib"
         # Never let generated Compose fall back to the example checkout for
         # these named contexts. A populated build tree can contain matching
         # gRPC headers, causing CMake to configure the example itself as gRPC.
         env.setdefault(
             "GRPC_SOURCE_CONTEXT",
-            cppboost_dependency_context("grpc", library),
+            cpp_dependency_context("grpc", library),
         )
         env.setdefault(
             "ASIO_GRPC_SOURCE_CONTEXT",
-            cppboost_dependency_context("asio-grpc", library),
+            cpp_dependency_context("asio-grpc", library),
         )
     elif language.name == "python":
         env["PROFILING_PYTHON_CONFIG_DIR"] = str(ARTIFACTS / "python-config")
@@ -843,7 +836,7 @@ def extract_profiler_assets(env: dict[str, str]) -> None:
 def build(language: Language, env: dict[str, str]) -> None:
     if language.name == "go":
         run(["make", "docker-build"], cwd=language.example, env=env, retry_network=True)
-    elif language.name in {"cpp", "cppboost", "cppcoro"}:
+    elif language.name in {"cpp", "cppcoro"}:
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
@@ -869,8 +862,8 @@ def build(language: Language, env: dict[str, str]) -> None:
         )
 
 
-def verify_cppboost_release_build(
-    env: dict[str, str], *, require_coroutine_diagnostics: bool, example: str = "cppboostexample"
+def verify_coro_release_build(
+    env: dict[str, str], *, require_coroutine_diagnostics: bool, example: str = "cppcoroexample"
 ) -> None:
     """Reject a stale or incorrectly instrumented runtime image."""
 
@@ -888,7 +881,7 @@ def verify_cppboost_release_build(
         )
         if result.returncode != 0:
             raise RuntimeError(
-                "cppboost runtime image is missing; re-run without --skip-build"
+                "cppcoro runtime image is missing; re-run without --skip-build"
             )
         return result.stdout.strip()
 
@@ -902,18 +895,18 @@ def verify_cppboost_release_build(
         build_type = image_label(image, "org.gorundebug.build-type")
         if build_type != "Release":
             raise RuntimeError(
-                "cppboost profiling requires Release runtime images; "
+                "cppcoro profiling requires Release runtime images; "
                 f"{image} label reports {build_type or 'missing'}. "
                 "Re-run without --skip-build."
             )
         if require_coroutine_diagnostics:
             diagnostics = image_label(
                 image,
-                "org.gorundebug.cppboostservicelib.coroutine-diagnostics",
+                "org.gorundebug.cppcoroservicelib.coroutine-diagnostics",
             )
             if diagnostics != "ON":
                 raise RuntimeError(
-                    "cppboost coroutine diagnostics were requested, but "
+                    "cppcoro coroutine diagnostics were requested, but "
                     f"{image} was built without diagnostics. "
                     "Re-run without --skip-build."
                 )
@@ -1059,8 +1052,8 @@ def disable_order_processed_endpoint(values: str) -> str:
     return values
 
 
-def prepare_cppboost_configs(service_cores: int, *, example: str = "cppboostexample", config_directory: str = "cppboost-config") -> None:
-    """Prepare Boost values files while preserving the generated schema."""
+def prepare_coro_configs(service_cores: int, *, example: str = "cppcoroexample", config_directory: str = "cppcoro-config") -> None:
+    """Prepare Coro values files while preserving the generated schema."""
     output = ARTIFACTS / config_directory
     output.mkdir(parents=True, exist_ok=True)
     for service, pool in (
@@ -1097,10 +1090,8 @@ def prepare_selected_configs(
     selected_names = {language.name for language in selected}
     if "cpp" in selected_names:
         prepare_cpp_configs(service_cores)
-    if "cppboost" in selected_names:
-        prepare_cppboost_configs(service_cores)
     if "cppcoro" in selected_names:
-        prepare_cppboost_configs(service_cores, example="cppcoroexample", config_directory="cppcoro-config")
+        prepare_coro_configs(service_cores, example="cppcoroexample", config_directory="cppcoro-config")
     if "python" in selected_names:
         prepare_python_configs()
 
@@ -1321,7 +1312,7 @@ def load(
         "runtime_event_loop_lag_seconds",
         "runtime_worker_utilization",
     }
-    if env.get("CPPBOOSTSERVICELIB_COROUTINE_DIAGNOSTICS") == "ON":
+    if env.get("CPPCOROSERVICELIB_COROUTINE_DIAGNOSTICS") == "ON":
         required_metrics.update(
             {
                 "runtime_handler_queued",
@@ -1554,7 +1545,7 @@ def profile_target(
             ),
             runtime_metrics_url=(
                 f"http://localhost:{ {'orderservice': 9091, 'inventoryservice': 9092, 'analyticsservice': 9093}[service] }/metrics"
-                if language.name in {"cppboost", "cppcoro", "typescript"}
+                if language.name in {"cppcoro", "typescript"}
                 and env["PROFILING_NOOP_METRICS"] == "0"
                 else None
             ),
@@ -1562,7 +1553,7 @@ def profile_target(
                 scenario_artifact_name(
                     args, f"{language.name}.{service}.runtime-metrics.json"
                 )
-                if language.name in {"cppboost", "cppcoro", "typescript"}
+                if language.name in {"cppcoro", "typescript"}
                 and env["PROFILING_NOOP_METRICS"] == "0"
                 else None
             ),
@@ -2602,7 +2593,7 @@ def main() -> int:
         action="store_true",
         help=(
             "enable intrusive Boost.Asio queued/running/suspended handler "
-            "diagnostics for cppboost profiling only"
+            "diagnostics for cppcoro profiling only"
         ),
     )
     parser.add_argument("--clean", action="store_true")
@@ -2704,14 +2695,14 @@ def main() -> int:
             with language_log(args, language.name, phase="build", append=True):
                 build(language, environment(args, language))
 
-    for cppboost in (language for language in selected if language.name in {"cppboost", "cppcoro"}):
+    for coro in (language for language in selected if language.name in {"cppcoro"}):
         with language_log(
-            args, cppboost.name, phase="verify-build", append=True
+            args, coro.name, phase="verify-build", append=True
         ):
-            verify_cppboost_release_build(
-                environment(args, cppboost),
+            verify_coro_release_build(
+                environment(args, coro),
                 require_coroutine_diagnostics=args.coroutine_diagnostics,
-                example=cppboost.example.name,
+                example=coro.example.name,
             )
 
     outputs = []

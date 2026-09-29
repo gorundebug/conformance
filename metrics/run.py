@@ -88,11 +88,6 @@ LANGUAGES = (
     Language(
         "cpp", ROOT / "cppexample", Path(__file__).with_name("compose.cpp.yml")
     ),
-    Language(
-        "cppboost",
-        ROOT / "cppboostexample",
-        Path(__file__).with_name("compose.cppboost.yml"),
-    ),
     Language("cppcoro", ROOT / "cppcoroexample", Path(__file__).with_name("compose.cppcoro.yml")),
     Language(
         "python",
@@ -167,7 +162,7 @@ def build(language: Any, env: dict[str, str]) -> None:
             env=env,
             retry_network=True,
         )
-    elif language.name in {"cppboost", "cppcoro"}:
+    elif language.name in {"cppcoro"}:
         run(
             ["make", "docker-build", "RUNTIME_IMAGE=1"],
             cwd=language.example,
@@ -197,10 +192,9 @@ def language_env(language: Any) -> dict[str, str]:
     env["GOSERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "servicelib")
     if language.name == "cpp":
         env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppservicelib")
-    elif language.name in {"cppboost", "cppcoro"}:
-        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / ("cppcoroservicelib" if language.name == "cppcoro" else "cppboostservicelib"))
-        if language.name == "cppcoro":
-            env["USE_LOCAL_MODULES"] = "1"
+    elif language.name in {"cppcoro"}:
+        env["SERVICELIB_SOURCE_CONTEXT"] = str(ROOT / "cppcoroservicelib")
+        env["USE_LOCAL_MODULES"] = "1"
         cpp_source_cache.configure_environment(
             env, Path(env["SERVICELIB_SOURCE_CONTEXT"])
         )
@@ -275,7 +269,7 @@ def prepare_python_configs() -> None:
         (output / f"{service}.overrides.yaml").write_text(text)
 
 
-def prepare_cppboost_configs(name: str = "cppboost") -> None:
+def prepare_coro_configs(name: str = "cppcoro") -> None:
     output = ARTIFACTS / name
     output.mkdir(parents=True, exist_ok=True)
     for service in ("analyticsservice", "inventoryservice", "orderservice"):
@@ -701,8 +695,8 @@ def run_language(
     )
     if language.name == "cpp":
         prepare_cpp_configs()
-    elif language.name in {"cppboost", "cppcoro"}:
-        prepare_cppboost_configs(language.name)
+    elif language.name in {"cppcoro"}:
+        prepare_coro_configs(language.name)
     elif language.name == "python":
         prepare_python_configs()
     if not skip_build:
@@ -763,7 +757,7 @@ def run_language(
                 SERVICE_URLS["analyticsservice"],
                 "kafka_consumer_messages_total",
             )
-        elif language.name in {"cppboost", "cppcoro", "rust", "typescript"}:
+        elif language.name in {"cppcoro", "rust", "typescript"}:
             wait_metric(SERVICE_URLS["orderservice"], "kafka_client_brokers")
             wait_metric(SERVICE_URLS["analyticsservice"], "kafka_client_brokers")
         raw_by_service = {

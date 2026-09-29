@@ -36,7 +36,6 @@ SERVICES = (
 EXAMPLES = {
     "go": "goexample",
     "cpp": "cppexample",
-    "cppboost": "cppboostexample",
     "cppcoro": "cppcoroexample",
     "python": "pyexample",
     "rust": "rustexample",
@@ -411,10 +410,6 @@ def language_source_environment(language: str) -> dict[str, str]:
         "cpp": {
             "GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),
             "SERVICELIB_SOURCE_CONTEXT": str(ROOT / "cppservicelib"),
-        },
-        "cppboost": {
-            "GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),
-            "SERVICELIB_SOURCE_CONTEXT": str(ROOT / "cppboostservicelib"),
         },
         "cppcoro": {
             "GOSERVICELIB_SOURCE_CONTEXT": str(ROOT / "servicelib"),

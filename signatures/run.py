@@ -2,7 +2,7 @@
 """Lexically compare the complete public C++ declaration surface.
 
 This deliberately does not preprocess the headers: canonical headers require
-userver while Boost headers require Asio.  The token parser ignores function
+userver while Coro headers require Asio.  The token parser ignores function
 bodies and private implementation, and records public types, aliases and
 callable declarations without needing either dependency graph.
 """
@@ -336,39 +336,46 @@ def main() -> int:
     allowed = policy.get("signature_deviations", {})
     substitutions = policy.get("boundary_type_substitutions", {})
     canonical_root = root / "cppservicelib" / "include" / "servicelib"
-    boost_root = root / "cppboostservicelib" / "include" / "servicelib"
+    coro_root = root / "cppcoroservicelib" / "include" / "servicelib"
+    for required in (canonical_root, coro_root):
+        if not required.is_dir():
+            print(f"missing conformance input: {required}")
+            return 2
     shared = sorted(
         path.relative_to(canonical_root).as_posix()
         for path in canonical_root.rglob("*.hpp")
-        if (boost_root / path.relative_to(canonical_root)).is_file()
+        if (coro_root / path.relative_to(canonical_root)).is_file()
     )
 
     files: dict[str, object] = {}
-    errors: list[str] = []
-    total_canonical = total_boost = 0
+    errors: list[str] = [
+        f"stale-policy-header:{relative}"
+        for relative in sorted(set(allowed) - set(shared))
+    ]
+    total_canonical = total_coro = 0
     for relative in shared:
         canonical_raw, canonical_errors = extract(canonical_root / relative)
-        boost_raw, boost_errors = extract(boost_root / relative)
+        coro_raw, coro_errors = extract(coro_root / relative)
         canonical = normalize_declarations(canonical_raw, substitutions)
-        boost = normalize_declarations(boost_raw, substitutions)
+        coro = normalize_declarations(coro_raw, substitutions)
         total_canonical += sum(canonical.values())
-        total_boost += sum(boost.values())
-        only_canonical = sorted((canonical - boost).elements())
-        only_boost = sorted((boost - canonical).elements())
-        different = bool(only_canonical or only_boost)
+        total_coro += sum(coro.values())
+        only_canonical = sorted((canonical - coro).elements())
+        only_coro = sorted((coro - canonical).elements())
+        different = bool(only_canonical or only_coro)
         permitted = allowed.get(relative)
         expected_canonical = sorted((permitted or {}).get("canonical_only", []))
-        expected_boost = sorted((permitted or {}).get("boost_only", []))
-        if canonical_errors or boost_errors:
+        expected_coro = sorted((permitted or {}).get("coro_only", []))
+        if canonical_errors or coro_errors:
             errors.append(f"parser:{relative}")
-        if only_canonical != expected_canonical or only_boost != expected_boost:
+        if only_canonical != expected_canonical or only_coro != expected_coro:
             errors.append(f"deviation-mismatch:{relative}")
-        if different or canonical_errors or boost_errors:
+        if different or canonical_errors or coro_errors:
             files[relative] = {
                 "canonical_only": only_canonical,
-                "boost_only": only_boost,
+                "coro_only": only_coro,
                 "canonical_parser_errors": canonical_errors,
-                "boost_parser_errors": boost_errors,
+                "coro_parser_errors": coro_errors,
                 "deviation": permitted,
             }
 
@@ -376,7 +383,7 @@ def main() -> int:
         "status": "pass" if not errors else "fail",
         "shared_headers": len(shared),
         "canonical_declarations": total_canonical,
-        "boost_declarations": total_boost,
+        "coro_declarations": total_coro,
         "different_headers": len(files),
         "boundary_type_substitutions": substitutions,
         "files": files,

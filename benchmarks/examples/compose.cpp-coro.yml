@@ -8,7 +8,7 @@ services:
       - --workers
       - ${BENCHMARK_SERVICE_CORES}
     volumes:
-      - ${BENCHMARK_CPPBOOST_CONFIG_DIR}:/benchmark-config:ro
+      - ${BENCHMARK_CPPCORO_CONFIG_DIR}:/benchmark-config:ro
 
   orderservice:
     environment:
@@ -21,4 +21,4 @@ services:
       - --workers
       - ${BENCHMARK_SERVICE_CORES}
     volumes:
-      - ${BENCHMARK_CPPBOOST_CONFIG_DIR}:/benchmark-config:ro
+      - ${BENCHMARK_CPPCORO_CONFIG_DIR}:/benchmark-config:ro

@@ -21,7 +21,7 @@ class SanitizerConformanceTest(unittest.TestCase):
     def test_matrix_covers_every_runtime_and_native_detector(self) -> None:
         self.assertEqual(
             set(RUN.IMPLEMENTATIONS),
-            {"go", "cpp", "cppboost", "python", "rust", "typescript"},
+            {"go", "cpp", "cppcoro", "python", "rust", "typescript"},
         )
         self.assertEqual(set(RUN.SANITIZERS), {"race", "asan", "tsan", "runtime"})
         self.assertEqual(
@@ -29,7 +29,7 @@ class SanitizerConformanceTest(unittest.TestCase):
             ("runtime", "asan", "tsan"),
         )
         self.assertEqual(
-            RUN.IMPLEMENTATION_SANITIZERS["cppboost"],
+            RUN.IMPLEMENTATION_SANITIZERS["cppcoro"],
             ("runtime", "asan", "tsan"),
         )
         for language, sanitizers in RUN.IMPLEMENTATION_SANITIZERS.items():
@@ -94,8 +94,8 @@ class SanitizerConformanceTest(unittest.TestCase):
         try:
             os.environ["SERVICELIB_SOURCE_CONTEXT"] = "published-context"
             self.assertEqual(
-                RUN.implementation_env("cppboost")["SERVICELIB_SOURCE_CONTEXT"],
-                str(RUN.ROOT / "cppboostservicelib"),
+                RUN.implementation_env("cppcoro")["SERVICELIB_SOURCE_CONTEXT"],
+                str(RUN.ROOT / "cppcoroservicelib"),
             )
             cpp_env = RUN.implementation_env("cpp")
             self.assertEqual(cpp_env["USE_LOCAL_MODULES"], "1")
@@ -104,10 +104,10 @@ class SanitizerConformanceTest(unittest.TestCase):
                 str(RUN.ROOT / "cppservicelib"),
             )
             self.assertNotIn("CPPSERVICELIB_CONAN_LOCKFILE", cpp_env)
-            env = RUN.implementation_env("cppboost")
+            env = RUN.implementation_env("cppcoro")
             self.assertEqual(
                 env["SERVICELIB_SOURCE_CONTEXT"],
-                str(RUN.ROOT / "cppboostservicelib"),
+                str(RUN.ROOT / "cppcoroservicelib"),
             )
         finally:
             if previous is None:

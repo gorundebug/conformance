@@ -14,40 +14,56 @@ import time
 HERE = Path(__file__).resolve().parent
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", HERE.parent)).expanduser().resolve()
 ARTIFACTS = HERE / ".artifacts" / "cppcoro-runtime"
+BACKENDS = ("epoll", "uring")
+BUILD_TYPES = ("Debug", "Release")
 STAGE_TESTS = {
-    "config": {"cppboostservicelib_config_loader_test"},
+    "io": {"coro_resolver_tests", "coro_event_engine_tests", "coro_callback_transport_tests"},
+    "config": {"cppcoroservicelib_config_loader_test"},
     "pools": {
-        "cppboostservicelib_taskpool_test",
-        "cppboostservicelib_other_pools_test",
+        "cppcoroservicelib_taskpool_test",
+        "cppcoroservicelib_other_pools_test",
         "cppcoroservicelib_coroutine_pool_test",
+        "cppcoroservicelib_coroutine_mutex_test",
+        "cppcoroservicelib_coroutine_task_executor_test",
     },
     "operators": {
-        "cppboostservicelib_operators_test",
-        "cppboostservicelib_operators_topology_test",
-        "cppboostservicelib_join_topology_test",
+        "cppcoroservicelib_operators_test",
+        "cppcoroservicelib_operators_topology_test",
+        "cppcoroservicelib_join_topology_test",
         "cppcoroservicelib_coroutine_selectors_test",
+        "cppcoroservicelib_coroutine_join_storage_test",
+        "cppcoroservicelib_substream_test",
+        "cppcoroservicelib_direct_caller_queue_test",
     },
-    "serde": {"cppboostservicelib_serde_test"},
+    "serde": {"cppcoroservicelib_serde_test"},
     "transports": {
-        "cppboostservicelib_http_endpoints_test",
-        "cppboostservicelib_kafka_endpoints_test",
-        "cppboostservicelib_grpc_runtime_test",
-        "cppboostservicelib_grpc_streaming_test",
+        "cppcoroservicelib_http_endpoints_test",
+        "cppcoroservicelib_kafka_endpoints_test",
+        "cppcoroservicelib_grpc_runtime_test",
+        "cppcoroservicelib_grpc_streaming_test",
         "cppcoroservicelib_coroutine_http_test",
         "cppcoroservicelib_coroutine_grpc_unary_test",
         "cppcoroservicelib_coroutine_grpc_streaming_test",
     },
     "telemetry": {
-        "cppboostservicelib_telemetry_test",
-        "cppboostservicelib_tracing_test",
-        "cppboostservicelib_prometheus_test",
+        "cppcoroservicelib_telemetry_test",
+        "cppcoroservicelib_tracing_test",
+        "cppcoroservicelib_prometheus_test",
     },
     "lifecycle": {
-        "cppboostservicelib_serviceapp_test",
+        "cppcoroservicelib_serviceapp_test",
         "cppcoroservicelib_coroutine_lifecycle_test",
         "cppcoroservicelib_coroutine_initialization_test",
     },
 }
+
+
+def required_stage_tests(backend: str) -> dict[str, set[str]]:
+    if backend not in BACKENDS:
+        raise ValueError(f"Unknown Coro backend: {backend}")
+    stages = {stage: set(tests) for stage, tests in STAGE_TESTS.items()}
+    stages["io"].add(f"{backend}_backend_tests")
+    return stages
 
 
 def passed_tests(log: Path) -> set[str]:
@@ -67,15 +83,22 @@ def main() -> int:
         raise RuntimeError(f"Missing coroutine runtime test driver: {driver}")
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
-    environment["CPPBOOSTSERVICELIB_ENABLE_OTEL"] = "True"
-    environment["CPPBOOSTSERVICELIB_CONAN_IMAGE"] = "cppcoroservicelib-conan-build"
+    for name in ("CPPCORO_BUILD_TARGET", "CPPCORO_TEST_REGEX"):
+        if environment.get(name):
+            raise RuntimeError(f"Full runtime gate does not allow filtering with {name}")
+    environment["CPPCOROSERVICELIB_ENABLE_OTEL"] = "True"
+    environment["CPPCOROSERVICELIB_CONAN_IMAGE"] = "cppcoroservicelib-conan-build"
     runs = []
     status = 0
-    for build_type in ("Debug", "Release"):
+    for backend, build_type in (
+        (backend, build_type) for backend in BACKENDS for build_type in BUILD_TYPES
+    ):
+        environment["CPP_CORO_IO_BACKEND"] = backend
+        required = required_stage_tests(backend)
         command = ["bash", str(driver), build_type]
-        log = ARTIFACTS / f"{build_type.lower()}.log"
+        log = ARTIFACTS / f"{backend}-{build_type.lower()}.log"
         started = time.monotonic()
-        print(f"cppcoro {build_type}: {log}", flush=True)
+        print(f"cppcoro {backend} {build_type}: {log}", flush=True)
         with log.open("w") as output:
             result = subprocess.run(
                 command, cwd=framework, env=environment,
@@ -84,10 +107,11 @@ def main() -> int:
         covered = passed_tests(log) if result.returncode == 0 else set()
         missing_by_stage = {
             stage: sorted(tests - covered)
-            for stage, tests in STAGE_TESTS.items()
+            for stage, tests in required.items()
             if tests - covered
         }
         runs.append({
+            "io_backend": backend,
             "build_type": build_type,
             "command": command,
             "exit_code": result.returncode,
@@ -102,6 +126,8 @@ def main() -> int:
     summary = {
         "status": "fail" if status else "pass",
         "languages": ["cppcoro"],
+        "io_backends": list(BACKENDS),
+        "build_types": list(BUILD_TYPES),
         "scope": "complete runtime Docker test suite",
         "stage_tests": {
             stage: sorted(tests) for stage, tests in STAGE_TESTS.items()

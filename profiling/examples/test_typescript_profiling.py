@@ -115,7 +115,7 @@ class TypeScriptProfilingTest(unittest.TestCase):
         self.assertEqual(
             set(languages),
             {
-                "go", "go-native", "cpp", "cpp-native", "cppboost",
+                "go", "go-native", "cpp", "cpp-native",
                 "cppboost-native", "cppcoro", "python", "python-native", "rust",
                 "rust-native", "typescript", "typescript-native",
             },
@@ -171,7 +171,7 @@ class TypeScriptProfilingTest(unittest.TestCase):
             loadgen_cores=6,
             vus=256,
         )
-        for name in ("cppboost", "cppboost-native"):
+        for name in ("cppcoro", "cppboost-native"):
             environment = profiling.environment(args, languages[name])
             self.assertEqual(
                 environment["GRPC_SOURCE_CONTEXT"],
@@ -190,7 +190,7 @@ class TypeScriptProfilingTest(unittest.TestCase):
             },
             clear=False,
         ):
-            environment = profiling.environment(args, languages["cppboost"])
+            environment = profiling.environment(args, languages["cppcoro"])
         self.assertEqual(
             environment["GRPC_SOURCE_CONTEXT"], "/cache/grpc-src"
         )

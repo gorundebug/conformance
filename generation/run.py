@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate, merge and build the canonical Boost C++ example."""
+"""Generate, merge and build the canonical Coro C++ example."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ import go_toolchain
 CONFORMANCE_DIR = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get("DEPENDENCIES_DIR", CONFORMANCE_DIR.parent)).expanduser().resolve()
 SERVICEGEN = ROOT / "servicegen"
-CANONICAL = ROOT / "cppboostexample"
-FRAMEWORK = ROOT / "cppboostservicelib"
+CANONICAL = ROOT / "cppcoroexample"
+FRAMEWORK = ROOT / "cppcoroservicelib"
 TYPESCRIPT_CANONICAL = ROOT / "tsexample"
 TYPESCRIPT_FRAMEWORK = ROOT / "tsservicelib"
 ARTIFACTS = CONFORMANCE_DIR / ".artifacts" / "generation"
@@ -37,7 +37,7 @@ ARTIFACTS = CONFORMANCE_DIR / ".artifacts" / "generation"
 CANONICAL_VARIANTS = {
     "go": ROOT / "goexample",
     "cpp": ROOT / "cppexample",
-    "cppboost": ROOT / "cppboostexample",
+    "cppcoro": ROOT / "cppcoroexample",
     "python": ROOT / "pyexample",
     "rust": ROOT / "rustexample",
     "typescript": ROOT / "tsexample",
@@ -217,9 +217,9 @@ def digest(path: Path) -> str:
 def isolate_compose_volumes(project: Path) -> None:
     """Let a temporary merge use Compose project-scoped build volumes."""
     fixed_name_prefixes = (
-        "cppboostexample_cpp-cmake-build",
-        "cppboostexample_cpp-ccache",
-        "${CPPBOOST_BUILD_VOLUME:-cppboostexample_cpp-cmake-build",
+        "cppcoroexample_cpp-cmake-build",
+        "cppcoroexample_cpp-ccache",
+        "${CPPCORO_BUILD_VOLUME:-cppcoroexample_cpp-cmake-build",
     )
     for name in (
         "docker-compose.yml",
@@ -256,11 +256,11 @@ def clean_generated_build_volumes(project_name: str) -> None:
     )
 
 
-def boost_source_cache_build_dir() -> str:
+def coro_source_cache_build_dir() -> str:
     return cpp_source_cache.build_dir(FRAMEWORK)
 
 
-def prepare_boost_source_cache() -> Path:
+def prepare_coro_source_cache() -> Path:
     source_cache = cpp_source_cache.source_dir(FRAMEWORK)
     required = (
         "boost-src", "yaml-cpp-src", "googletest-src", "grpc-src",
@@ -274,12 +274,12 @@ def prepare_boost_source_cache() -> Path:
     missing = [name for name in required if not (source_cache / name).is_dir()]
     if missing:
         raise RuntimeError(
-            "shared Boost source cache is incomplete: " + ", ".join(missing)
+            "shared Coro source cache is incomplete: " + ", ".join(missing)
         )
     return source_cache
 
 
-def attach_boost_source_cache(project: Path, source_cache: Path) -> None:
+def attach_coro_source_cache(project: Path, source_cache: Path) -> None:
     container_cache = "/servicegen-cpp-source-cache"
     cmake_cache = project / "conformance-source-cache.generated.cmake"
     cmake_cache.write_text(cpp_source_cache.cmake_cache_contents(container_cache))
@@ -288,7 +288,7 @@ def attach_boost_source_cache(project: Path, source_cache: Path) -> None:
         "services": {
             "cpp-build": {
                 "environment": {
-                    "CPPBOOST_SOURCE_CACHE": "1",
+                    "CPPCORO_SOURCE_CACHE": "1",
                 },
                 "volumes": [
                     f"{source_cache}:{container_cache}:ro",
@@ -726,9 +726,9 @@ def main() -> int:
         if old.is_file():
             old.unlink()
 
-    temporary = Path(tempfile.mkdtemp(prefix="cppboost-generation-merge-"))
+    temporary = Path(tempfile.mkdtemp(prefix="cppcoro-generation-merge-"))
     archive_dir = temporary / "archives"
-    merged = temporary / "cppboostexample"
+    merged = temporary / "cppcoroexample"
     typescript_merged = temporary / "tsexample"
     archive_dir.mkdir()
     shutil.copytree(
@@ -749,7 +749,7 @@ def main() -> int:
         "docker": not args.skip_docker,
     }
     started = time.monotonic()
-    project = f"cppboost-generation-{os.getpid()}"
+    project = f"cppcoro-generation-{os.getpid()}"
     docker_env: dict[str, str] | None = None
     down: list[str] | None = None
     docker_started = False
@@ -803,7 +803,7 @@ def main() -> int:
             verify_canonical_examples_are_generated(archive_dir, temporary)
         )
 
-        archive = archive_dir / "cppboost.zip"
+        archive = archive_dir / "cppcoro.zip"
         if not archive.is_file() or archive.stat().st_size == 0:
             raise RuntimeError(f"generator did not create a non-empty {archive}")
         artifact_matrix = verify_archive_artifacts(archive)
@@ -845,8 +845,8 @@ def main() -> int:
         build_results: list[dict[str, str]] = []
         if not args.skip_docker:
             isolate_compose_volumes(merged)
-            source_cache = prepare_boost_source_cache()
-            attach_boost_source_cache(merged, source_cache)
+            source_cache = prepare_coro_source_cache()
+            attach_coro_source_cache(merged, source_cache)
             docker_env = os.environ.copy()
             docker_env.update({
                 "COMPOSE_PROJECT_NAME": project,
@@ -875,7 +875,7 @@ def main() -> int:
                 cwd=merged, env=docker_env, retry_network=True,
             )
             (ARTIFACTS / "integration.log").write_text(integration_output)
-            if "generated Boost C++ integration lifecycle: PASS" not in integration_output:
+            if "generated C++ integration lifecycle: PASS" not in integration_output:
                 raise RuntimeError(
                     "generated integration run did not execute the live scenario"
                 )

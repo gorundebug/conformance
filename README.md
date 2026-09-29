@@ -243,7 +243,7 @@ Run selected ports or reuse current images:
 
 ```bash
 python3 metrics/run.py --language go --language cpp
-python3 metrics/run.py --language go --language cppboost
+python3 metrics/run.py --language go --language cppcoro
 python3 metrics/run.py --skip-build
 ```
 
@@ -452,9 +452,9 @@ bash ./quickstart.sh -- kubernetes
 
 ## Generated example merge conformance
 
-The generation gate creates the canonical Boost C++ archive from the graph,
+The generation gate creates the canonical Coro C++ archive from the graph,
 specification and configuration inputs and merges it into a disposable copy of
-`cppboostexample`. It hashes every existing user-owned file before and after
+`cppcoroexample`. It hashes every existing user-owned file before and after
 the merge; an overwrite, removal or mode change fails the gate. New files from
 the archive are reported separately, because adding a previously absent file
 is part of the merge contract. Local `.servicegen` state is excluded. The gate
@@ -688,32 +688,46 @@ and `profiling/examples/.artifacts/durable/`.
 
 ## C++ structural conformance
 
-The structural suite compares `cppboostservicelib` directly with the
-canonical `cppservicelib`, and `cppboostexample` directly with `cppexample`.
-It fails on every unrecorded or stale public-path difference, every newly
-changed shared public file and every generated-example layout difference. It
-also compares all user-authored service/function interface headers: nine must
-remain byte-identical, while the sole HTTP transport-boundary implementation
-must retain its canonical public member contract.
-The only accepted differences live in `structure/deviations.json` and must be
-an explicit userver boundary or its Boost replacement.
+The structural suite compares `cppcoroservicelib` with the canonical
+`cppservicelib`, and `cppcoroexample` with `cppexample`. It rejects unrecorded
+and stale public-path, shared-content and generated-layout differences.
+Explicit directory mappings align Coro model and API-adapter directories with
+their canonical counterparts without dropping files; mapping collisions fail.
+Service/function interface differences explicitly describe coroutine return
+types and transport boundaries. The HTTP source contract checks both shared
+members and each runtime's exact synchronous or `awaitable` signatures.
+`structure/deviations.json` records these boundaries and their reasons. It
+also rejects retired runtime enum/parser tokens independently of shared-file
+allowances. The Boost library remains a Coro dependency, not a runtime variant.
 
 ```bash
 make structure
 python3 structure/run.py
+# Local uncommitted workspace validation, without claiming Git publication readiness:
+python3 structure/run.py --artifact-state workspace
 ```
 
 The machine-readable result is written to
 `.artifacts/structure/summary.json`. This suite covers paths, shared-file
 identity and example layout; signature and behavioral comparisons are
 separate required conformance layers and are not implied by a structural pass.
+The default artifact state is `tracked`; the report explicitly records when
+only `workspace` artifacts were checked.
+
+The signature suite compares exact public declarations. Its reviewed pairs in
+`signatures/deviations.json` record coroutine returns, ownership boundaries and
+runtime-specific types rather than globally erasing `awaitable`. A changed
+parameter, new declaration, removed allowance or missing runtime fails the
+check. This is a userver/Coro API comparison, not a proof of runtime behavior.
+Both Coro I/O backends use the same public headers and business API; the runtime
+matrix separately checks epoll/uring in Debug/Release.
 
 ## Configuration conformance
 
 `python3 config/run.py` compares the canonical generated Go configuration with
-the Boost C++ configuration for both example services. The base and values
-files must be byte-identical. Every generated `$variable` is then checked in
-both typed adapters: Boost must write the real canonical C++ member from YAML
+the Coro C++ configuration. The base and values files must be byte-identical.
+Every generated `$variable` is then checked in both typed adapters: Coro must
+write the real canonical C++ member from YAML
 and environment input (never hide it in `properties`), and Go must write the
 corresponding typed member through the same environment name. The runner emits
 `.artifacts/config/summary.json` and is part of `make all`.
@@ -922,7 +936,7 @@ The machine-readable result is `.artifacts/dashboards/summary.json`.
 
 The public runtime is https://github.com/gorundebug/cppcoroservicelib and its
 canonical example is https://github.com/gorundebug/cppcoroexample. Both are
-restored by `quickstart.sh`, alongside the existing Boost repositories.
+restored by `quickstart.sh` as the supported Coro runtime and example.
 They are included in the ordinary runner selection, not an opt-in experiment.
 
 The benchmark name is `cpp-coro`; profiling and live conformance use
@@ -931,10 +945,10 @@ CPU quotas, graph validation, load, telemetry and assertions are unchanged.
 Local development uses the same `DEPENDENCIES_DIR` and
 `DEPENDENCY_PROXY_DIR` options as Boost.
 
-The example contains the adapted coroutine source. The shared generator does
-not yet have a coroutine backend: do not regenerate it with the synchronous
-Boost backend. A requested graph profile must still match the actual graph;
-incompatible profiles are not silently accepted.
+The generator supports `cppCoro` directly. Profile preparation merges its own
+`cppcoro.zip`, preserves user business code and validates the requested graph.
+It does not adapt a synchronous Boost archive. Backend (`epoll`/`uring`, epoll
+by default) and graph typing are independent generation/build choices.
 
 Live scenario, Kafka, metrics, tracing, dashboards, logging, sanitizer and
 Kubernetes runners include `cppcoro`. `make cppcoro-runtime` runs the library's
@@ -943,4 +957,4 @@ config, pools, operators, serde, transports, telemetry and lifecycle tests
 actually ran. This is the coroutine runtime's coverage for those stages,
 without rebuilding the same library separately in each gate. It is included in
 `make fast`, the cold-gate sequence and the aggregate report. Generation and
-published-package conformance still require a coroutine generator backend.
+published-package conformance must exercise that same generated Coro project.

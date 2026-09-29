@@ -24,9 +24,9 @@ ARTIFACT = CONFORMANCE_DIR / ".artifacts" / "pools" / "summary.json"
 
 GO = ROOT / "servicelib"
 CANONICAL = ROOT / "cppservicelib"
-BOOST = ROOT / "cppboostservicelib"
+CORO = ROOT / "cppcoroservicelib"
 TYPESCRIPT = ROOT / "tsservicelib"
-BOOST_BUILD_IMAGE = "cppboostservicelib-build:local"
+CORO_BUILD_IMAGE = "cppcoroservicelib-build:local"
 
 
 REQUIRED_SOURCE_CASES = {
@@ -63,7 +63,7 @@ REQUIRED_SOURCE_CASES = {
         "RejectsCancelledContextAndDetectsSelfStop",
         "ExternalCancellationExpeditesAndIsVisibleToCallback",
     ),
-    BOOST / "tests/taskpool_test.cpp": (
+    CORO / "tests/taskpool_test.cpp": (
         "lifecycleFifoAndMetrics",
         "cancellationAndFailureIsolation",
         "deadlineMovesQueuedTaskToFront",
@@ -76,7 +76,7 @@ REQUIRED_SOURCE_CASES = {
         "stopDeadlineReportsButStillDrains",
         "selfStopIsRejectedWithoutBreakingThePool",
     ),
-    BOOST / "tests/other_pools_test.cpp": (
+    CORO / "tests/other_pools_test.cpp": (
         "PriorityFifoAndDeadlinePromotion",
         "ExplicitCancellationPromotesOnlyOnce",
         "ExternalCancellationPromotesQueuedTask",
@@ -170,21 +170,21 @@ def verify_source_matrix() -> dict[str, object]:
     return {"files": files, "required_case_markers": total}
 
 
-def boost_framework_build_script() -> str:
+def coro_framework_build_script() -> str:
     return (
         "cmake --fresh -S . -B build/docker -G Ninja "
         "-DCMAKE_BUILD_TYPE=Debug "
         "-DCMAKE_INSTALL_PREFIX=/workspace/build/docker-install "
-        "-DCPPBOOSTSERVICELIB_BUILD_TESTS=ON "
-        "-DCPPBOOSTSERVICELIB_ENABLE_KAFKA=ON "
-        f"{cpp_source_cache.cmake_args(BOOST)}&& "
+        "-DCPPCOROSERVICELIB_BUILD_TESTS=ON "
+        "-DCPPCOROSERVICELIB_ENABLE_KAFKA=ON "
+        f"{cpp_source_cache.cmake_args(CORO)}&& "
         "cmake --build build/docker --parallel && "
         "ctest --test-dir build/docker --output-on-failure && "
         "cmake --install build/docker && "
         "cmake --fresh -S tests/consumer -B build/consumer -G Ninja "
         "-DCMAKE_PREFIX_PATH=/workspace/build/docker-install && "
         "cmake --build build/consumer --parallel && "
-        "/workspace/build/consumer/cppboostservicelib_consumer"
+        "/workspace/build/consumer/cppcoroservicelib_consumer"
     )
 
 
@@ -193,11 +193,11 @@ def main() -> int:
     parser.add_argument(
         "--skip-build",
         action="store_true",
-        help="reuse the current canonical and Boost Docker build trees",
+        help="reuse the current canonical and Coro Docker build trees",
     )
     args = parser.parse_args()
 
-    missing = [str(path) for path in (GO, CANONICAL, BOOST, TYPESCRIPT) if not path.is_dir()]
+    missing = [str(path) for path in (GO, CANONICAL, CORO, TYPESCRIPT) if not path.is_dir()]
     if missing:
         raise RuntimeError("missing conformance input: " + ", ".join(missing))
 
@@ -288,66 +288,66 @@ def main() -> int:
 
     if not args.skip_build:
         runs.append(execute(
-            "boost-build-image",
+            "coro-build-image",
             ["docker", "build", "-f", "Dockerfile.cmake", "-t",
-             BOOST_BUILD_IMAGE, "."],
-            BOOST,
-            env=dependency_environment.from_framework(BOOST),
+             CORO_BUILD_IMAGE, "."],
+            CORO,
+            env=dependency_environment.from_framework(CORO),
         ))
         runs.append(execute(
-            "boost-source-cache",
-            cpp_source_cache.prepare_command(BOOST),
-            BOOST,
+            "coro-source-cache",
+            cpp_source_cache.prepare_command(CORO),
+            CORO,
         ))
         runs.append(execute(
-            "boost-framework-build-and-tests",
+            "coro-framework-build-and-tests",
             [
                 "docker", "run", "--rm",
                 "-e", "CCACHE_DIR=/ccache",
                 "-e", "CCACHE_BASEDIR=/workspace",
                 "-e", "CCACHE_COMPILERCHECK=content",
-                "-v", "cppboostservicelib-ccache:/ccache",
-                "-v", cpp_source_cache.source_mount(BOOST),
-                "-v", f"{BOOST}:/workspace", "-w", "/workspace",
+                "-v", "cppcoroservicelib-ccache:/ccache",
+                "-v", cpp_source_cache.source_mount(CORO),
+                "-v", f"{CORO}:/workspace", "-w", "/workspace",
                 *cpp_source_cache.build_volume_mount_args(
-                    BOOST, "cppboostservicelib-pools"
+                    CORO, "cppcoroservicelib-pools"
                 ),
-                BOOST_BUILD_IMAGE, "/bin/bash", "-lc",
-                boost_framework_build_script(),
+                CORO_BUILD_IMAGE, "/bin/bash", "-lc",
+                coro_framework_build_script(),
             ],
-            BOOST,
+            CORO,
         ))
     runs.append(
         execute(
-            "boost-cpp-pools",
+            "coro-cpp-pools",
             [
                 "docker",
                 "run",
                 "--rm",
                 "-v",
-                cpp_source_cache.source_mount(BOOST),
+                cpp_source_cache.source_mount(CORO),
                 "-v",
-                f"{BOOST}:/workspace",
+                f"{CORO}:/workspace",
                 *cpp_source_cache.build_volume_mount_args(
-                    BOOST, "cppboostservicelib-pools"
+                    CORO, "cppcoroservicelib-pools"
                 ),
                 "-w",
                 "/workspace",
-                BOOST_BUILD_IMAGE,
+                CORO_BUILD_IMAGE,
                 "ctest",
                 "--test-dir",
                 "build/docker",
                 "--output-on-failure",
                 "-R",
-                "cppboostservicelib_(taskpool|other_pools)_test",
+                "cppcoroservicelib_(taskpool|other_pools)_test",
             ],
-            BOOST,
+            CORO,
         )
     )
 
     summary = {
         "status": "pass",
-        "languages": ["go", "canonical-cpp", "cppboost", "typescript"],
+        "languages": ["go", "canonical-cpp", "cppcoro", "typescript"],
         "source_matrix": source_matrix,
         "runs": runs,
         "unrestricted_build_parallelism": True,

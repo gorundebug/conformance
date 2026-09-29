@@ -85,9 +85,27 @@ def wait_count(event: str, minimum: int, deadline: float) -> tuple[int, str]:
     )
 
 
+def generated_lifecycle(source: str) -> dict[str, bool]:
+    loader_stop = source.find("loader.Stop()")
+    service_stop = source.find("service.stop(")
+    return {
+        "telemetry": bool(re.search(
+            r"ConfigLoader<Config>\s+loader\([\s\S]*?"
+            r"\{\},\s*bootstrap_logger,\s*\*?metrics,\s*\"\"\s*\);",
+            source,
+        )),
+        "polling": "loader.Start(" in source,
+        "owned_publication": (
+            "std::shared_ptr<const servicelib::config::RuntimeConfig>" in source
+            and "RuntimeConfigRegistry::Publish(" in source
+        ),
+        "stop_before_service": 0 <= loader_stop < service_stop,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Verify generated cppboost config reload and retention in Docker."
+        description="Verify generated cppcoro config reload and retention in Docker."
     )
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--output", type=Path, default=DEFAULT_ARTIFACT)
@@ -97,8 +115,8 @@ def main() -> int:
     args = parser.parse_args()
 
     root = args.root.resolve()
-    example = root / "cppboostexample"
-    framework = root / "cppboostservicelib"
+    example = root / "cppcoroexample"
+    framework = root / "cppcoroservicelib"
     main_source = example / "orderservice" / "cmd" / "service" / "main.cpp"
     required = (example / "docker-compose.yml", framework, main_source)
     missing = [str(path) for path in required if not path.exists()]
@@ -188,22 +206,7 @@ def main() -> int:
         final_error = reload_count(final_metrics, "error")
 
         source = main_source.read_text()
-        wiring = {
-            "telemetry": bool(
-                re.search(
-                    r"ConfigLoader<Config>\s+loader\([\s\S]*?"
-                    r"\{\},\s*bootstrap_logger,\s*\*?metrics,\s*\"\"\s*\);",
-                    source,
-                )
-            ),
-            "polling": "loader.Start(" in source,
-            "owned_publication": (
-                "std::shared_ptr<const servicelib::config::RuntimeConfig>" in source
-                and "RuntimeConfigRegistry::Publish(" in source
-            ),
-            "stop_before_service": source.find("loader.Stop()")
-            < source.find("service.stop()"),
-        }
+        wiring = generated_lifecycle(source)
         if not all(wiring.values()):
             raise RuntimeError(f"generated reload lifecycle is incomplete: {wiring}")
 

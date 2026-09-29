@@ -31,7 +31,7 @@ SERVICEGEN = ROOT / "servicegen"
 VARIANTS = {
     "go": "goexample",
     "cpp": "cppexample",
-    "cppboost": "cppboostexample",
+    "cppcoro": "cppcoroexample",
     "python": "pyexample",
     "rust": "rustexample",
     "typescript": "tsexample",
@@ -40,7 +40,7 @@ VARIANTS = {
 FRAMEWORKS = (
     "servicelib",
     "cppservicelib",
-    "cppboostservicelib",
+    "cppcoroservicelib",
     "pyservicelib",
     "rustservicelib",
     "tsservicelib",
