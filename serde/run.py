@@ -348,12 +348,15 @@ def coro_serde_script(skip_build: bool) -> str:
     source_args = cpp_source_cache.cmake_args(CORO)
     return (
         "cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug "
+        "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
+        "-DCMAKE_PROJECT_INCLUDE=/repo/conformance/serde/coro_probe.cmake "
         f"-DCPPCOROSERVICELIB_BUILD_TESTS=ON {source_args}&& "
         "cmake --build build/debug --parallel --target "
         "cppcoroservicelib_serde_test && "
         "ctest --test-dir build/debug --output-on-failure "
         "-R cppcoroservicelib_serde_test && "
         "cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release "
+        "-DCPPCOROSERVICELIB_DEPENDENCY_MODE=FETCH "
         f"-DCPPCOROSERVICELIB_BUILD_TESTS=ON {source_args}&& "
         "cmake --build build/release --parallel --target "
         "cppcoroservicelib_serde_test && "
@@ -395,6 +398,7 @@ def main() -> int:
         "run",
         "--rm",
         *coro_source_mount_args(),
+        *repository_mounts(),
         "-v",
         f"{CORO}:/workspace",
         *cpp_source_cache.build_volume_mount_args(
@@ -541,14 +545,16 @@ def main() -> int:
         "run",
         "--rm",
         *repository_mounts(),
+        "-v", f"{CORO}:/workspace",
+        *cpp_source_cache.build_volume_mount_args(
+            CORO, "cppcoroservicelib-serde"
+        ),
         "cppcoroservicelib-build:local",
         "/bin/bash",
         "-lc",
-        "c++ -std=c++20 -DSERVICELIB_CUSTOM_SERDE_CORO=1 "
-        "-I/repo/cppcoroservicelib/include -I/repo/cppcoroexample "
-        "-I/repo/cppcoroexample/model_cppcoro/include "
-        "/repo/conformance/serde/custom_cpp_probe.cpp -lboost_json "
-        "-o /tmp/custom-serde-coro && /tmp/custom-serde-coro",
+        "cmake --build /workspace/build/debug --parallel "
+        "--target cppcoroservicelib_custom_serde_probe && "
+        "/workspace/build/debug/cppcoroservicelib_custom_serde_probe",
     ]
     canonical_custom, canonical_custom_run = json_probe(
         "canonical-cpp-custom-json-serde", canonical_custom_command, CANONICAL,
