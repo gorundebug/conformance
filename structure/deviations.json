@@ -179,6 +179,8 @@
       "inventoryservice/static_config.yaml",
       "inventoryservice/docker/userver-packages.txt",
       "inventoryservice/docker/userver-tsan-ignorelist.generated.txt",
+      "inventory_service_api/cpp/CMakeLists.txt",
+      "order_service_api/cpp/CMakeLists.txt",
       "orderservice/config/config_vars.integration.yaml",
       "orderservice/config/config_vars.yaml",
       "orderservice/internal/app/clients.generated.cpp",
