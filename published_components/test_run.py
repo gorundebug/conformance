@@ -34,10 +34,10 @@ class PublishedComponentsTest(unittest.TestCase):
             service.mkdir()
             (service / "make.generated.mk").write_text(
                 "SERVICELIB_SOURCE_CONTEXT MODEL_GO_SOURCE_CONTEXT "
-                "MODULE_MODEL_CPP_SOURCE_CONTEXT\n"
+                "MODULE_MODEL_CPPCORO_SOURCE_CONTEXT\n"
             )
             for module in (
-                "model_cpp", "inventory_service_api", "order_service_api"
+                "model_cppcoro", "inventory_service_api", "order_service_api"
             ):
                 (owner_root / "cppcoroexample/v1.2.3" / module).mkdir()
             contexts = run.published_context_arguments(
@@ -46,6 +46,11 @@ class PublishedComponentsTest(unittest.TestCase):
             self.assertIn(
                 "SERVICELIB_SOURCE_CONTEXT="
                 f"{owner_root / 'cppcoroservicelib/v1.2.3'}",
+                contexts,
+            )
+            self.assertIn(
+                "MODULE_MODEL_CPPCORO_SOURCE_CONTEXT="
+                f"{owner_root / 'cppcoroexample/v1.2.3/model_cppcoro'}",
                 contexts,
             )
             self.assertNotIn(

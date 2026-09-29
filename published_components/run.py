@@ -612,8 +612,8 @@ def published_context_arguments(
             "SERVICELIB_SOURCE_CONTEXT": source(
                 "cppcoroservicelib"
             ),
-            "MODULE_MODEL_CPP_SOURCE_CONTEXT": source(
-                project_repository, "model_cpp"
+            "MODULE_MODEL_CPPCORO_SOURCE_CONTEXT": source(
+                project_repository, "model_cppcoro"
             ),
             "MODULE_INVENTORY_SERVICE_API_SOURCE_CONTEXT": source(
                 project_repository, "inventory_service_api"
