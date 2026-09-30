@@ -17,8 +17,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-import dependency_environment
 import tooling_lock
+
+import dependency_environment
 
 
 HERE = Path(__file__).resolve().parent

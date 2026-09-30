@@ -1,17 +1,5 @@
 import { performance } from "node:perf_hooks";
 
-import {
-  DelayPool,
-  JsonSerde,
-  MessageContext,
-  RuntimeConfigStore,
-  SerdeType,
-  ServiceEnvironment,
-  errorSerdeType,
-  makeDefaultSerdeRegistry,
-  makeStreamSerde,
-} from "@gorundebug/tsservicelib/runtime";
-
 import { buildStreamGraph } from "/app/dist/internal/app/service.generated.js";
 import { Config } from "/app/dist/internal/config/config.js";
 import {
@@ -28,6 +16,18 @@ import {
   makeProcessOrderItems,
   makeSoftDeadline,
 } from "/app/dist/internal/functions/index.generated.js";
+
+import {
+  DelayPool,
+  JsonSerde,
+  MessageContext,
+  RuntimeConfigStore,
+  SerdeType,
+  ServiceEnvironment,
+  errorSerdeType,
+  makeDefaultSerdeRegistry,
+  makeStreamSerde,
+} from "@gorundebug/tsservicelib/runtime";
 
 function positiveInteger(name, fallback) {
   const raw = process.env[name];

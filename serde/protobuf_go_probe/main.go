@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strconv"
 
-	processorderitem "github.com/gorundebug/inventory_service_api/pkg/generated/proto/inventoryserviceapi/processorderitem"
 	"google.golang.org/protobuf/proto"
+
+	processorderitem "github.com/gorundebug/inventory_service_api/pkg/generated/proto/inventoryserviceapi/processorderitem"
 )
 
 var deterministic = proto.MarshalOptions{Deterministic: true}

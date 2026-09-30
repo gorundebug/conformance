@@ -1,9 +1,3 @@
-#include <proto/inventoryserviceapi/processorderitem/processorderitem.pb.h>
-
-#include <google/protobuf/io/coded_stream.h>
-#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
-#include <google/protobuf/message_lite.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <iomanip>
@@ -11,6 +5,11 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+#include <proto/inventoryserviceapi/processorderitem/processorderitem.pb.h>
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
+#include <google/protobuf/message_lite.h>
 
 namespace {
 

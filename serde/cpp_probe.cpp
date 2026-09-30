@@ -1,5 +1,3 @@
-#include <servicelib/runtime/serde/serdeimpl.hpp>
-
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -10,6 +8,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <servicelib/runtime/serde/serdeimpl.hpp>
 
 namespace {
 

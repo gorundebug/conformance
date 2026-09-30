@@ -4,9 +4,10 @@
 
 from __future__ import annotations
 
-import logging
 import runpy
 import sys
+
+import logging
 
 
 def main() -> None:

@@ -11,13 +11,13 @@
 #else
 #error "custom serde runtime is not selected"
 #endif
-#include <orderservice/internal/serdes/serde_registration.generated.hpp>
-
 #include <any>
 #include <cstddef>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+
+#include <orderservice/internal/serdes/serde_registration.generated.hpp>
 
 namespace {
 

@@ -8,13 +8,14 @@ import (
 	"os"
 	"time"
 
-	inventoryserviceapi "github.com/gorundebug/inventory_service_api/pkg/generated/proto/inventoryserviceapi"
-	processorderitem "github.com/gorundebug/inventory_service_api/pkg/generated/proto/inventoryserviceapi/processorderitem"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	inventoryserviceapi "github.com/gorundebug/inventory_service_api/pkg/generated/proto/inventoryserviceapi"
+	processorderitem "github.com/gorundebug/inventory_service_api/pkg/generated/proto/inventoryserviceapi/processorderitem"
 )
 
 type output struct {

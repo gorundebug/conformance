@@ -9,7 +9,6 @@ from datetime import timedelta
 from temporalio.client import Client, WorkflowFailureError
 from temporalio.worker import Worker
 from temporalio.worker.workflow_sandbox import RestrictedWorkflowAccessError
-
 from python_sandbox_probe_workflow import PythonSandboxProbeWorkflow
 
 
